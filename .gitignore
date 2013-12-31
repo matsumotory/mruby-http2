@@ -1,0 +1,23 @@
+# Compiled Object files
+*.slo
+*.lo
+*.o
+
+# Compiled Dynamic libraries
+*.so
+*.exe
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+
+# gtags
+GPATH
+GRTAGS
+GTAGS
+
+Makefile
+config.h
+config.log
+config.status

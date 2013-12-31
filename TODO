@@ -1,0 +1,4 @@
+- use mruby-http
+- implement some method (post...)
+- implement some class (Server, Proxy...)
+- write http2 callback function by Ruby block
