@@ -1,5 +1,5 @@
 # HTTP2 Module for mruby  [![Build Status](https://travis-ci.org/matsumoto-r/mruby-http2.png?branch=master)](https://travis-ci.org/matsumoto-r/mruby-http2)
-HTTP2 module for mruby. You can access Web site using HTTP/2.0 protocol from mruby applications or devices with mruby.
+HTTP2 module for mruby using [nghttp2](https://github.com/tatsuhiro-t/nghttp2). You can access Web site using HTTP/2.0 protocol from mruby applications or devices with mruby.
 
 - [HTTP/2.0](http://http2.github.io/) 
 
