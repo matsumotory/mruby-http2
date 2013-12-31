@@ -3,7 +3,7 @@ HTTP2 module for mruby. You can access Web site using HTTP/2.0 protocol from mru
 
 - [HTTP/2.0](http://http2.github.io/) 
 
-    HTTP/2.0 is a replacement for how HTTP is expressed ¡Èon the wire.¡É It is not a ground-up rewrite of the protocol; HTTP methods, status codes and semantics will be the same, and it should be possible to use the same APIs as HTTP/1.x (possibly with some small additions) to represent the protocol.
+    HTTP/2.0 is a replacement for how HTTP is expressed "on the wire". It is not a ground-up rewrite of the protocol; HTTP methods, status codes and semantics will be the same, and it should be possible to use the same APIs as HTTP/1.x (possibly with some small additions) to represent the protocol.
 
 ## TODO
 This mrbgem is very early version.
