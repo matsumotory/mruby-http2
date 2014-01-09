@@ -208,7 +208,6 @@ static int on_frame_send_callback(nghttp2_session *session, const nghttp2_frame 
     if(nghttp2_session_get_stream_user_data(session, frame->hd.stream_id)) {
       const nghttp2_nv *nva = frame->headers.nva;
       req_headers = mrb_hash_new(conn->mrb);
-      //printf("[INFO] C ----------------------------> S (HEADERS)\n");
       for(i = 0; i < frame->headers.nvlen; ++i) {
         mrb_hash_set(conn->mrb, req_headers, mrb_str_new(conn->mrb, (char *)nva[i].name, nva[i].namelen), mrb_str_new(conn->mrb, (char *)nva[i].value, nva[i].valuelen));
       }
@@ -216,11 +215,9 @@ static int on_frame_send_callback(nghttp2_session *session, const nghttp2_frame 
     }
     break;
   case NGHTTP2_RST_STREAM:
-    //printf("[INFO] C ----------------------------> S (RST_STREAM)\n");
     mrb_hash_set(conn->mrb, conn->response, mrb_symbol_value(mrb_intern_cstr(conn->mrb, "frame_send_header_rst_stream")), mrb_true_value());
     break;
   case NGHTTP2_GOAWAY:
-    //printf("[INFO] C ----------------------------> S (GOAWAY)\n");
     mrb_hash_set(conn->mrb, conn->response, mrb_symbol_value(mrb_intern_cstr(conn->mrb, "frame_send_header_goway")), mrb_true_value());
     break;
   }
@@ -242,7 +239,6 @@ static int on_frame_recv_callback(nghttp2_session *session, const nghttp2_frame 
       if(req) {
         mrb_http2_check_gzip(conn->mrb, req, frame->headers.nva, frame->headers.nvlen);
         reply_headers = mrb_hash_new(conn->mrb);
-        //printf("[INFO] C <---------------------------- S (HEADERS)\n");
         for(i = 0; i < frame->headers.nvlen; ++i) {
           mrb_hash_set(conn->mrb, reply_headers, mrb_str_new(conn->mrb, (char *)nva[i].name, nva[i].namelen), mrb_str_new(conn->mrb, (char *)nva[i].value, nva[i].valuelen));
         }
@@ -251,7 +247,6 @@ static int on_frame_recv_callback(nghttp2_session *session, const nghttp2_frame 
     }
     break;
   case NGHTTP2_RST_STREAM:
-    //printf("[INFO] C <---------------------------- S (RST_STREAM)\n");
     mrb_hash_set(conn->mrb, conn->response, mrb_symbol_value(mrb_intern_cstr(conn->mrb, "frame_recv_header_rst_stream")), mrb_true_value());
     break;
   case NGHTTP2_GOAWAY:
