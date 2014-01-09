@@ -73,12 +73,19 @@ enum {
   {(uint8_t*)NAME, (uint8_t*)VALUE,                                    \
     (uint16_t)(sizeof(NAME) - 1), (uint16_t)(strlen(VALUE)) }
 
+typedef struct {
+    struct mrb_http2_conn_t *conn;
+    struct mrb_http2_request_t *req;
+    struct mrb_http2_uri_t *uri;
+} mrb_http2_context_t;
+
 struct mrb_http2_conn_t {
   SSL *ssl;
   nghttp2_session *session;
   int want_io;
   mrb_state *mrb;
   mrb_value response;
+  mrb_value cb_block_hash;
 };
 
 struct mrb_http2_request_t {
@@ -105,6 +112,24 @@ static size_t CONTENT_LENGTH_LEN = sizeof(CONTENT_LENGTH) - 1;
 static char GZIP[] = "gzip";
 static size_t GZIP_LEN = sizeof(GZIP) - 1;
 
+static void mrb_http2_request_free(mrb_state *mrb, struct mrb_http2_request_t *req)
+{
+  free(req->host);
+  free(req->path);
+  free(req->hostport);
+  nghttp2_gzip_inflate_del(req->inflater);
+}
+
+static void mrb_http2_context_free(mrb_state *mrb, void *p)
+{
+  mrb_http2_context_t *ctx = (mrb_http2_context_t *)p;
+  mrb_http2_request_free(mrb, ctx->req);
+}
+
+static const struct mrb_data_type mrb_http2_context_type = {
+  "mrb_http2_context_t", mrb_http2_context_free,
+};
+
 static char *strcopy(const char *s, size_t len)
 {
   char *dst;
@@ -113,6 +138,87 @@ static char *strcopy(const char *s, size_t len)
   dst[len] = '\0';
   return dst;
 }
+
+//TODO: use mruby-http
+static int parse_uri(struct mrb_http2_uri_t *res, const char *uri)
+{
+  size_t len, i, offset;
+  int ipv6addr = 0;
+  memset(res, 0, sizeof(struct mrb_http2_uri_t));
+  len = strlen(uri);
+  if(len < 9 || memcmp("https://", uri, 8) != 0) {
+    return -1;
+  }
+  offset = 8;
+  res->host = res->hostport = &uri[offset];
+  res->hostlen = 0;
+  if(uri[offset] == '[') {
+    ++offset;
+    ++res->host;
+    ipv6addr = 1;
+    for(i = offset; i < len; ++i) {
+      if(uri[i] == ']') {
+        res->hostlen = i-offset;
+        offset = i+1;
+        break;
+      }
+    }
+  } else {
+    const char delims[] = ":/?#";
+    for(i = offset; i < len; ++i) {
+      if(strchr(delims, uri[i]) != NULL) {
+        break;
+      }
+    }
+    res->hostlen = i-offset;
+    offset = i;
+  }
+  if(res->hostlen == 0) {
+    return -1;
+  }
+  res->port = 443;
+  if(offset < len) {
+    if(uri[offset] == ':') {
+      const char delims[] = "/?#";
+      int port = 0;
+      ++offset;
+      for(i = offset; i < len; ++i) {
+        if(strchr(delims, uri[i]) != NULL) {
+          break;
+        }
+        if('0' <= uri[i] && uri[i] <= '9') {
+          port *= 10;
+          port += uri[i]-'0';
+          if(port > 65535) {
+            return -1;
+          }
+        } else {
+          return -1;
+        }
+      }
+      if(port == 0) {
+        return -1;
+      }
+      offset = i;
+      res->port = port;
+    }
+  }
+  res->hostportlen = uri+offset+ipv6addr-res->host;
+  for(i = offset; i < len; ++i) {
+    if(uri[i] == '#') {
+      break;
+    }
+  }
+  if(i-offset == 0) {
+    res->path = "/";
+    res->pathlen = 1;
+  } else {
+    res->path = &uri[offset];
+    res->pathlen = i-offset;
+  }
+  return 0;
+}
+
 
 static void mrb_http2_check_gzip(mrb_state *mrb, struct mrb_http2_request_t *req, nghttp2_nv *nva, size_t nvlen)
 {
@@ -153,6 +259,10 @@ static ssize_t send_callback(nghttp2_session *session, const uint8_t *data, size
       rv = NGHTTP2_ERR_CALLBACK_FAILURE;
     }
   }
+  mrb_value cb_block = mrb_hash_get(conn->mrb, conn->cb_block_hash, mrb_str_new_cstr(conn->mrb, "send_callback"));
+  if (!mrb_nil_p(cb_block)) {
+    mrb_yield_argv(conn->mrb, cb_block, 0, NULL);
+  }
   return rv;
 }
 
@@ -176,6 +286,10 @@ static ssize_t recv_callback(nghttp2_session *session, uint8_t *buf, size_t leng
   } else if(rv == 0) {
     rv = NGHTTP2_ERR_EOF;
   }
+  mrb_value cb_block = mrb_hash_get(conn->mrb, conn->cb_block_hash, mrb_str_new_cstr(conn->mrb, "recv_callback"));
+  if (!mrb_nil_p(cb_block)) {
+    mrb_yield_argv(conn->mrb, cb_block, 0, NULL);
+  }
   return rv;
 }
 
@@ -193,6 +307,10 @@ static int before_frame_send_callback(nghttp2_session *session, const nghttp2_fr
       req->stream_id = stream_id;
       mrb_hash_set(conn->mrb, conn->response, mrb_symbol_value(mrb_intern_cstr(conn->mrb, "stream_id")), mrb_fixnum_value(stream_id));
     }
+  }
+  mrb_value cb_block = mrb_hash_get(conn->mrb, conn->cb_block_hash, mrb_str_new_cstr(conn->mrb, "before_frame_send_callback"));
+  if (!mrb_nil_p(cb_block)) {
+    mrb_yield_argv(conn->mrb, cb_block, 0, NULL);
   }
   return 0;
 }
@@ -220,6 +338,10 @@ static int on_frame_send_callback(nghttp2_session *session, const nghttp2_frame 
   case NGHTTP2_GOAWAY:
     mrb_hash_set(conn->mrb, conn->response, mrb_symbol_value(mrb_intern_cstr(conn->mrb, "frame_send_header_goway")), mrb_true_value());
     break;
+  }
+  mrb_value cb_block = mrb_hash_get(conn->mrb, conn->cb_block_hash, mrb_str_new_cstr(conn->mrb, "on_frame_send_callback"));
+  if (!mrb_nil_p(cb_block)) {
+    mrb_yield_argv(conn->mrb, cb_block, 0, NULL);
   }
   return 0;
 }
@@ -253,15 +375,20 @@ static int on_frame_recv_callback(nghttp2_session *session, const nghttp2_frame 
     mrb_hash_set(conn->mrb, conn->response, mrb_symbol_value(mrb_intern_cstr(conn->mrb, "frame_recv_header_goway")), mrb_true_value());
     break;
   }
+  mrb_value cb_block = mrb_hash_get(conn->mrb, conn->cb_block_hash, mrb_str_new_cstr(conn->mrb, "on_frame_recv_callback"));
+  if (!mrb_nil_p(cb_block)) {
+    mrb_yield_argv(conn->mrb, cb_block, 0, NULL);
+  }
   return 0;
 }
 
 static int on_stream_close_callback(nghttp2_session *session, int32_t stream_id, nghttp2_error_code error_code, void *user_data)
 {
   struct mrb_http2_conn_t *conn;
+  struct mrb_http2_request_t *req;
+
   conn = (struct mrb_http2_conn_t*)user_data;
   mrb_state *mrb = conn->mrb;
-  struct mrb_http2_request_t *req;
   req = nghttp2_session_get_stream_user_data(session, stream_id);
   if(req) {
     int rv;
@@ -269,6 +396,10 @@ static int on_stream_close_callback(nghttp2_session *session, int32_t stream_id,
     if(rv != 0) {
       mrb_raisef(mrb, E_RUNTIME_ERROR, "nghttp2_submit_goaway: %S", mrb_fixnum_value(rv));
     }
+  }
+  mrb_value cb_block = mrb_hash_get(conn->mrb, conn->cb_block_hash, mrb_str_new_cstr(conn->mrb, "on_stream_close_callback"));
+  if (!mrb_nil_p(cb_block)) {
+    mrb_yield_argv(conn->mrb, cb_block, 0, NULL);
   }
   return 0;
 }
@@ -320,6 +451,10 @@ static int on_data_chunk_recv_callback(nghttp2_session *session, uint8_t flags, 
     body_len = mrb_fixnum_value(strlen(body));
     mrb_hash_set(conn->mrb, conn->response, mrb_symbol_value(mrb_intern_cstr(conn->mrb, "body")), body_data);
     mrb_hash_set(conn->mrb, conn->response, mrb_symbol_value(mrb_intern_cstr(conn->mrb, "body_length")), body_len);
+  }
+  mrb_value cb_block = mrb_hash_get(conn->mrb, conn->cb_block_hash, mrb_str_new_cstr(conn->mrb, "on_data_chunk_recv_callback"));
+  if (!mrb_nil_p(cb_block)) {
+    mrb_yield_argv(conn->mrb, cb_block, 0, NULL);
   }
   return 0;
 }
@@ -477,12 +612,17 @@ static void mrb_http2_request_init(mrb_state *mrb, struct mrb_http2_request_t *r
   req->inflater = NULL;
 }
 
-static void mrb_http2_request_free(mrb_state *mrb, struct mrb_http2_request_t *req)
+static mrb_value mrb_http2_cb_block_hash_init(mrb_state *mrb)
 {
-  free(req->host);
-  free(req->path);
-  free(req->hostport);
-  nghttp2_gzip_inflate_del(req->inflater);
+  mrb_value hash = mrb_hash_new(mrb);
+  mrb_hash_set(mrb, hash, mrb_str_new_cstr(mrb, "send_callback"), mrb_nil_value());
+  mrb_hash_set(mrb, hash, mrb_str_new_cstr(mrb, "recv_callback"), mrb_nil_value());
+  mrb_hash_set(mrb, hash, mrb_str_new_cstr(mrb, "before_frame_send_callback"), mrb_nil_value());
+  mrb_hash_set(mrb, hash, mrb_str_new_cstr(mrb, "on_frame_send_callback"), mrb_nil_value());
+  mrb_hash_set(mrb, hash, mrb_str_new_cstr(mrb, "on_frame_recv_callback"), mrb_nil_value());
+  mrb_hash_set(mrb, hash, mrb_str_new_cstr(mrb, "on_stream_close_callback"), mrb_nil_value());
+  mrb_hash_set(mrb, hash, mrb_str_new_cstr(mrb, "on_data_chunk_recv_callback"), mrb_nil_value());
+  return hash;
 }
 
 static mrb_value mrb_http2_fetch_uri(mrb_state *mrb, const struct mrb_http2_uri_t *uri)
@@ -496,7 +636,6 @@ static mrb_value mrb_http2_fetch_uri(mrb_state *mrb, const struct mrb_http2_uri_
   int rv;
   nfds_t npollfds = 1;
   struct pollfd pollfds[1];
-  mrb_value response = mrb_hash_new(mrb);
   mrb_http2_request_init(mrb, &req, uri);
 
   mrb_http2_setup_nghttp2_callbacks(mrb, &callbacks);
@@ -524,7 +663,9 @@ static mrb_value mrb_http2_fetch_uri(mrb_state *mrb, const struct mrb_http2_uri_
   mrb_http2_make_non_block(mrb, fd);
   mrb_http2_set_tcp_nodelay(mrb, fd);
   conn.mrb = mrb;
-  conn.response = response;
+  conn.response = mrb_hash_new(mrb);
+  conn.cb_block_hash = mrb_http2_cb_block_hash_init(mrb);
+
   rv = nghttp2_session_client_new(&conn.session, &callbacks, &conn);
   if(rv != 0) {
     mrb_raisef(mrb, E_RUNTIME_ERROR, "nghttp2_session_client_new: %S", mrb_fixnum_value(rv));
@@ -557,87 +698,192 @@ static mrb_value mrb_http2_fetch_uri(mrb_state *mrb, const struct mrb_http2_uri_
   close(fd);
   mrb_http2_request_free(mrb, &req);
 
-  return response;
+  return conn.response;
 }
 
-//TODO: use mruby-http
-static int parse_uri(struct mrb_http2_uri_t *res, const char *uri)
+static mrb_value mrb_http2_get_uri(mrb_state *mrb, mrb_http2_context_t *ctx)
 {
-  size_t len, i, offset;
-  int ipv6addr = 0;
-  memset(res, 0, sizeof(struct mrb_http2_uri_t));
-  len = strlen(uri);
-  if(len < 9 || memcmp("https://", uri, 8) != 0) {
-    return -1;
+  nghttp2_session_callbacks callbacks;
+  SSL_CTX *ssl_ctx;
+  SSL *ssl;
+  int rv;
+  int fd;
+  struct pollfd pollfds[1];
+  nfds_t npollfds = 1;
+
+  mrb_http2_setup_nghttp2_callbacks(mrb, &callbacks);
+
+  fd = mrb_http2_connect_to(mrb, ctx->req->host, ctx->req->port);
+  if(fd == -1) {
+    mrb_raisef(mrb, E_RUNTIME_ERROR, "Could not open file descriptor: host \"%S\", port \"%S\"", mrb_str_new_cstr(mrb, ctx->req->host), mrb_fixnum_value(ctx->req->port));
   }
-  offset = 8;
-  res->host = res->hostport = &uri[offset];
-  res->hostlen = 0;
-  if(uri[offset] == '[') {
-    ++offset;
-    ++res->host;
-    ipv6addr = 1;
-    for(i = offset; i < len; ++i) {
-      if(uri[i] == ']') {
-        res->hostlen = i-offset;
-        offset = i+1;
-        break;
-      }
+  ssl_ctx = SSL_CTX_new(SSLv23_client_method());
+  if(ssl_ctx == NULL) {
+    mrb_raisef(mrb, E_RUNTIME_ERROR, "SSL_CTX_new: %S", mrb_str_new_cstr(mrb, ERR_error_string(ERR_get_error(), NULL)));
+  }
+  mrb_http2_init_ssl_ctx(mrb, ssl_ctx);
+  ssl = SSL_new(ssl_ctx);
+  if(ssl == NULL) {
+    mrb_raisef(mrb, E_RUNTIME_ERROR, "SSL_new: %S", mrb_str_new_cstr(mrb, ERR_error_string(ERR_get_error(), NULL)));
+  }
+  mrb_http2_ssl_handshake(mrb, ssl, fd);
+
+  ctx->conn->ssl = ssl;
+  ctx->conn->want_io = IO_NONE;
+
+  SSL_write(ssl, NGHTTP2_CLIENT_CONNECTION_HEADER, NGHTTP2_CLIENT_CONNECTION_HEADER_LEN);
+
+  mrb_http2_make_non_block(mrb, fd);
+  mrb_http2_set_tcp_nodelay(mrb, fd);
+  ctx->conn->mrb = mrb;
+  rv = nghttp2_session_client_new(&ctx->conn->session, &callbacks, ctx->conn);
+  if(rv != 0) {
+    mrb_raisef(mrb, E_RUNTIME_ERROR, "nghttp2_session_client_new: %S", mrb_fixnum_value(rv));
+  }
+
+  mrb_http2_submit_request(mrb, ctx->conn, ctx->req);
+
+  pollfds[0].fd = fd;
+  mrb_http2_ctl_poll(mrb, pollfds, ctx->conn);
+
+  while(nghttp2_session_want_read(ctx->conn->session) || nghttp2_session_want_write(ctx->conn->session)) {
+    int nfds = poll(pollfds, npollfds, -1);
+    if(nfds == -1) {
+      mrb_raisef(mrb, E_RUNTIME_ERROR, "poll: %S", mrb_str_new_cstr(mrb, strerror(errno)));
+    } 
+    if(pollfds[0].revents & (POLLIN | POLLOUT)) {
+      mrb_http2_exec_io(mrb, ctx->conn);
     }
-  } else {
-    const char delims[] = ":/?#";
-    for(i = offset; i < len; ++i) {
-      if(strchr(delims, uri[i]) != NULL) {
-        break;
-      }
+    if((pollfds[0].revents & POLLHUP) || (pollfds[0].revents & POLLERR)) {
+      mrb_raise(mrb, E_RUNTIME_ERROR, "connection error");
     }
-    res->hostlen = i-offset;
-    offset = i;
+    mrb_http2_ctl_poll(mrb, pollfds, ctx->conn);
   }
-  if(res->hostlen == 0) {
-    return -1;
+
+  nghttp2_session_del(ctx->conn->session);
+  SSL_shutdown(ssl);
+  SSL_free(ssl);
+  SSL_CTX_free(ssl_ctx);
+  shutdown(fd, SHUT_WR);
+  close(fd);
+  mrb_http2_request_free(mrb, ctx->req);
+
+  return ctx->conn->response;
+}
+
+static mrb_value mrb_http2_client_inst_get(mrb_state *mrb, mrb_value self)
+{
+  mrb_http2_context_t *ctx = DATA_PTR(self);
+  return mrb_http2_get_uri(mrb, ctx);
+}
+
+static mrb_value mrb_http2_client_request(mrb_state *mrb, mrb_value self)
+{
+  mrb_http2_context_t *ctx = DATA_PTR(self);
+  mrb_value block;
+
+  mrb_get_args(mrb, "&", &block);
+  mrb_yield_argv(mrb, block, 0, NULL);
+
+  if(ctx->uri == NULL) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "not found uri data");
   }
-  res->port = 443;
-  if(offset < len) {
-    if(uri[offset] == ':') {
-      const char delims[] = "/?#";
-      int port = 0;
-      ++offset;
-      for(i = offset; i < len; ++i) {
-        if(strchr(delims, uri[i]) != NULL) {
-          break;
-        }
-        if('0' <= uri[i] && uri[i] <= '9') {
-          port *= 10;
-          port += uri[i]-'0';
-          if(port > 65535) {
-            return -1;
-          }
-        } else {
-          return -1;
-        }
-      }
-      if(port == 0) {
-        return -1;
-      }
-      offset = i;
-      res->port = port;
-    }
+  ctx->req = (struct mrb_http2_request_t *)mrb_malloc(mrb, sizeof(struct mrb_http2_request_t));
+  mrb_http2_request_init(mrb, ctx->req, ctx->uri);
+
+  return self;
+}
+
+static mrb_value mrb_http2_set_block_callback(mrb_state *mrb, mrb_value self, char *cb_type)
+{
+  mrb_http2_context_t *ctx = DATA_PTR(self);
+  mrb_value cb_block;
+
+  mrb_get_args(mrb, "&", &cb_block);
+  mrb_hash_set(mrb, ctx->conn->cb_block_hash, mrb_str_new_cstr(mrb, cb_type), cb_block);
+
+  return ctx->conn->cb_block_hash;
+}
+
+static mrb_value mrb_http2_set_send_callback(mrb_state *mrb, mrb_value self)
+{
+  return mrb_http2_set_block_callback(mrb, self, "send_callback");
+}
+
+static mrb_value mrb_http2_set_recv_callback(mrb_state *mrb, mrb_value self)
+{
+  return mrb_http2_set_block_callback(mrb, self, "recv_callback");
+}
+
+static mrb_value mrb_http2_set_before_frame_send_callback(mrb_state *mrb, mrb_value self)
+{
+  return mrb_http2_set_block_callback(mrb, self, "before_frame_send_callback");
+}
+
+static mrb_value mrb_http2_set_on_frame_send_callback(mrb_state *mrb, mrb_value self)
+{
+  return mrb_http2_set_block_callback(mrb, self, "on_frame_send_callback");
+}
+
+static mrb_value mrb_http2_set_on_frame_recv_callback(mrb_state *mrb, mrb_value self)
+{
+  return mrb_http2_set_block_callback(mrb, self, "on_frame_recv_callback");
+}
+
+static mrb_value mrb_http2_set_on_stream_close_callback(mrb_state *mrb, mrb_value self)
+{
+  return mrb_http2_set_block_callback(mrb, self, "on_stream_close_callback");
+}
+
+static mrb_value mrb_http2_set_on_data_chunk_recv_callback(mrb_state *mrb, mrb_value self)
+{
+  return mrb_http2_set_block_callback(mrb, self, "on_data_chunk_recv_callback");
+}
+
+static mrb_value mrb_http2_client_set_uri(mrb_state *mrb, mrb_value self)
+{
+  mrb_http2_context_t *ctx = DATA_PTR(self);
+  int rv;
+  char *uri;
+  ctx->uri = (struct mrb_http2_uri_t *)mrb_malloc(mrb, sizeof(struct mrb_http2_uri_t));
+
+  mrb_get_args(mrb, "z", &uri);
+  rv = parse_uri(ctx->uri, uri);
+  if(rv != 0) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "parse_uri failed");
   }
-  res->hostportlen = uri+offset+ipv6addr-res->host;
-  for(i = offset; i < len; ++i) {
-    if(uri[i] == '#') {
-      break;
-    }
+
+  return self;
+}
+
+static mrb_value mrb_http2_client_init(mrb_state *mrb, mrb_value self)
+{
+  mrb_http2_context_t *ctx;
+  struct sigaction act;
+
+  ctx = (mrb_http2_context_t *)DATA_PTR(self);
+  if (ctx) {
+      mrb_free(mrb, ctx);
   }
-  if(i-offset == 0) {
-    res->path = "/";
-    res->pathlen = 1;
-  } else {
-    res->path = &uri[offset];
-    res->pathlen = i-offset;
-  }
-  return 0;
+  DATA_TYPE(self) = &mrb_http2_context_type;
+  DATA_PTR(self) = NULL;
+
+  ctx = (mrb_http2_context_t *)mrb_malloc(mrb, sizeof(mrb_http2_context_t));
+  ctx->uri = NULL;
+  ctx->conn = (struct mrb_http2_conn_t *)mrb_malloc(mrb, sizeof(struct mrb_http2_conn_t));
+  ctx->conn->mrb = mrb;
+  ctx->conn->response = mrb_hash_new(mrb);
+  ctx->conn->cb_block_hash = mrb_http2_cb_block_hash_init(mrb);
+  DATA_PTR(self) = ctx;
+
+  memset(&act, 0, sizeof(struct sigaction));
+  act.sa_handler = SIG_IGN;
+  sigaction(SIGPIPE, &act, 0);
+
+  SSL_load_error_strings();
+  SSL_library_init();
+
+  return self;
 }
 
 mrb_value mrb_http2_client_get(mrb_state *mrb, mrb_value self)
@@ -668,7 +914,20 @@ void mrb_mruby_http2_gem_init(mrb_state *mrb)
 
   http2 = mrb_define_module(mrb, "HTTP2");
   client = mrb_define_class_under(mrb, http2, "Client", mrb->object_class);
-  mrb_define_class_method(mrb, client, "http2_get", mrb_http2_client_get, ARGS_REQ(1));
+
+  mrb_define_method(mrb, client, "initialize", mrb_http2_client_init, MRB_ARGS_NONE());
+  mrb_define_method(mrb, client, "request", mrb_http2_client_request, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, client, "inst_get", mrb_http2_client_inst_get, MRB_ARGS_NONE());
+  mrb_define_method(mrb, client, "uri=", mrb_http2_client_set_uri, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, client, "send_callback", mrb_http2_set_send_callback, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, client, "recv_callback", mrb_http2_set_recv_callback, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, client, "before_frame_send_callback", mrb_http2_set_before_frame_send_callback, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, client, "on_frame_send_callback", mrb_http2_set_on_frame_send_callback, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, client, "on_frame_recv_callback", mrb_http2_set_on_frame_recv_callback, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, client, "on_stream_close_callback", mrb_http2_set_on_stream_close_callback, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, client, "on_data_chunk_recv_callback", mrb_http2_set_on_data_chunk_recv_callback, MRB_ARGS_REQ(1));
+  
+  mrb_define_class_method(mrb, client, "http2_get", mrb_http2_client_get, MRB_ARGS_REQ(1));
 
   DONE;
 }

@@ -4,6 +4,10 @@ module HTTP2
       response_hash = http2_get(url)
       Response.new(response_hash)
     end
+    def get
+      response_hash = inst_get
+      Response.new(response_hash)
+    end
   end
   class Response
     def initialize(response_hash)
