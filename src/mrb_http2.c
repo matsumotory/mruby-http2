@@ -40,6 +40,7 @@
 #include <poll.h>
 #include <signal.h>
 #include <assert.h>
+#include <pthread.h>
 
 #include <nghttp2/nghttp2.h>
 #include <openssl/ssl.h>
@@ -65,6 +66,7 @@ enum {
   WANT_WRITE
 };
 
+#define TRACER printf("%s:%d\n", __func__, __LINE__)
 #define MAKE_NV(NAME, VALUE)                                           \
   {(uint8_t*)NAME, (uint8_t*)VALUE,                                    \
     (uint16_t)(sizeof(NAME) - 1), (uint16_t)(sizeof(VALUE) - 1) }
@@ -111,6 +113,7 @@ static char CONTENT_LENGTH[] = "content-encoding";
 static size_t CONTENT_LENGTH_LEN = sizeof(CONTENT_LENGTH) - 1;
 static char GZIP[] = "gzip";
 static size_t GZIP_LEN = sizeof(GZIP) - 1;
+static pthread_mutex_t mutex;
 
 static void mrb_http2_request_free(mrb_state *mrb, struct mrb_http2_request_t *req)
 {
@@ -124,6 +127,7 @@ static void mrb_http2_context_free(mrb_state *mrb, void *p)
 {
   mrb_http2_context_t *ctx = (mrb_http2_context_t *)p;
   mrb_http2_request_free(mrb, ctx->req);
+  pthread_mutex_destroy(&mutex);
 }
 
 static const struct mrb_data_type mrb_http2_context_type = {
@@ -259,9 +263,11 @@ static ssize_t send_callback(nghttp2_session *session, const uint8_t *data, size
       rv = NGHTTP2_ERR_CALLBACK_FAILURE;
     }
   }
-  mrb_value cb_block = mrb_hash_get(conn->mrb, conn->cb_block_hash, mrb_str_new_cstr(conn->mrb, "send_callback"));
-  if (!mrb_nil_p(cb_block)) {
-    mrb_yield_argv(conn->mrb, cb_block, 0, NULL);
+  if (!mrb_nil_p(conn->cb_block_hash)) {
+    mrb_value cb_block = mrb_hash_get(conn->mrb, conn->cb_block_hash, mrb_str_new_cstr(conn->mrb, "send_callback"));
+    if (!mrb_nil_p(cb_block)) {
+      mrb_yield_argv(conn->mrb, cb_block, 0, NULL);
+    }
   }
   return rv;
 }
@@ -286,14 +292,17 @@ static ssize_t recv_callback(nghttp2_session *session, uint8_t *buf, size_t leng
   } else if(rv == 0) {
     rv = NGHTTP2_ERR_EOF;
   }
-  mrb_value cb_block = mrb_hash_get(conn->mrb, conn->cb_block_hash, mrb_str_new_cstr(conn->mrb, "recv_callback"));
-  if (!mrb_nil_p(cb_block)) {
-    mrb_yield_argv(conn->mrb, cb_block, 0, NULL);
+  if (!mrb_nil_p(conn->cb_block_hash)) {
+    mrb_value cb_block = mrb_hash_get(conn->mrb, conn->cb_block_hash, mrb_str_new_cstr(conn->mrb, "recv_callback"));
+    if (!mrb_nil_p(cb_block)) {
+      mrb_yield_argv(conn->mrb, cb_block, 0, NULL);
+    }
   }
   return rv;
 }
 
-static int before_frame_send_callback(nghttp2_session *session, const nghttp2_frame *frame, void *user_data)
+static int before_frame_send_callback(nghttp2_session *session, 
+    const nghttp2_frame *frame, void *user_data)
 {
   struct mrb_http2_conn_t *conn;
   conn = (struct mrb_http2_conn_t*)user_data;
@@ -305,12 +314,16 @@ static int before_frame_send_callback(nghttp2_session *session, const nghttp2_fr
     req = nghttp2_session_get_stream_user_data(session, stream_id);
     if(req && req->stream_id == -1) {
       req->stream_id = stream_id;
-      mrb_hash_set(conn->mrb, conn->response, mrb_symbol_value(mrb_intern_cstr(conn->mrb, "stream_id")), mrb_fixnum_value(stream_id));
+      mrb_hash_set(conn->mrb, conn->response, 
+          mrb_symbol_value(mrb_intern_cstr(conn->mrb, "stream_id")), mrb_fixnum_value(stream_id));
     }
   }
-  mrb_value cb_block = mrb_hash_get(conn->mrb, conn->cb_block_hash, mrb_str_new_cstr(conn->mrb, "before_frame_send_callback"));
-  if (!mrb_nil_p(cb_block)) {
-    mrb_yield_argv(conn->mrb, cb_block, 0, NULL);
+  if (!mrb_nil_p(conn->cb_block_hash)) {
+    mrb_value cb_block = mrb_hash_get(conn->mrb, conn->cb_block_hash, 
+        mrb_str_new_cstr(conn->mrb, "before_frame_send_callback"));
+    if (!mrb_nil_p(cb_block)) {
+      mrb_yield_argv(conn->mrb, cb_block, 0, NULL);
+    }
   }
   return 0;
 }
@@ -327,21 +340,29 @@ static int on_frame_send_callback(nghttp2_session *session, const nghttp2_frame 
       const nghttp2_nv *nva = frame->headers.nva;
       req_headers = mrb_hash_new(conn->mrb);
       for(i = 0; i < frame->headers.nvlen; ++i) {
-        mrb_hash_set(conn->mrb, req_headers, mrb_str_new(conn->mrb, (char *)nva[i].name, nva[i].namelen), mrb_str_new(conn->mrb, (char *)nva[i].value, nva[i].valuelen));
+        mrb_hash_set(conn->mrb, req_headers, 
+            mrb_str_new(conn->mrb, (char *)nva[i].name, nva[i].namelen), 
+            mrb_str_new(conn->mrb, (char *)nva[i].value, nva[i].valuelen));
       }
-      mrb_hash_set(conn->mrb, conn->response, mrb_symbol_value(mrb_intern_cstr(conn->mrb, "request_headers")), req_headers);
+      mrb_hash_set(conn->mrb, conn->response, 
+          mrb_symbol_value(mrb_intern_cstr(conn->mrb, "request_headers")), req_headers);
     }
     break;
   case NGHTTP2_RST_STREAM:
-    mrb_hash_set(conn->mrb, conn->response, mrb_symbol_value(mrb_intern_cstr(conn->mrb, "frame_send_header_rst_stream")), mrb_true_value());
+    mrb_hash_set(conn->mrb, conn->response, 
+        mrb_symbol_value(mrb_intern_cstr(conn->mrb, "frame_send_header_rst_stream")), mrb_true_value());
     break;
   case NGHTTP2_GOAWAY:
-    mrb_hash_set(conn->mrb, conn->response, mrb_symbol_value(mrb_intern_cstr(conn->mrb, "frame_send_header_goway")), mrb_true_value());
+    mrb_hash_set(conn->mrb, conn->response, 
+        mrb_symbol_value(mrb_intern_cstr(conn->mrb, "frame_send_header_goway")), mrb_true_value());
     break;
   }
-  mrb_value cb_block = mrb_hash_get(conn->mrb, conn->cb_block_hash, mrb_str_new_cstr(conn->mrb, "on_frame_send_callback"));
-  if (!mrb_nil_p(cb_block)) {
-    mrb_yield_argv(conn->mrb, cb_block, 0, NULL);
+  if (!mrb_nil_p(conn->cb_block_hash)) {
+    mrb_value cb_block = mrb_hash_get(conn->mrb, conn->cb_block_hash, 
+        mrb_str_new_cstr(conn->mrb, "on_frame_send_callback"));
+    if (!mrb_nil_p(cb_block)) {
+      mrb_yield_argv(conn->mrb, cb_block, 0, NULL);
+    }
   }
   return 0;
 }
@@ -350,35 +371,92 @@ static int on_frame_recv_callback(nghttp2_session *session, const nghttp2_frame 
 {
   struct mrb_http2_conn_t *conn;
   conn = (struct mrb_http2_conn_t*)user_data;
-  mrb_value reply_headers;
+
+  switch(frame->hd.type) {
+  case NGHTTP2_HEADERS:
+    if(frame->headers.cat != NGHTTP2_HCAT_RESPONSE &&
+       frame->headers.cat != NGHTTP2_HCAT_PUSH_RESPONSE) {
+      break;
+    }
+    //TRACER;
+    break;
+  case NGHTTP2_RST_STREAM:
+  //TRACER;
+    mrb_hash_set(conn->mrb, conn->response, 
+        mrb_symbol_value(mrb_intern_cstr(conn->mrb, "frame_recv_header_rst_stream")), mrb_true_value());
+    break;
+  case NGHTTP2_GOAWAY:
+  //TRACER;
+    mrb_hash_set(conn->mrb, conn->response, 
+        mrb_symbol_value(mrb_intern_cstr(conn->mrb, "frame_recv_header_goway")), mrb_true_value());
+    break;
+  }
+  //TRACER;
+  //mrb_p(conn->mrb, conn->cb_block_hash);
+  //conn->cb_block_hash = mrb_nil_value();
+  //if (!mrb_nil_p(conn->cb_block_hash)) {
+  //TRACER;
+  //  mrb_value cb_block = mrb_hash_get(conn->mrb, conn->cb_block_hash, 
+  //                          mrb_str_new_lit(conn->mrb, "on_frame_recv_callback"));
+  //  if (!mrb_nil_p(cb_block)) {
+  //    mrb_yield_argv(conn->mrb, cb_block, 0, NULL);
+  //  }
+  //}
+  return 0;
+}
+
+//static int on_header_callback(nghttp2_session *session, const nghttp2_frame *frame, void *user_data)
+static int on_header_callback(nghttp2_session *session,
+                       const nghttp2_frame *frame,
+                       const uint8_t *name, size_t namelen,
+                       const uint8_t *value, size_t valuelen,
+                       void *user_data)
+
+{
+  struct mrb_http2_conn_t *conn;
+  conn = (struct mrb_http2_conn_t*)user_data;
+  //mrb_value reply_headers;
   size_t i;
   switch(frame->hd.type) {
   case NGHTTP2_HEADERS:
-    if(frame->headers.cat == NGHTTP2_HCAT_RESPONSE) {
+    if(frame->headers.cat != NGHTTP2_HCAT_RESPONSE &&
+       frame->headers.cat != NGHTTP2_HCAT_PUSH_RESPONSE) {
+      break;
+    }
+    //TRACER;
+    struct mrb_http2_request_t *req;
+    req = nghttp2_session_get_stream_user_data(session, frame->hd.stream_id);
+    if(req) {
+      //TRACER;
       const nghttp2_nv *nva = frame->headers.nva;
-      struct mrb_http2_request_t *req;
-      req = nghttp2_session_get_stream_user_data(session, frame->hd.stream_id);
-      if(req) {
-        mrb_http2_check_gzip(conn->mrb, req, frame->headers.nva, frame->headers.nvlen);
-        reply_headers = mrb_hash_new(conn->mrb);
-        for(i = 0; i < frame->headers.nvlen; ++i) {
-          mrb_hash_set(conn->mrb, reply_headers, mrb_str_new(conn->mrb, (char *)nva[i].name, nva[i].namelen), mrb_str_new(conn->mrb, (char *)nva[i].value, nva[i].valuelen));
-        }
-        mrb_hash_set(conn->mrb, conn->response, mrb_symbol_value(mrb_intern_cstr(conn->mrb, "response_headers")), reply_headers);
+      //printf("nvlen:%d\n", frame->headers.nvlen);
+      printf("RESPONSE_HEADERS: %s:%s\n", strcopy(name, namelen), strcopy(value, valuelen));
+      //printf("%s:%s\n", (char *)nva[1].name, (char *)nva[1].value);
+      mrb_http2_check_gzip(conn->mrb, req, frame->headers.nva, frame->headers.nvlen);
+      //reply_headers = mrb_hash_new(conn->mrb);
+      for(i = 0; i < frame->headers.nvlen; ++i) {
+        printf("%s:%s\n", (char *)nva[i].name, (char *)nva[i].value);
+        //TRACER;
+        //mrb_hash_set(conn->mrb, reply_headers
+        //    , mrb_str_new(conn->mrb, (char *)nva[i].name, nva[i].namelen)
+        //    , mrb_str_new(conn->mrb, (char *)nva[i].value, nva[i].valuelen));
       }
+      //mrb_hash_set(conn->mrb, conn->response, 
+      //    mrb_symbol_value(mrb_intern_cstr(conn->mrb, "response_headers")), reply_headers);
+      //mrb_hash_set(conn->mrb, conn->response, mrb_symbol_value(mrb_intern_cstr(conn->mrb, "response_headers")), mrb_str_new_lit(conn->mrb, "hoge"));
     }
     break;
-  case NGHTTP2_RST_STREAM:
-    mrb_hash_set(conn->mrb, conn->response, mrb_symbol_value(mrb_intern_cstr(conn->mrb, "frame_recv_header_rst_stream")), mrb_true_value());
-    break;
   case NGHTTP2_GOAWAY:
-    mrb_hash_set(conn->mrb, conn->response, mrb_symbol_value(mrb_intern_cstr(conn->mrb, "frame_recv_header_goway")), mrb_true_value());
+    mrb_hash_set(conn->mrb, conn->response, 
+        mrb_symbol_value(mrb_intern_cstr(conn->mrb, "on_header_goway")), mrb_true_value());
     break;
   }
-  mrb_value cb_block = mrb_hash_get(conn->mrb, conn->cb_block_hash, mrb_str_new_cstr(conn->mrb, "on_frame_recv_callback"));
-  if (!mrb_nil_p(cb_block)) {
-    mrb_yield_argv(conn->mrb, cb_block, 0, NULL);
-  }
+  //if (!mrb_nil_p(conn->cb_block_hash)) {
+  //  mrb_value cb_block = mrb_hash_get(conn->mrb, conn->cb_block_hash, mrb_str_new_cstr(conn->mrb, "on_header_callback"));
+  //  if (!mrb_nil_p(cb_block)) {
+  //    mrb_yield_argv(conn->mrb, cb_block, 0, NULL);
+  //  }
+  //}
   return 0;
 }
 
@@ -397,9 +475,11 @@ static int on_stream_close_callback(nghttp2_session *session, int32_t stream_id,
       mrb_raisef(mrb, E_RUNTIME_ERROR, "nghttp2_submit_goaway: %S", mrb_fixnum_value(rv));
     }
   }
-  mrb_value cb_block = mrb_hash_get(conn->mrb, conn->cb_block_hash, mrb_str_new_cstr(conn->mrb, "on_stream_close_callback"));
-  if (!mrb_nil_p(cb_block)) {
-    mrb_yield_argv(conn->mrb, cb_block, 0, NULL);
+  if (!mrb_nil_p(conn->cb_block_hash)) {
+    mrb_value cb_block = mrb_hash_get(conn->mrb, conn->cb_block_hash, mrb_str_new_cstr(conn->mrb, "on_stream_close_callback"));
+    if (!mrb_nil_p(cb_block)) {
+      mrb_yield_argv(conn->mrb, cb_block, 0, NULL);
+    }
   }
   return 0;
 }
@@ -452,9 +532,13 @@ static int on_data_chunk_recv_callback(nghttp2_session *session, uint8_t flags, 
     mrb_hash_set(conn->mrb, conn->response, mrb_symbol_value(mrb_intern_cstr(conn->mrb, "body")), body_data);
     mrb_hash_set(conn->mrb, conn->response, mrb_symbol_value(mrb_intern_cstr(conn->mrb, "body_length")), body_len);
   }
-  mrb_value cb_block = mrb_hash_get(conn->mrb, conn->cb_block_hash, mrb_str_new_cstr(conn->mrb, "on_data_chunk_recv_callback"));
-  if (!mrb_nil_p(cb_block)) {
-    mrb_yield_argv(conn->mrb, cb_block, 0, NULL);
+  if (!mrb_nil_p(conn->cb_block_hash)) {
+    mrb_value cb_block = mrb_hash_get(conn->mrb, conn->cb_block_hash, mrb_str_new_cstr(conn->mrb, "on_data_chunk_recv_callback"));
+    if (!mrb_nil_p(cb_block)) {
+      pthread_mutex_lock(&mutex);
+      mrb_yield_argv(conn->mrb, cb_block, 0, NULL);
+      pthread_mutex_unlock(&mutex);
+    }
   }
   return 0;
 }
@@ -469,6 +553,7 @@ static void mrb_http2_setup_nghttp2_callbacks(mrb_state *mrb, nghttp2_session_ca
   callbacks->on_frame_recv_callback = on_frame_recv_callback;
   callbacks->on_stream_close_callback = on_stream_close_callback;
   callbacks->on_data_chunk_recv_callback = on_data_chunk_recv_callback;
+  callbacks->on_header_callback = on_header_callback;
 }
 
 static int select_next_proto_cb(SSL* ssl, unsigned char **out, unsigned char *outlen, const unsigned char *in, unsigned int inlen, void *arg)
@@ -581,6 +666,7 @@ static void mrb_http2_submit_request(mrb_state *mrb, struct mrb_http2_conn_t *co
     MAKE_NV(":scheme", "https"),
     MAKE_NV_CS(":authority", req->hostport),
     MAKE_NV("accept", "*/*"),
+    MAKE_NV("accept-encoding", GZIP),
     MAKE_NV("user-agent", MRUBY_HTTP2_NAME"/"MRUBY_HTTP2_VERSION)
   };
   rv = nghttp2_submit_request(conn->session, pri, nva, sizeof(nva)/sizeof(nva[0]), NULL, req);
@@ -664,7 +750,7 @@ static mrb_value mrb_http2_fetch_uri(mrb_state *mrb, const struct mrb_http2_uri_
   mrb_http2_set_tcp_nodelay(mrb, fd);
   conn.mrb = mrb;
   conn.response = mrb_hash_new(mrb);
-  conn.cb_block_hash = mrb_http2_cb_block_hash_init(mrb);
+  conn.cb_block_hash = mrb_nil_value();
 
   rv = nghttp2_session_client_new(&conn.session, &callbacks, &conn);
   if(rv != 0) {
@@ -861,6 +947,7 @@ static mrb_value mrb_http2_client_init(mrb_state *mrb, mrb_value self)
   mrb_http2_context_t *ctx;
   struct sigaction act;
 
+  pthread_mutex_init(&mutex, NULL);
   ctx = (mrb_http2_context_t *)DATA_PTR(self);
   if (ctx) {
       mrb_free(mrb, ctx);
@@ -873,7 +960,7 @@ static mrb_value mrb_http2_client_init(mrb_state *mrb, mrb_value self)
   ctx->conn = (struct mrb_http2_conn_t *)mrb_malloc(mrb, sizeof(struct mrb_http2_conn_t));
   ctx->conn->mrb = mrb;
   ctx->conn->response = mrb_hash_new(mrb);
-  ctx->conn->cb_block_hash = mrb_http2_cb_block_hash_init(mrb);
+  ctx->conn->cb_block_hash = mrb_nil_value();
   DATA_PTR(self) = ctx;
 
   memset(&act, 0, sizeof(struct sigaction));
