@@ -42,6 +42,11 @@
 #include <assert.h>
 #include <pthread.h>
 
+#include <event.h>
+#include <event2/event.h>
+#include <event2/bufferevent_ssl.h>
+#include <event2/listener.h>
+
 #include <nghttp2/nghttp2.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
@@ -54,7 +59,7 @@
 #include "mruby/string.h"
 #include "mruby/class.h"
 #include "mrb_http2.h"
-
+#include "mruby/numeric.h"
 
 #define DONE mrb_gc_arena_restore(mrb, 0);
 #define MRUBY_HTTP2_NAME "mruby-http2"
@@ -76,9 +81,22 @@ enum {
     (uint16_t)(sizeof(NAME) - 1), (uint16_t)(strlen(VALUE)) }
 
 typedef struct {
-    struct mrb_http2_conn_t *conn;
-    struct mrb_http2_request_t *req;
-    struct mrb_http2_uri_t *uri;
+  SSL_CTX *ssl_ctx;
+  struct event_base *evbase;
+} app_context_t;
+
+typedef struct {
+  const char *service;
+  app_context_t app_ctx;
+} mrb_http2_server_t;
+
+typedef struct {
+  struct mrb_http2_conn_t *conn;
+  struct mrb_http2_request_t *req;
+  struct mrb_http2_uri_t *uri;
+
+  // HTTP2::Server class only
+  mrb_http2_server_t *server;
 } mrb_http2_context_t;
 
 struct mrb_http2_conn_t {
@@ -125,8 +143,15 @@ static void mrb_http2_request_free(mrb_state *mrb, struct mrb_http2_request_t *r
 
 static void mrb_http2_context_free(mrb_state *mrb, void *p)
 {
+  TRACER;
   mrb_http2_context_t *ctx = (mrb_http2_context_t *)p;
   mrb_http2_request_free(mrb, ctx->req);
+  TRACER;
+  if (ctx->server) {
+    TRACER;
+    event_base_free(ctx->server->app_ctx.evbase);
+    SSL_CTX_free(ctx->server->app_ctx.ssl_ctx);
+  }
   pthread_mutex_destroy(&mutex);
 }
 
@@ -331,9 +356,9 @@ static int before_frame_send_callback(nghttp2_session *session,
 static int on_frame_send_callback(nghttp2_session *session, const nghttp2_frame *frame, void *user_data)
 {
   struct mrb_http2_conn_t *conn;
-  conn = (struct mrb_http2_conn_t*)user_data;
   mrb_value req_headers;
   size_t i;
+  conn = (struct mrb_http2_conn_t*)user_data;
   switch(frame->hd.type) {
   case NGHTTP2_HEADERS:
     if(nghttp2_session_get_stream_user_data(session, frame->hd.stream_id)) {
@@ -414,9 +439,10 @@ static int on_header_callback(nghttp2_session *session,
 
 {
   struct mrb_http2_conn_t *conn;
-  conn = (struct mrb_http2_conn_t*)user_data;
   //mrb_value reply_headers;
   size_t i;
+  struct mrb_http2_request_t *req;
+  conn = (struct mrb_http2_conn_t*)user_data;
   switch(frame->hd.type) {
   case NGHTTP2_HEADERS:
     if(frame->headers.cat != NGHTTP2_HCAT_RESPONSE &&
@@ -424,13 +450,12 @@ static int on_header_callback(nghttp2_session *session,
       break;
     }
     //TRACER;
-    struct mrb_http2_request_t *req;
     req = nghttp2_session_get_stream_user_data(session, frame->hd.stream_id);
     if(req) {
       //TRACER;
       const nghttp2_nv *nva = frame->headers.nva;
       //printf("nvlen:%d\n", frame->headers.nvlen);
-      printf("RESPONSE_HEADERS: %s:%s\n", strcopy(name, namelen), strcopy(value, valuelen));
+      printf("RESPONSE_HEADERS: %s:%s\n", strcopy((const char*)name, namelen), strcopy((const char*)value, valuelen));
       //printf("%s:%s\n", (char *)nva[1].name, (char *)nva[1].value);
       mrb_http2_check_gzip(conn->mrb, req, frame->headers.nva, frame->headers.nvlen);
       //reply_headers = mrb_hash_new(conn->mrb);
@@ -464,9 +489,10 @@ static int on_stream_close_callback(nghttp2_session *session, int32_t stream_id,
 {
   struct mrb_http2_conn_t *conn;
   struct mrb_http2_request_t *req;
+  mrb_state *mrb;
 
   conn = (struct mrb_http2_conn_t*)user_data;
-  mrb_state *mrb = conn->mrb;
+  mrb = conn->mrb;
   req = nghttp2_session_get_stream_user_data(session, stream_id);
   if(req) {
     int rv;
@@ -489,11 +515,14 @@ static int on_stream_close_callback(nghttp2_session *session, int32_t stream_id,
 static int on_data_chunk_recv_callback(nghttp2_session *session, uint8_t flags, int32_t stream_id, const uint8_t *data, size_t len, void *user_data)
 {
   struct mrb_http2_conn_t *conn;
-  conn = (struct mrb_http2_conn_t*)user_data;
   struct mrb_http2_request_t *req;
   char *body;
+  conn = (struct mrb_http2_conn_t*)user_data;
   req = nghttp2_session_get_stream_user_data(session, stream_id);
   if(req) {
+    mrb_value body_len;
+    mrb_value body_data;
+
     mrb_hash_set(conn->mrb, conn->response, mrb_symbol_value(mrb_intern_cstr(conn->mrb, "recieve_bytes")), mrb_float_value(conn->mrb, (float)len));
     body = NULL;
     if(req->inflater) {
@@ -502,12 +531,13 @@ static int on_data_chunk_recv_callback(nghttp2_session *session, uint8_t flags, 
         size_t outlen = MAX_OUTLEN;
         size_t tlen = len;
         int rv;
+        char *merge_body;
         rv = nghttp2_gzip_inflate(req->inflater, out, &outlen, data, &tlen);
         if(rv == -1) {
           nghttp2_submit_rst_stream(session, NGHTTP2_FLAG_NONE, stream_id, NGHTTP2_INTERNAL_ERROR);
           break;
         }
-        char *merge_body = strcopy((char *)out, outlen);
+        merge_body = strcopy((const char *)out, outlen);
         if (body == NULL) {
           body = merge_body;
         }
@@ -520,8 +550,7 @@ static int on_data_chunk_recv_callback(nghttp2_session *session, uint8_t flags, 
     } else {
       body = strcopy((char *)data, len);
     }
-    mrb_value body_data = mrb_hash_get(conn->mrb, conn->response, mrb_symbol_value(mrb_intern_cstr(conn->mrb, "body")));
-    mrb_value body_len;
+    body_data = mrb_hash_get(conn->mrb, conn->response, mrb_symbol_value(mrb_intern_cstr(conn->mrb, "body")));
     if (!mrb_nil_p(body_data)) {
       mrb_str_concat(conn->mrb, body_data, mrb_str_new_cstr(conn->mrb, (char *)body));
     }
@@ -995,12 +1024,115 @@ mrb_value mrb_http2_client_get(mrb_state *mrb, mrb_value self)
   return mrb_http2_fetch_uri(mrb, &uri_data);
 }
 
+//
+//
+// HTTP2::Server class
+//
+//
+static unsigned char next_proto_list[256];
+static size_t next_proto_list_len;
+
+static int next_proto_cb(SSL *s, const unsigned char **data, unsigned int *len, 
+    void *arg)
+{
+  *data = next_proto_list;
+  *len = next_proto_list_len;
+  return SSL_TLSEXT_ERR_OK;
+}
+
+static SSL_CTX* mrb_create_ssl_ctx(mrb_state *mrb, const char *key_file, 
+    const char *cert_file)
+{
+  SSL_CTX *ssl_ctx;
+  ssl_ctx = SSL_CTX_new(SSLv23_server_method());
+  if(!ssl_ctx) {
+    mrb_raisef(mrb, E_RUNTIME_ERROR, "Could not create SSL/TLS context: %S", 
+        mrb_str_new_cstr(mrb, ERR_error_string(ERR_get_error(), NULL)));
+  }
+  SSL_CTX_set_options(ssl_ctx, 
+      SSL_OP_ALL | SSL_OP_NO_SSLv2 | SSL_OP_NO_COMPRESSION |
+      SSL_OP_NO_SESSION_RESUMPTION_ON_RENEGOTIATION);
+
+  if(SSL_CTX_use_PrivateKey_file(ssl_ctx, key_file, 
+        SSL_FILETYPE_PEM) != 1) {
+    mrb_raisef(mrb, E_RUNTIME_ERROR, "Could not read private key file %S", 
+        mrb_str_new_cstr(mrb, key_file));
+  }
+  if(SSL_CTX_use_certificate_chain_file(ssl_ctx, cert_file) != 1) {
+    mrb_raisef(mrb, E_RUNTIME_ERROR, "Could not read certificate file %S", 
+        mrb_str_new_cstr(mrb, cert_file));
+  }
+
+  next_proto_list[0] = NGHTTP2_PROTO_VERSION_ID_LEN;
+  memcpy(&next_proto_list[1], NGHTTP2_PROTO_VERSION_ID, 
+      NGHTTP2_PROTO_VERSION_ID_LEN);
+  next_proto_list_len = 1 + NGHTTP2_PROTO_VERSION_ID_LEN;
+
+  SSL_CTX_set_next_protos_advertised_cb(ssl_ctx, next_proto_cb, NULL);
+  return ssl_ctx;
+}
+
+static void init_app_context(app_context_t *app_ctx, SSL_CTX *ssl_ctx,
+    struct event_base *evbase)
+{
+  memset(app_ctx, 0, sizeof(app_context_t));
+  app_ctx->ssl_ctx = ssl_ctx;
+  app_ctx->evbase = evbase;
+}
+
+static mrb_value mrb_http2_server_init(mrb_state *mrb, mrb_value self)
+{
+  mrb_http2_context_t *ctx;
+  struct sigaction act;
+  SSL_CTX *ssl_ctx;
+  app_context_t app_ctx;
+  struct event_base *evbase;
+  mrb_value config;
+  mrb_value port;
+  char *service, *key_file, *cert_file;
+
+  ctx = (mrb_http2_context_t *)mrb_malloc(mrb, sizeof(mrb_http2_context_t));
+  ctx->uri = NULL;
+  ctx->conn = (struct mrb_http2_conn_t *)mrb_malloc(mrb, sizeof(struct mrb_http2_conn_t));
+  ctx->conn->mrb = mrb;
+  ctx->conn->response = mrb_hash_new(mrb);
+  ctx->conn->cb_block_hash = mrb_nil_value();
+
+  memset(&act, 0, sizeof(struct sigaction));
+  act.sa_handler = SIG_IGN;
+  sigaction(SIGPIPE, &act, NULL);
+
+  SSL_load_error_strings();
+  SSL_library_init();
+
+  mrb_get_args(mrb, "H", &config);
+  port = mrb_hash_get(mrb, config, mrb_symbol_value(mrb_intern_lit(mrb, "port")));
+  service = mrb_str_to_cstr(mrb, mrb_fixnum_to_str(mrb, port, 10));
+  key_file = mrb_str_to_cstr(mrb, mrb_hash_get(mrb, config, mrb_symbol_value(mrb_intern_lit(mrb, "key"))));
+  cert_file = mrb_str_to_cstr(mrb, mrb_hash_get(mrb, config, mrb_symbol_value(mrb_intern_lit(mrb, "crt"))));
+
+  ssl_ctx = mrb_create_ssl_ctx(mrb, key_file, cert_file);
+  evbase = event_base_new();
+  init_app_context(&app_ctx, ssl_ctx, evbase);
+  ctx->server = (mrb_http2_server_t *)mrb_malloc(mrb, sizeof(mrb_http2_server_t));
+  ctx->server->service = service;
+  ctx->server->app_ctx = app_ctx;
+
+  DATA_TYPE(self) = &mrb_http2_context_type;
+  DATA_PTR(self) = ctx;
+  TRACER;
+
+  return self;
+}
+
+
 void mrb_mruby_http2_gem_init(mrb_state *mrb)
 {
-  struct RClass *http2, *client;
+  struct RClass *http2, *client, *server;
 
   http2 = mrb_define_module(mrb, "HTTP2");
   client = mrb_define_class_under(mrb, http2, "Client", mrb->object_class);
+  server = mrb_define_class_under(mrb, http2, "Server", mrb->object_class);
 
   mrb_define_method(mrb, client, "initialize", mrb_http2_client_init, MRB_ARGS_NONE());
   mrb_define_method(mrb, client, "request", mrb_http2_client_request, MRB_ARGS_REQ(1));
@@ -1015,6 +1147,9 @@ void mrb_mruby_http2_gem_init(mrb_state *mrb)
   mrb_define_method(mrb, client, "on_data_chunk_recv_callback", mrb_http2_set_on_data_chunk_recv_callback, MRB_ARGS_REQ(1));
   
   mrb_define_class_method(mrb, client, "http2_get", mrb_http2_client_get, MRB_ARGS_REQ(1));
+
+  mrb_define_method(mrb, server, "initialize", mrb_http2_server_init, MRB_ARGS_REQ(1));
+  //mrb_define_method(mrb, server, "run", mrb_http2_server_run, MRB_ARGS_NONE());
 
   DONE;
 }
