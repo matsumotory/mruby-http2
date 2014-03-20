@@ -1134,6 +1134,9 @@ mrb_value mrb_http2_client_get(mrb_state *mrb, mrb_value self)
 //
 //
 
+static unsigned char next_proto_list[256];
+static size_t next_proto_list_len;
+
 static void add_stream(http2_session_data *session_data, 
     http2_stream_data *stream_data)
 {
@@ -1817,9 +1820,6 @@ static mrb_value mrb_http2_server_run(mrb_state *mrb, mrb_value self)
 
   return self;
 }
-
-static unsigned char next_proto_list[256];
-static size_t next_proto_list_len;
 
 static int next_proto_cb(SSL *s, const unsigned char **data, 
     unsigned int *len, void *arg)
