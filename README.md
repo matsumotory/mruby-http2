@@ -29,16 +29,17 @@ r.stream_id
 ```
 ##### HTTP2 get reuslt
 ```ruby
-{:body=>"hello mruby-http2!!\n", :body_length=>20, :recieve_bytes=>20.0, :response_headers=>{":status"=>"200"}, :frame_send_header_goway=>true, :request_headers=>{"user-agent"=>"mruby-http2/0.0.1", "accept"=>"*/*", ":authority"=>"127.0.0.1:8080", ":scheme"=>"https", "accept-encoding"=>"gzip", ":method"=>"GET", ":path"=>"/index.html"}, :stream_id=>1}
+{:body=>"hello mruby-http2!!\n", :body_length=>20, :recieve_bytes=>20.0, :response_headers=>{"last-modified"=>"Wed, 19 Mar 2014 08:41:00 GMT", "server"=>"nghttpd nghttp2/0.4.0-DEV", ":status"=>"200", "date"=>"Thu, 20 Mar 2014 11:38:17 GMT", "cache-control"=>"max-age=3600", "content-length"=>"20"}, :frame_send_header_goway=>true, :request_headers=>{"user-agent"=>"mruby-http2/0.0.1", "accept"=>"*/*", ":authority"=>"127.0.0.1:8080", ":scheme"=>"https", "accept-encoding"=>"gzip", ":method"=>"GET", ":path"=>"/index.html"}, :stream_id=>1}
 "hello mruby-http2!!\n"
 {"user-agent"=>"mruby-http2/0.0.1", "accept"=>"*/*", ":authority"=>"127.0.0.1:8080", ":scheme"=>"https", "accept-encoding"=>"gzip", ":method"=>"GET", ":path"=>"/index.html"}
-{":status"=>"200"}
+{"last-modified"=>"Wed, 19 Mar 2014 08:41:00 GMT", "server"=>"nghttpd nghttp2/0.4.0-DEV", ":status"=>"200", "date"=>"Thu, 20 Mar 2014 11:38:17 GMT", "cache-control"=>"max-age=3600", "content-length"=>"20"}
 200
 "hello mruby-http2!!\n"
 20
 1
 ```
 ##### Set callback block from Ruby
+Access to nghttpd HTTP/2 Server
 ```ruby
 r = HTTP2::Client.get 'https://127.0.0.1:8080/index.html'
 
@@ -85,38 +86,33 @@ p r.response
 ```
 ##### Result
 ```
-{:body=>"hello mruby-http2!!\n", :body_length=>20, :recieve_bytes=>20.0, :response_headers=>{":status"=>"200"}, :frame_send_header_goway=>true, :request_headers=>{"user-agent"=>"mruby-http2/0.0.1", "accept"=>"*/*", ":authority"=>"127.0.0.1:8080", ":scheme"=>"https", "accept-encoding"=>"gzip", ":method"=>"GET", ":path"=>"/index.html"}, :stream_id=>1}
-"hello mruby-http2!!\n"
-{"user-agent"=>"mruby-http2/0.0.1", "accept"=>"*/*", ":authority"=>"127.0.0.1:8080", ":scheme"=>"https", "accept-encoding"=>"gzip", ":method"=>"GET", ":path"=>"/index.html"}
-{":status"=>"200"}
-200
-"hello mruby-http2!!\n"
-20
-1
 "---- set callback version ----"
+"recv_callback"
+"on_frame_recv_callback"
 "recv_callback"
 "before_frame_send_callback"
 "send_callback"
 "on_frame_send_callback"
-"recv_callback"
-"on_frame_recv_callback"
+"before_frame_send_callback"
+"send_callback"
+"on_frame_send_callback"
 "recv_callback"
 "header callback"
+"header callback"
+"header callback"
+"header callback"
+"header callback"
+"header callback"
 "on_frame_recv_callback"
-"recv_callback"
 "on_data_chunk_recv_callback"
 "on_frame_recv_callback"
-"recv_callback"
 "on_frame_recv_callback"
 "on_stream_close_callback"
 "recv_callback"
 "before_frame_send_callback"
 "send_callback"
 "on_frame_send_callback"
-"before_frame_send_callback"
-"send_callback"
-"on_frame_send_callback"
-{:body=>"hello mruby-http2!!\n", :body_length=>20, :recieve_bytes=>20.0, :response_headers=>{":status"=>"200"}, :frame_send_header_goway=>true, :request_headers=>{"user-agent"=>"mruby-http2/0.0.1", "accept"=>"*/*", ":authority"=>"127.0.0.1:8080", ":scheme"=>"https", "accept-encoding"=>"gzip", ":method"=>"GET", ":path"=>"/index.html"}, :stream_id=>1}
+{:body=>"hello mruby-http2!!\n", :body_length=>20, :recieve_bytes=>20.0, :response_headers=>{"last-modified"=>"Wed, 19 Mar 2014 08:41:00 GMT", "server"=>"nghttpd nghttp2/0.4.0-DEV", ":status"=>"200", "date"=>"Thu, 20 Mar 2014 11:39:34 GMT", "cache-control"=>"max-age=3600", "content-length"=>"20"}, :frame_send_header_goway=>true, :request_headers=>{"user-agent"=>"mruby-http2/0.0.1", "accept"=>"*/*", ":authority"=>"127.0.0.1:8080", ":scheme"=>"https", "accept-encoding"=>"gzip", ":method"=>"GET", ":path"=>"/index.html"}, :stream_id=>1}
 ```
 #### HTTP2::Server
 ##### run HTTP/2 server
