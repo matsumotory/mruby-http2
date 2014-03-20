@@ -13,8 +13,8 @@ This is a very early version, please test and report errors. Wellcome pull-reque
 - write HTTP2 callback function by Ruby block
 
 ## example
-- HTTP2 by mruby
-
+#### HTTP2::Client
+##### HTTP2 get
 ```ruby
 r = HTTP2::Client.get 'https://106.186.112.116/'
 
@@ -27,9 +27,7 @@ r.body
 r.body_length
 r.stream_id
 ```
-
-- response
-
+##### HTTP2 get reuslt
 ```ruby
 #r
 
@@ -93,7 +91,6 @@ r.stream_id
 #r.body
 
 ```
-
 ##### Set callback block from Ruby
 ```ruby
 r = HTTP2::Client.get 'https://127.0.0.1:8080/index.html'
@@ -172,6 +169,28 @@ p r.response
 "before_frame_send_callback"
 "send_callback"
 "on_frame_send_callback"
+{:body=>"hello mruby-http2!!\n", :body_length=>20, :recieve_bytes=>20.0, :response_headers=>{":status"=>"200"}, :frame_send_header_goway=>true, :request_headers=>{"user-agent"=>"mruby-http2/0.0.1", "accept"=>"*/*", ":authority"=>"127.0.0.1:8080", ":scheme"=>"https", "accept-encoding"=>"gzip", ":method"=>"GET", ":path"=>"/index.html"}, :stream_id=>1}
+```
+#### HTTP2::Server
+##### run HTTP/2 server
+```ruby
+s = HTTP2::Server.new({
+  :port => 8080, 
+  :key => "/path/to/server.key", 
+  :crt =>"/path/to/server.crt",
+  :debug => nil,
+})
+
+s.run
+```
+##### request from HTTP2::Client 
+```ruby
+r = HTTP2::Client.get 'https://127.0.0.1:8080/index.html'
+
+p r.response
+```
+##### response
+```ruby
 {:body=>"hello mruby-http2!!\n", :body_length=>20, :recieve_bytes=>20.0, :response_headers=>{":status"=>"200"}, :frame_send_header_goway=>true, :request_headers=>{"user-agent"=>"mruby-http2/0.0.1", "accept"=>"*/*", ":authority"=>"127.0.0.1:8080", ":scheme"=>"https", "accept-encoding"=>"gzip", ":method"=>"GET", ":path"=>"/index.html"}, :stream_id=>1}
 ```
 
