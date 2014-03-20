@@ -94,8 +94,23 @@ enum {
     (uint16_t)(sizeof(NAME) - 1), (uint16_t)(strlen(VALUE)) }
 
 typedef struct {
+  unsigned int debug;
+  const char *key;
+  const char *cert;
+  const char *service;
+} mrb_http2_config_t;
+
+typedef struct {
+  const char *service;
+  mrb_value args;
+  mrb_http2_config_t *config;
+  mrb_state *mrb;
+} mrb_http2_server_t;
+
+typedef struct {
   SSL_CTX *ssl_ctx;
   struct event_base *evbase;
+  mrb_http2_server_t *server;
 } app_context;
 
 typedef struct http2_stream_data {
@@ -115,24 +130,9 @@ typedef struct http2_session_data {
 } http2_session_data;
 
 typedef struct {
-  unsigned int debug;
-} mrb_http2_config_t;
-
-typedef struct {
-  const char *service;
-  app_context app_ctx;
-  http2_session_data *session_data;
-  mrb_value args;
-  mrb_http2_config_t *config;
-} mrb_http2_server_t;
-
-typedef struct {
   struct mrb_http2_conn_t *conn;
   struct mrb_http2_request_t *req;
   struct mrb_http2_uri_t *uri;
-
-  // HTTP2::Server class only
-  mrb_http2_server_t *server;
 } mrb_http2_context_t;
 
 struct mrb_http2_conn_t {
@@ -182,15 +182,22 @@ static void mrb_http2_context_free(mrb_state *mrb, void *p)
   mrb_http2_context_t *ctx = (mrb_http2_context_t *)p;
   mrb_http2_request_free(mrb, ctx->req);
   TRACER;
-  if (ctx->server) {
-    TRACER;
-    event_base_free(ctx->server->app_ctx.evbase);
-    SSL_CTX_free(ctx->server->app_ctx.ssl_ctx);
-  }
+}
+
+static void mrb_http2_server_free(mrb_state *mrb, void *p)
+{
+  mrb_http2_server_t *server = (mrb_http2_server_t *)p;
+  mrb_free(mrb, server->config);
+  mrb_free(mrb, server);
+  TRACER;
 }
 
 static const struct mrb_data_type mrb_http2_context_type = {
   "mrb_http2_context_t", mrb_http2_context_free,
+};
+
+static const struct mrb_data_type mrb_http2_server_type = {
+  "mrb_http2_server_t", mrb_http2_server_free,
 };
 
 static char *strcopy(const char *s, size_t len)
@@ -1174,7 +1181,8 @@ static http2_stream_data* create_http2_stream_data(mrb_state *mrb,
   return stream_data;
 }
 
-static void delete_http2_stream_data(mrb_state *mrb, http2_stream_data *stream_data)
+static void delete_http2_stream_data(mrb_state *mrb, 
+    http2_stream_data *stream_data)
 {
   TRACER;
   if(stream_data->fd != -1) {
@@ -1184,15 +1192,15 @@ static void delete_http2_stream_data(mrb_state *mrb, http2_stream_data *stream_d
   mrb_free(mrb, stream_data);
 }
 
-static void delete_http2_session_data(mrb_http2_context_t *ctx, 
-    http2_session_data *session_data)
+static void delete_http2_session_data(http2_session_data *session_data)
 {
   http2_stream_data *stream_data;
   SSL *ssl = bufferevent_openssl_get_ssl(session_data->bev);
-  mrb_state *mrb = ctx->conn->mrb;
+  mrb_state *mrb = session_data->app_ctx->server->mrb;
+  mrb_http2_config_t *config = session_data->app_ctx->server->config;
 
   TRACER;
-  if (ctx->server->config->debug) {
+  if (config->debug) {
     fprintf(stderr, "%s disconnected\n", session_data->client_addr);
   }
   if(ssl) {
@@ -1219,7 +1227,6 @@ static int session_send(http2_session_data *session_data)
   TRACER;
   rv = nghttp2_session_send(session_data->session);
   if(rv != 0) {
-    //warnx("Fatal error: %s", nghttp2_strerror(rv));
     fprintf(stderr, "Fatal error: %s", nghttp2_strerror(rv));
     return -1;
   }
@@ -1231,7 +1238,7 @@ static int session_send(http2_session_data *session_data)
    function. Invocation of nghttp2_session_mem_recv() may make
    additional pending frames, so call session_send() at the end of the
    function. */
-static int session_recv(mrb_state *mrb, http2_session_data *session_data)
+static int session_recv(http2_session_data *session_data)
 {
   int rv;
   struct evbuffer *input = bufferevent_get_input(session_data->bev);
@@ -1241,7 +1248,6 @@ static int session_recv(mrb_state *mrb, http2_session_data *session_data)
   TRACER;
   rv = nghttp2_session_mem_recv(session_data->session, data, datalen);
   if(rv < 0) {
-    //warnx("Fatal error: %s", nghttp2_strerror(rv));
     fprintf(stderr, "Fatal error: %s", nghttp2_strerror(rv));
     return -1;
   }
@@ -1257,9 +1263,9 @@ static int session_recv(mrb_state *mrb, http2_session_data *session_data)
 static ssize_t server_send_callback(nghttp2_session *session, 
     const uint8_t *data, size_t length, int flags, void *user_data)
 {
-  mrb_http2_context_t *ctx = (mrb_http2_context_t *)user_data;
-  http2_session_data *session_data = ctx->server->session_data;
-  mrb_state *mrb = ctx->conn->mrb;
+  http2_session_data *session_data = (http2_session_data *)user_data;
+  mrb_state *mrb = session_data->app_ctx->server->mrb;
+
   http2_stream_data *stream_data;
 
   struct bufferevent *bev = session_data->bev;
@@ -1364,7 +1370,6 @@ static int send_response(nghttp2_session *session, int32_t stream_id,
   TRACER;
   rv = nghttp2_submit_response(session, stream_id, nva, nvlen, &data_prd);
   if(rv != 0) {
-    //warnx("Fatal error: %s", nghttp2_strerror(rv));
     fprintf(stderr, "Fatal error: %s", nghttp2_strerror(rv));
     return -1;
   }
@@ -1386,11 +1391,9 @@ static int error_reply(nghttp2_session *session, http2_stream_data *stream_data)
   TRACER;
   rv = pipe(pipefd);
   if(rv != 0) {
-    //warn("Could not create pipe");
     rv = nghttp2_submit_rst_stream(session, NGHTTP2_FLAG_NONE, 
         stream_data->stream_id, NGHTTP2_INTERNAL_ERROR);
     if(rv != 0) {
-      //warnx("Fatal error: %s", nghttp2_strerror(rv));
     fprintf(stderr, "Fatal error: %s", nghttp2_strerror(rv));
       return -1;
     }
@@ -1413,9 +1416,9 @@ static int server_on_header_callback(nghttp2_session *session,
     const nghttp2_frame *frame, const uint8_t *name, size_t namelen, 
     const uint8_t *value, size_t valuelen, void *user_data)
 {
-  mrb_http2_context_t *ctx = (mrb_http2_context_t *)user_data;
-  http2_session_data *session_data = ctx->server->session_data;
-  mrb_state *mrb = ctx->conn->mrb;
+  http2_session_data *session_data = (http2_session_data *)user_data;
+  mrb_state *mrb = session_data->app_ctx->server->mrb;
+
   http2_stream_data *stream_data;
 
   const char PATH[] = ":path";
@@ -1444,10 +1447,10 @@ static int server_on_header_callback(nghttp2_session *session,
 static int server_on_begin_headers_callback(nghttp2_session *session, 
     const nghttp2_frame *frame, void *user_data)
 {
-  mrb_http2_context_t *ctx = (mrb_http2_context_t *)user_data;
-  mrb_state *mrb = ctx->conn->mrb;
+  http2_session_data *session_data = (http2_session_data *)user_data;
+  mrb_state *mrb = session_data->app_ctx->server->mrb;
+
   http2_stream_data *stream_data;
-  http2_session_data *session_data = ctx->server->session_data;
 
   TRACER;
   if(frame->hd.type != NGHTTP2_HEADERS ||
@@ -1475,11 +1478,12 @@ static int check_path(const char *path)
     !ends_with(path, "/..") && !ends_with(path, "/.");
 }
 
-static int server_on_request_recv(mrb_http2_context_t *ctx, nghttp2_session *session, 
+static int server_on_request_recv(nghttp2_session *session, 
     http2_session_data *session_data, http2_stream_data *stream_data)
 {
   int fd;
-  mrb_state *mrb = ctx->conn->mrb;
+  mrb_state *mrb = session_data->app_ctx->server->mrb;
+  mrb_http2_config_t *config = session_data->app_ctx->server->config;
 
   nghttp2_nv hdrs[] = {
     MAKE_NV(":status", "200")
@@ -1493,7 +1497,7 @@ static int server_on_request_recv(mrb_http2_context_t *ctx, nghttp2_session *ses
     }
     return 0;
   }
-  if (ctx->server->config->debug) {
+  if (config->debug) {
     fprintf(stderr, "%s GET %s\n", session_data->client_addr, 
         stream_data->request_path);
   }
@@ -1527,9 +1531,8 @@ static int server_on_request_recv(mrb_http2_context_t *ctx, nghttp2_session *ses
 static int server_on_frame_recv_callback(nghttp2_session *session, 
     const nghttp2_frame *frame, void *user_data)
 {
-  mrb_http2_context_t *ctx = (mrb_http2_context_t *)user_data;
-  http2_session_data *session_data = ctx->server->session_data;
-  mrb_state *mrb = ctx->conn->mrb;
+  http2_session_data *session_data = (http2_session_data *)user_data;
+  mrb_state *mrb = session_data->app_ctx->server->mrb;
   http2_stream_data *stream_data;
 
   TRACER;
@@ -1545,7 +1548,7 @@ static int server_on_frame_recv_callback(nghttp2_session *session,
       if(!stream_data) {
         return 0;
       }
-      return server_on_request_recv(ctx, session, session_data, stream_data);
+      return server_on_request_recv(session, session_data, stream_data);
     }
     break;
   default:
@@ -1558,9 +1561,8 @@ static int server_on_frame_recv_callback(nghttp2_session *session,
 static int server_on_stream_close_callback(nghttp2_session *session, 
     int32_t stream_id, nghttp2_error_code error_code, void *user_data)
 {
-  mrb_http2_context_t *ctx = (mrb_http2_context_t *)user_data;
-  http2_session_data *session_data = ctx->server->session_data;
-  mrb_state *mrb = ctx->conn->mrb;
+  http2_session_data *session_data = (http2_session_data *)user_data;
+  mrb_state *mrb = session_data->app_ctx->server->mrb;
   http2_stream_data *stream_data;
 
   TRACER;
@@ -1574,10 +1576,9 @@ static int server_on_stream_close_callback(nghttp2_session *session,
   return 0;
 }
 
-static void mrb_http2_server_session_init(mrb_http2_context_t *ctx)
+static void mrb_http2_server_session_init(http2_session_data *session_data)
 {
   nghttp2_session_callbacks callbacks = {0};
-  http2_session_data *session_data = ctx->server->session_data;
 
   TRACER;
   callbacks.send_callback = server_send_callback;
@@ -1585,7 +1586,7 @@ static void mrb_http2_server_session_init(mrb_http2_context_t *ctx)
   callbacks.on_stream_close_callback = server_on_stream_close_callback;
   callbacks.on_header_callback = server_on_header_callback;
   callbacks.on_begin_headers_callback = server_on_begin_headers_callback;
-  nghttp2_session_server_new(&session_data->session, &callbacks, ctx);
+  nghttp2_session_server_new(&session_data->session, &callbacks, session_data);
 }
 
 /* Send HTTP/2.0 client connection header, which includes 24 bytes
@@ -1601,7 +1602,6 @@ static int send_server_connection_header(http2_session_data *session_data)
                                iv, ARRLEN(iv));
   TRACER;
   if(rv != 0) {
-    //warnx("Fatal error: %s", nghttp2_strerror(rv));
     fprintf(stderr, "Fatal error: %s", nghttp2_strerror(rv));
     return -1;
   }
@@ -1613,13 +1613,11 @@ static int send_server_connection_header(http2_session_data *session_data)
    checked. */
 static void mrb_http2_server_readcb(struct bufferevent *bev, void *ptr)
 {
-  mrb_http2_context_t *ctx = (mrb_http2_context_t *)ptr;
-  http2_session_data *session_data = ctx->server->session_data;
-  mrb_state *mrb = ctx->conn->mrb;
+  http2_session_data *session_data = (http2_session_data *)ptr;
 
   TRACER;
-  if(session_recv(mrb, session_data) != 0) {
-    delete_http2_session_data(ctx, session_data);
+  if(session_recv(session_data) != 0) {
+    delete_http2_session_data(session_data);
     return;
   }
 }
@@ -1627,9 +1625,7 @@ static void mrb_http2_server_readcb(struct bufferevent *bev, void *ptr)
 
 static void mrb_http2_server_writecb(struct bufferevent *bev, void *ptr)
 {
-  mrb_http2_context_t *ctx = (mrb_http2_context_t *)ptr;
-  http2_session_data *session_data = ctx->server->session_data;
-  mrb_state *mrb = ctx->conn->mrb;
+  http2_session_data *session_data = (http2_session_data *)ptr;
 
   TRACER;
   if(evbuffer_get_length(bufferevent_get_output(bev)) > 0) {
@@ -1638,12 +1634,12 @@ static void mrb_http2_server_writecb(struct bufferevent *bev, void *ptr)
   TRACER;
   if(nghttp2_session_want_read(session_data->session) == 0 &&
      nghttp2_session_want_write(session_data->session) == 0) {
-    delete_http2_session_data(ctx, session_data);
+    delete_http2_session_data(session_data);
     return;
   } 
   TRACER;
   if(session_send(session_data) != 0) {
-    delete_http2_session_data(ctx, session_data);
+    delete_http2_session_data(session_data);
     return;
   }
 }
@@ -1652,18 +1648,18 @@ static void mrb_http2_server_writecb(struct bufferevent *bev, void *ptr)
 static void mrb_http2_server_eventcb(struct bufferevent *bev, short events, 
     void *ptr)
 {
-  mrb_http2_context_t *ctx = (mrb_http2_context_t *)ptr;
-  http2_session_data *session_data = ctx->server->session_data;
-  mrb_state *mrb = ctx->conn->mrb;
+  http2_session_data *session_data = (http2_session_data *)ptr;
+  mrb_state *mrb = session_data->app_ctx->server->mrb;
+  mrb_http2_config_t *config = session_data->app_ctx->server->config;
 
   TRACER;
   if(events & BEV_EVENT_CONNECTED) {
-    if (ctx->server->config->debug) { 
+    if (config->debug) { 
       fprintf(stderr, "%s connected\n", session_data->client_addr);
     }
     return;
   } 
-  if (ctx->server->config->debug) { 
+  if (config->debug) { 
     if(events & BEV_EVENT_EOF) {
       fprintf(stderr, "%s EOF\n", session_data->client_addr);
     } else if(events & BEV_EVENT_ERROR) {
@@ -1673,16 +1669,15 @@ static void mrb_http2_server_eventcb(struct bufferevent *bev, short events,
     }
   }
   TRACER;
-  delete_http2_session_data(ctx, session_data);
+  delete_http2_session_data(session_data);
 }
 
 /* readcb for bufferevent to check first 24 bytes client connection
    header. */
 static void mrb_http2_server_handshake_readcb(struct bufferevent *bev, void *ptr)
 {
-  mrb_http2_context_t *ctx = (mrb_http2_context_t *)ptr;
-  http2_session_data *session_data = ctx->server->session_data;
-  mrb_state *mrb = ctx->conn->mrb;
+  http2_session_data *session_data = (http2_session_data *)ptr;
+  mrb_state *mrb = session_data->app_ctx->server->mrb;
 
   uint8_t data[24];
   struct evbuffer *input = bufferevent_get_input(session_data->bev);
@@ -1692,23 +1687,23 @@ static void mrb_http2_server_handshake_readcb(struct bufferevent *bev, void *ptr
   TRACER;
   if(memcmp(conhead + NGHTTP2_CLIENT_CONNECTION_HEADER_LEN 
         - session_data->handshake_leftlen, data, readlen) != 0) {
-    delete_http2_session_data(ctx, session_data);
+    delete_http2_session_data(session_data);
     return;
   }
   session_data->handshake_leftlen -= readlen;
   TRACER;
   if(session_data->handshake_leftlen == 0) {
     bufferevent_setcb(session_data->bev, mrb_http2_server_readcb, 
-        mrb_http2_server_writecb, mrb_http2_server_eventcb, ptr);
+        mrb_http2_server_writecb, mrb_http2_server_eventcb, session_data);
     /* Process pending data in buffer since they are not notified
        further */
-    mrb_http2_server_session_init(ctx);
+    mrb_http2_server_session_init(session_data);
     if(send_server_connection_header(session_data) != 0) {
-      delete_http2_session_data(ctx, session_data);
+      delete_http2_session_data(session_data);
       return;
     }
-    if(session_recv(mrb, session_data) != 0) {
-      delete_http2_session_data(ctx, session_data);
+    if(session_recv(session_data) != 0) {
+      delete_http2_session_data(session_data);
       return;
     }
   }
@@ -1760,65 +1755,16 @@ static http2_session_data* create_http2_session_data(mrb_state *mrb,
 static void mrb_http2_acceptcb(struct evconnlistener *listener, int fd, 
     struct sockaddr *addr, int addrlen, void *ptr)
 {
-  mrb_http2_context_t *ctx = (mrb_http2_context_t *)ptr;
+  app_context *app_ctx = (app_context *)ptr;
   http2_session_data *session_data;
-  mrb_state *mrb = ctx->conn->mrb;
+  mrb_state *mrb = app_ctx->server->mrb;
 
   TRACER;
-  session_data = create_http2_session_data(mrb, &ctx->server->app_ctx, 
+  session_data = create_http2_session_data(mrb, app_ctx, 
       fd, addr, addrlen);
-  ctx->server->session_data = session_data;
   bufferevent_setcb(session_data->bev, mrb_http2_server_handshake_readcb, 
-      NULL, mrb_http2_server_eventcb, ctx);
+      NULL, mrb_http2_server_eventcb, session_data);
   TRACER;
-}
-
-static void mrb_start_listen(mrb_state *mrb, mrb_value self, 
-    struct event_base *evbase, const char *service)
-{
-  mrb_http2_context_t *ctx = DATA_PTR(self);  
-  int rv;
-  struct addrinfo hints;
-  struct addrinfo *res, *rp;
-
-  TRACER;
-  memset(&hints, 0, sizeof(hints));
-  hints.ai_family = AF_UNSPEC;
-  hints.ai_socktype = SOCK_STREAM;
-  hints.ai_flags = AI_PASSIVE;
-#ifdef AI_ADDRCONFIG
-  hints.ai_flags |= AI_ADDRCONFIG;
-#endif
-
-  rv = getaddrinfo(NULL, service, &hints, &res);
-  if(rv != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, "getaddrinfo failed");
-  }
-  TRACER;
-  for(rp = res; rp; rp = rp->ai_next) {
-    struct evconnlistener *listener;
-    listener = evconnlistener_new_bind(evbase, mrb_http2_acceptcb, ctx, 
-        LEV_OPT_CLOSE_ON_FREE | LEV_OPT_REUSEABLE, 16, rp->ai_addr, 
-        rp->ai_addrlen);
-
-    if(listener) {
-      return;
-    }
-  }
-  mrb_raise(mrb, E_RUNTIME_ERROR, "Could not start listener");
-}
-
-static mrb_value mrb_http2_server_run(mrb_state *mrb, mrb_value self)
-{
-  mrb_http2_context_t *ctx = DATA_PTR(self);  
-
-  TRACER;
-  mrb_start_listen(mrb, self, ctx->server->app_ctx.evbase, 
-      ctx->server->service);
-  event_base_loop(ctx->server->app_ctx.evbase, 0);
-  TRACER;
-
-  return self;
 }
 
 static int next_proto_cb(SSL *s, const unsigned char **data, 
@@ -1867,34 +1813,73 @@ static SSL_CTX* mrb_http2_create_ssl_ctx(mrb_state *mrb,
 static void init_app_context(app_context *actx, SSL_CTX *ssl_ctx, 
     struct event_base *evbase)
 {
-  //app_context *actx = (app_context *)mrb_malloc(mrb, sizeof(app_context));
   memset(actx, 0, sizeof(app_context));
   actx->ssl_ctx = ssl_ctx;
   actx->evbase = evbase;
-
-  //return actx;
 }
 
-static struct mrb_http2_conn_t *init_connection_context(mrb_state *mrb)
+static void mrb_start_listen(struct event_base *evbase, const char *service, app_context *app_ctx)
 {
-  struct mrb_http2_conn_t *conn = (struct mrb_http2_conn_t *)mrb_malloc(mrb, 
-      sizeof(struct mrb_http2_conn_t));
-  memset(conn, 0, sizeof(struct mrb_http2_conn_t));
-  conn->mrb = mrb;
-  conn->response = mrb_hash_new(mrb);
-  conn->cb_block_hash = mrb_nil_value();
+  int rv;
+  struct addrinfo hints;
+  struct addrinfo *res, *rp;
+  mrb_state *mrb = app_ctx->server->mrb;
 
-  return conn;
+  TRACER;
+  memset(&hints, 0, sizeof(hints));
+  hints.ai_family = AF_UNSPEC;
+  hints.ai_socktype = SOCK_STREAM;
+  hints.ai_flags = AI_PASSIVE;
+#ifdef AI_ADDRCONFIG
+  hints.ai_flags |= AI_ADDRCONFIG;
+#endif
+
+  rv = getaddrinfo(NULL, service, &hints, &res);
+  if(rv != 0) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "getaddrinfo failed");
+  }
+  TRACER;
+  for(rp = res; rp; rp = rp->ai_next) {
+    struct evconnlistener *listener;
+    listener = evconnlistener_new_bind(evbase, mrb_http2_acceptcb, app_ctx, 
+        LEV_OPT_CLOSE_ON_FREE | LEV_OPT_REUSEABLE, 16, rp->ai_addr, 
+        rp->ai_addrlen);
+
+    if(listener) {
+      return;
+    }
+  }
+  mrb_raise(mrb, E_RUNTIME_ERROR, "Could not start listener");
+}
+
+static mrb_value mrb_http2_server_run(mrb_state *mrb, mrb_value self)
+{
+  mrb_http2_server_t *server = DATA_PTR(self);  
+  SSL_CTX *ssl_ctx;
+  struct event_base *evbase;
+  app_context app_ctx;
+
+  ssl_ctx = mrb_http2_create_ssl_ctx(mrb, server->config->key, server->config->cert);
+  evbase = event_base_new();
+
+  init_app_context(&app_ctx, ssl_ctx, evbase);
+  app_ctx.server = server;
+
+  TRACER;
+  mrb_start_listen(evbase, server->config->service, &app_ctx);
+  event_base_loop(app_ctx.evbase, 0);
+  event_base_free(app_ctx.evbase);
+  SSL_CTX_free(app_ctx.ssl_ctx);
+  TRACER;
+
+  return self;
 }
 
 static mrb_value mrb_http2_server_init(mrb_state *mrb, mrb_value self)
 {
-  mrb_http2_context_t *ctx;
+  mrb_http2_server_t *server;
   struct sigaction act;
-  SSL_CTX *ssl_ctx;
-  struct event_base *evbase;
   mrb_value args, port, debug;
-  app_context app_ctx;
   char *service, *key_file, *cert_file;
 
   memset(&act, 0, sizeof(struct sigaction));
@@ -1913,33 +1898,29 @@ static mrb_value mrb_http2_server_init(mrb_state *mrb, mrb_value self)
         mrb_symbol_value(mrb_intern_lit(mrb, "crt"))));
   debug = mrb_hash_get(mrb, args, mrb_symbol_value(mrb_intern_lit(mrb, "debug")));
 
-  ssl_ctx = mrb_http2_create_ssl_ctx(mrb, key_file, cert_file);
-  evbase = event_base_new();
+  // server context
+  server = (mrb_http2_server_t *)mrb_malloc(mrb, sizeof(mrb_http2_server_t));
+  memset(server, 0, sizeof(mrb_http2_server_t));
+  server->args = args;
+  server->mrb = mrb;
 
-  ctx = (mrb_http2_context_t *)mrb_malloc(mrb, sizeof(mrb_http2_context_t));
-  memset(ctx, 0, sizeof(mrb_http2_context_t));
-  ctx->uri = NULL;
-  ctx->conn = init_connection_context(mrb);
-
-  ctx->server = (mrb_http2_server_t *)mrb_malloc(mrb, sizeof(mrb_http2_server_t));
-  memset(ctx->server, 0, sizeof(mrb_http2_server_t));
-  ctx->server->service = service;
-  ctx->server->args = args;
-
-  init_app_context(&app_ctx, ssl_ctx, evbase);
-  ctx->server->app_ctx = app_ctx;
-
-  ctx->server->config = (mrb_http2_config_t *)mrb_malloc(mrb, 
+  // server config create
+  server->config = (mrb_http2_config_t *)mrb_malloc(mrb, 
       sizeof(mrb_http2_config_t));
-  memset(ctx->server->config, 0, sizeof(mrb_http2_config_t));
+  memset(server->config, 0, sizeof(mrb_http2_config_t));
+
+  server->config->service = service;
+  server->config->key = key_file;
+  server->config->cert = cert_file;
+
   if (!mrb_nil_p(debug)) {
-    ctx->server->config->debug = MRB_HTTP2_CONFIG_ENABLED;
+    server->config->debug = MRB_HTTP2_CONFIG_ENABLED;
   } else {
-    ctx->server->config->debug = MRB_HTTP2_CONFIG_DISABLED;
+    server->config->debug = MRB_HTTP2_CONFIG_DISABLED;
   }
 
-  DATA_TYPE(self) = &mrb_http2_context_type;
-  DATA_PTR(self) = ctx;
+  DATA_TYPE(self) = &mrb_http2_server_type;
+  DATA_PTR(self) = server;
   TRACER;
 
   return self;
