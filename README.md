@@ -13,8 +13,9 @@ This is a very early version, please test and report errors. Wellcome pull-reque
 - write HTTP2 callback function by Ruby block
 
 ## example
-#### HTTP2::Client
+### HTTP2::Client
 ##### HTTP2 get
+Access to nghttpd HTTP/2 Server
 ```ruby
 r = HTTP2::Client.get 'https://127.0.0.1:8080/index.html'
 
@@ -85,7 +86,7 @@ p r.response
 
 ```
 ##### Result
-```
+```ruby
 "---- set callback version ----"
 "recv_callback"
 "on_frame_recv_callback"
@@ -114,7 +115,7 @@ p r.response
 "on_frame_send_callback"
 {:body=>"hello mruby-http2!!\n", :body_length=>20, :recieve_bytes=>20.0, :response_headers=>{"last-modified"=>"Wed, 19 Mar 2014 08:41:00 GMT", "server"=>"nghttpd nghttp2/0.4.0-DEV", ":status"=>"200", "date"=>"Thu, 20 Mar 2014 11:39:34 GMT", "cache-control"=>"max-age=3600", "content-length"=>"20"}, :frame_send_header_goway=>true, :request_headers=>{"user-agent"=>"mruby-http2/0.0.1", "accept"=>"*/*", ":authority"=>"127.0.0.1:8080", ":scheme"=>"https", "accept-encoding"=>"gzip", ":method"=>"GET", ":path"=>"/index.html"}, :stream_id=>1}
 ```
-#### HTTP2::Server
+### HTTP2::Server
 ##### run HTTP/2 server
 ```ruby
 s = HTTP2::Server.new({
@@ -131,9 +132,81 @@ s.run
 r = HTTP2::Client.get 'https://127.0.0.1:8080/index.html'
 
 p r.response
+p r.body
+p r.request_headers
+p r.response_headers
+p r.status
+p r.body
+p r.body_length
+p r.stream_id
+
+p "---- set callback version ----"
+
+s = HTTP2::Client.new
+s.uri = 'https://127.0.0.1:8080/index.html'
+s.on_header_callback {
+  p "header callback"
+}
+s.send_callback {
+  p "send_callback"
+}
+s.recv_callback {
+  p "recv_callback"
+}
+s.before_frame_send_callback {
+  p "before_frame_send_callback"
+}
+s.on_frame_send_callback {
+  p "on_frame_send_callback"
+}
+s.on_frame_recv_callback {
+  p "on_frame_recv_callback"
+}
+s.on_stream_close_callback {
+  p "on_stream_close_callback"
+}
+s.on_data_chunk_recv_callback {
+  p "on_data_chunk_recv_callback"
+}
+r = s.get
+p r.response
 ```
 ##### response
 ```ruby
+{:body=>"hello mruby-http2!!\n", :body_length=>20, :recieve_bytes=>20.0, :response_headers=>{":status"=>"200"}, :frame_send_header_goway=>true, :request_headers=>{"user-agent"=>"mruby-http2/0.0.1", "accept"=>"*/*", ":authority"=>"127.0.0.1:8080", ":scheme"=>"https", "accept-encoding"=>"gzip", ":method"=>"GET", ":path"=>"/index.html"}, :stream_id=>1}
+"hello mruby-http2!!\n"
+{"user-agent"=>"mruby-http2/0.0.1", "accept"=>"*/*", ":authority"=>"127.0.0.1:8080", ":scheme"=>"https", "accept-encoding"=>"gzip", ":method"=>"GET", ":path"=>"/index.html"}
+{":status"=>"200"}
+200
+"hello mruby-http2!!\n"
+20
+1
+"---- set callback version ----"
+"recv_callback"
+"before_frame_send_callback"
+"send_callback"
+"on_frame_send_callback"
+"recv_callback"
+"on_frame_recv_callback"
+"recv_callback"
+"before_frame_send_callback"
+"send_callback"
+"on_frame_send_callback"
+"recv_callback"
+"header callback"
+"on_frame_recv_callback"
+"recv_callback"
+"recv_callback"
+"on_data_chunk_recv_callback"
+"on_frame_recv_callback"
+"recv_callback"
+"recv_callback"
+"on_frame_recv_callback"
+"on_stream_close_callback"
+"recv_callback"
+"before_frame_send_callback"
+"send_callback"
+"on_frame_send_callback"
 {:body=>"hello mruby-http2!!\n", :body_length=>20, :recieve_bytes=>20.0, :response_headers=>{":status"=>"200"}, :frame_send_header_goway=>true, :request_headers=>{"user-agent"=>"mruby-http2/0.0.1", "accept"=>"*/*", ":authority"=>"127.0.0.1:8080", ":scheme"=>"https", "accept-encoding"=>"gzip", ":method"=>"GET", ":path"=>"/index.html"}, :stream_id=>1}
 ```
 
