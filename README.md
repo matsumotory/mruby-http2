@@ -15,7 +15,7 @@ This is a very early version, please test and report errors. Wellcome pull-reque
 ## example
 ### mruby-http2 Test Site
 ```
-https://http2.matsumoto-r.jp/index.html
+https://http2.matsumoto-r.jp:58080/index.html
 ```
 ### HTTP2::Client
 ##### HTTP2 get
