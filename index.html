@@ -63,11 +63,17 @@
 </ul><h2>
 <a name="example" class="anchor" href="#example"><span class="octicon octicon-link"></span></a>example</h2>
 
-<ul>
-<li>HTTP2 by mruby</li>
-</ul><div class="highlight highlight-ruby"><pre><span class="n">r</span> <span class="o">=</span> <span class="no">HTTP2</span><span class="o">::</span><span class="no">Client</span><span class="o">.</span><span class="n">get</span> <span class="s1">'https://106.186.112.116/'</span>
+<h3>
+<a name="http2client" class="anchor" href="#http2client"><span class="octicon octicon-link"></span></a>HTTP2::Client</h3>
 
-<span class="n">r</span>
+<h5>
+<a name="http2-get" class="anchor" href="#http2-get"><span class="octicon octicon-link"></span></a>HTTP2 get</h5>
+
+<p>Access to nghttpd HTTP/2 Server</p>
+
+<div class="highlight highlight-ruby"><pre><span class="n">r</span> <span class="o">=</span> <span class="no">HTTP2</span><span class="o">::</span><span class="no">Client</span><span class="o">.</span><span class="n">get</span> <span class="s1">'https://127.0.0.1:8080/index.html'</span>
+
+<span class="n">r</span><span class="o">.</span><span class="n">response</span>
 <span class="n">r</span><span class="o">.</span><span class="n">body</span>
 <span class="n">r</span><span class="o">.</span><span class="n">request_headers</span>
 <span class="n">r</span><span class="o">.</span><span class="n">response_headers</span>
@@ -77,69 +83,200 @@
 <span class="n">r</span><span class="o">.</span><span class="n">stream_id</span>
 </pre></div>
 
-<ul>
-<li>response</li>
-</ul><div class="highlight highlight-ruby"><pre><span class="c1">#r</span>
+<h5>
+<a name="http2-get-reuslt" class="anchor" href="#http2-get-reuslt"><span class="octicon octicon-link"></span></a>HTTP2 get reuslt</h5>
 
-<span class="p">{</span>
-  <span class="ss">:body</span><span class="o">=&gt;</span><span class="s2">"---- snip ----"</span><span class="p">,</span> 
-  <span class="ss">:body_length</span><span class="o">=&gt;</span><span class="mi">1400</span><span class="p">,</span> 
-  <span class="ss">:stream_id</span><span class="o">=&gt;</span><span class="mi">1</span><span class="p">,</span> 
-  <span class="ss">:frame_send_header_goway</span><span class="o">=&gt;</span><span class="kp">true</span><span class="p">,</span> 
-  <span class="ss">:recieve_bytes</span><span class="o">=&gt;</span><span class="mi">1400</span><span class="o">.</span><span class="mi">0</span><span class="p">,</span> 
-  <span class="ss">:request_headers</span><span class="o">=&gt;</span><span class="p">{</span>
-    <span class="s2">":path"</span><span class="o">=&gt;</span><span class="s2">"/"</span><span class="p">,</span> 
-    <span class="s2">":scheme"</span><span class="o">=&gt;</span><span class="s2">"https"</span><span class="p">,</span> 
-    <span class="s2">"user-agent"</span><span class="o">=&gt;</span><span class="s2">"mruby-http2/0.0.1"</span><span class="p">,</span> 
-    <span class="s2">":authority"</span><span class="o">=&gt;</span><span class="s2">"106.186.112.116"</span><span class="p">,</span> 
-    <span class="s2">":method"</span><span class="o">=&gt;</span><span class="s2">"GET"</span><span class="p">,</span> 
-    <span class="s2">"accept"</span><span class="o">=&gt;</span><span class="s2">"*/*"</span>
-  <span class="p">},</span> 
-  <span class="ss">:response_headers</span><span class="o">=&gt;</span><span class="p">{</span>
-    <span class="s2">"last-modified"</span><span class="o">=&gt;</span><span class="s2">"Wed, 18 Dec 2013 15:12:23 GMT"</span><span class="p">,</span> 
-    <span class="s2">"etag"</span><span class="o">=&gt;</span><span class="s2">"</span><span class="se">\"</span><span class="s2">52b1bb57-2450</span><span class="se">\"</span><span class="s2">"</span><span class="p">,</span> 
-    <span class="s2">"x-varnish"</span><span class="o">=&gt;</span><span class="s2">"340171131"</span><span class="p">,</span> 
-    <span class="s2">"content-length"</span><span class="o">=&gt;</span><span class="s2">"9296"</span><span class="p">,</span> 
-    <span class="s2">"date"</span><span class="o">=&gt;</span><span class="s2">"Tue, 31 Dec 2013 11:04:13 GMT"</span><span class="p">,</span> 
-    <span class="s2">"age"</span><span class="o">=&gt;</span><span class="s2">"0"</span><span class="p">,</span> 
-    <span class="s2">"accept-ranges"</span><span class="o">=&gt;</span><span class="s2">"bytes"</span><span class="p">,</span> 
-    <span class="s2">"content-type"</span><span class="o">=&gt;</span><span class="s2">"text/html"</span><span class="p">,</span> 
-    <span class="s2">":status"</span><span class="o">=&gt;</span><span class="s2">"200"</span><span class="p">,</span> 
-    <span class="s2">"server"</span><span class="o">=&gt;</span><span class="s2">"nginx/1.4.1 (Ubuntu)"</span><span class="p">,</span> 
-    <span class="s2">"via"</span><span class="o">=&gt;</span><span class="s2">"1.1 varnish, 1.1 nghttpx"</span>
-  <span class="p">}</span>
-<span class="p">}</span>
-
-<span class="c1">#r,status</span>
+<div class="highlight highlight-ruby"><pre><span class="p">{</span><span class="ss">:body</span><span class="o">=&gt;</span><span class="s2">"hello mruby-http2!!</span><span class="se">\n</span><span class="s2">"</span><span class="p">,</span> <span class="ss">:body_length</span><span class="o">=&gt;</span><span class="mi">20</span><span class="p">,</span> <span class="ss">:recieve_bytes</span><span class="o">=&gt;</span><span class="mi">20</span><span class="o">.</span><span class="mi">0</span><span class="p">,</span> <span class="ss">:response_headers</span><span class="o">=&gt;</span><span class="p">{</span><span class="s2">"last-modified"</span><span class="o">=&gt;</span><span class="s2">"Wed, 19 Mar 2014 08:41:00 GMT"</span><span class="p">,</span> <span class="s2">"server"</span><span class="o">=&gt;</span><span class="s2">"nghttpd nghttp2/0.4.0-DEV"</span><span class="p">,</span> <span class="s2">":status"</span><span class="o">=&gt;</span><span class="s2">"200"</span><span class="p">,</span> <span class="s2">"date"</span><span class="o">=&gt;</span><span class="s2">"Thu, 20 Mar 2014 11:38:17 GMT"</span><span class="p">,</span> <span class="s2">"cache-control"</span><span class="o">=&gt;</span><span class="s2">"max-age=3600"</span><span class="p">,</span> <span class="s2">"content-length"</span><span class="o">=&gt;</span><span class="s2">"20"</span><span class="p">},</span> <span class="ss">:frame_send_header_goway</span><span class="o">=&gt;</span><span class="kp">true</span><span class="p">,</span> <span class="ss">:request_headers</span><span class="o">=&gt;</span><span class="p">{</span><span class="s2">"user-agent"</span><span class="o">=&gt;</span><span class="s2">"mruby-http2/0.0.1"</span><span class="p">,</span> <span class="s2">"accept"</span><span class="o">=&gt;</span><span class="s2">"*/*"</span><span class="p">,</span> <span class="s2">":authority"</span><span class="o">=&gt;</span><span class="s2">"127.0.0.1:8080"</span><span class="p">,</span> <span class="s2">":scheme"</span><span class="o">=&gt;</span><span class="s2">"https"</span><span class="p">,</span> <span class="s2">"accept-encoding"</span><span class="o">=&gt;</span><span class="s2">"gzip"</span><span class="p">,</span> <span class="s2">":method"</span><span class="o">=&gt;</span><span class="s2">"GET"</span><span class="p">,</span> <span class="s2">":path"</span><span class="o">=&gt;</span><span class="s2">"/index.html"</span><span class="p">},</span> <span class="ss">:stream_id</span><span class="o">=&gt;</span><span class="mi">1</span><span class="p">}</span>
+<span class="s2">"hello mruby-http2!!</span><span class="se">\n</span><span class="s2">"</span>
+<span class="p">{</span><span class="s2">"user-agent"</span><span class="o">=&gt;</span><span class="s2">"mruby-http2/0.0.1"</span><span class="p">,</span> <span class="s2">"accept"</span><span class="o">=&gt;</span><span class="s2">"*/*"</span><span class="p">,</span> <span class="s2">":authority"</span><span class="o">=&gt;</span><span class="s2">"127.0.0.1:8080"</span><span class="p">,</span> <span class="s2">":scheme"</span><span class="o">=&gt;</span><span class="s2">"https"</span><span class="p">,</span> <span class="s2">"accept-encoding"</span><span class="o">=&gt;</span><span class="s2">"gzip"</span><span class="p">,</span> <span class="s2">":method"</span><span class="o">=&gt;</span><span class="s2">"GET"</span><span class="p">,</span> <span class="s2">":path"</span><span class="o">=&gt;</span><span class="s2">"/index.html"</span><span class="p">}</span>
+<span class="p">{</span><span class="s2">"last-modified"</span><span class="o">=&gt;</span><span class="s2">"Wed, 19 Mar 2014 08:41:00 GMT"</span><span class="p">,</span> <span class="s2">"server"</span><span class="o">=&gt;</span><span class="s2">"nghttpd nghttp2/0.4.0-DEV"</span><span class="p">,</span> <span class="s2">":status"</span><span class="o">=&gt;</span><span class="s2">"200"</span><span class="p">,</span> <span class="s2">"date"</span><span class="o">=&gt;</span><span class="s2">"Thu, 20 Mar 2014 11:38:17 GMT"</span><span class="p">,</span> <span class="s2">"cache-control"</span><span class="o">=&gt;</span><span class="s2">"max-age=3600"</span><span class="p">,</span> <span class="s2">"content-length"</span><span class="o">=&gt;</span><span class="s2">"20"</span><span class="p">}</span>
 <span class="mi">200</span>
+<span class="s2">"hello mruby-http2!!</span><span class="se">\n</span><span class="s2">"</span>
+<span class="mi">20</span>
+<span class="mi">1</span>
+</pre></div>
 
-<span class="c1">#r.request_headers</span>
-<span class="p">{</span>
-  <span class="s2">":path"</span><span class="o">=&gt;</span><span class="s2">"/"</span><span class="p">,</span>
-  <span class="s2">":scheme"</span><span class="o">=&gt;</span><span class="s2">"https"</span><span class="p">,</span>
-  <span class="s2">"user-agent"</span><span class="o">=&gt;</span><span class="s2">"mruby-http2/0.0.1"</span><span class="p">,</span>
-  <span class="s2">":authority"</span><span class="o">=&gt;</span><span class="s2">"106.186.112.116"</span><span class="p">,</span>
-  <span class="s2">":method"</span><span class="o">=&gt;</span><span class="s2">"GET"</span><span class="p">,</span>
-  <span class="s2">"accept"</span><span class="o">=&gt;</span><span class="s2">"*/*"</span>
+<h5>
+<a name="set-callback-block-from-ruby" class="anchor" href="#set-callback-block-from-ruby"><span class="octicon octicon-link"></span></a>Set callback block from Ruby</h5>
+
+<p>Access to nghttpd HTTP/2 Server</p>
+
+<div class="highlight highlight-ruby"><pre><span class="n">r</span> <span class="o">=</span> <span class="no">HTTP2</span><span class="o">::</span><span class="no">Client</span><span class="o">.</span><span class="n">get</span> <span class="s1">'https://127.0.0.1:8080/index.html'</span>
+
+<span class="nb">p</span> <span class="n">r</span><span class="o">.</span><span class="n">response</span>
+<span class="nb">p</span> <span class="n">r</span><span class="o">.</span><span class="n">body</span>
+<span class="nb">p</span> <span class="n">r</span><span class="o">.</span><span class="n">request_headers</span>
+<span class="nb">p</span> <span class="n">r</span><span class="o">.</span><span class="n">response_headers</span>
+<span class="nb">p</span> <span class="n">r</span><span class="o">.</span><span class="n">status</span>
+<span class="nb">p</span> <span class="n">r</span><span class="o">.</span><span class="n">body</span>
+<span class="nb">p</span> <span class="n">r</span><span class="o">.</span><span class="n">body_length</span>
+<span class="nb">p</span> <span class="n">r</span><span class="o">.</span><span class="n">stream_id</span>
+
+<span class="nb">p</span> <span class="s2">"---- set callback version ----"</span>
+
+<span class="n">s</span> <span class="o">=</span> <span class="no">HTTP2</span><span class="o">::</span><span class="no">Client</span><span class="o">.</span><span class="n">new</span>
+<span class="n">s</span><span class="o">.</span><span class="n">uri</span> <span class="o">=</span> <span class="s1">'https://127.0.0.1:8080/index.html'</span>
+<span class="n">s</span><span class="o">.</span><span class="n">on_header_callback</span> <span class="p">{</span>
+  <span class="nb">p</span> <span class="s2">"header callback"</span>
 <span class="p">}</span>
-
-<span class="c1">#r.response_headers</span>
-<span class="p">{</span>
-  <span class="s2">"last-modified"</span><span class="o">=&gt;</span><span class="s2">"Wed, 18 Dec 2013 15:12:23 GMT"</span><span class="p">,</span>
-  <span class="s2">"etag"</span><span class="o">=&gt;</span><span class="s2">"</span><span class="se">\"</span><span class="s2">52b1bb57-2450</span><span class="se">\"</span><span class="s2">"</span><span class="p">,</span>
-  <span class="s2">"x-varnish"</span><span class="o">=&gt;</span><span class="s2">"340171131"</span><span class="p">,</span>
-  <span class="s2">"content-length"</span><span class="o">=&gt;</span><span class="s2">"9296"</span><span class="p">,</span>
-  <span class="s2">"date"</span><span class="o">=&gt;</span><span class="s2">"Tue, 31 Dec 2013 11:04:13 GMT"</span><span class="p">,</span>
-  <span class="s2">"age"</span><span class="o">=&gt;</span><span class="s2">"0"</span><span class="p">,</span>
-  <span class="s2">"accept-ranges"</span><span class="o">=&gt;</span><span class="s2">"bytes"</span><span class="p">,</span>
-  <span class="s2">"content-type"</span><span class="o">=&gt;</span><span class="s2">"text/html"</span><span class="p">,</span>
-  <span class="s2">":status"</span><span class="o">=&gt;</span><span class="s2">"200"</span><span class="p">,</span>
-  <span class="s2">"server"</span><span class="o">=&gt;</span><span class="s2">"nginx/1.4.1 (Ubuntu)"</span><span class="p">,</span>
-  <span class="s2">"via"</span><span class="o">=&gt;</span><span class="s2">"1.1 varnish, 1.1 nghttpx"</span>
+<span class="n">s</span><span class="o">.</span><span class="n">send_callback</span> <span class="p">{</span>
+  <span class="nb">p</span> <span class="s2">"send_callback"</span>
 <span class="p">}</span>
+<span class="n">s</span><span class="o">.</span><span class="n">recv_callback</span> <span class="p">{</span>
+  <span class="nb">p</span> <span class="s2">"recv_callback"</span>
+<span class="p">}</span>
+<span class="n">s</span><span class="o">.</span><span class="n">before_frame_send_callback</span> <span class="p">{</span>
+  <span class="nb">p</span> <span class="s2">"before_frame_send_callback"</span>
+<span class="p">}</span>
+<span class="n">s</span><span class="o">.</span><span class="n">on_frame_send_callback</span> <span class="p">{</span>
+  <span class="nb">p</span> <span class="s2">"on_frame_send_callback"</span>
+<span class="p">}</span>
+<span class="n">s</span><span class="o">.</span><span class="n">on_frame_recv_callback</span> <span class="p">{</span>
+  <span class="nb">p</span> <span class="s2">"on_frame_recv_callback"</span>
+<span class="p">}</span>
+<span class="n">s</span><span class="o">.</span><span class="n">on_stream_close_callback</span> <span class="p">{</span>
+  <span class="nb">p</span> <span class="s2">"on_stream_close_callback"</span>
+<span class="p">}</span>
+<span class="n">s</span><span class="o">.</span><span class="n">on_data_chunk_recv_callback</span> <span class="p">{</span>
+  <span class="nb">p</span> <span class="s2">"on_data_chunk_recv_callback"</span>
+<span class="p">}</span>
+<span class="n">r</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">get</span>
+<span class="nb">p</span> <span class="n">r</span><span class="o">.</span><span class="n">response</span>
 
-<span class="c1">#r.body</span>
+</pre></div>
 
+<h5>
+<a name="result" class="anchor" href="#result"><span class="octicon octicon-link"></span></a>Result</h5>
+
+<div class="highlight highlight-ruby"><pre><span class="s2">"---- set callback version ----"</span>
+<span class="s2">"recv_callback"</span>
+<span class="s2">"on_frame_recv_callback"</span>
+<span class="s2">"recv_callback"</span>
+<span class="s2">"before_frame_send_callback"</span>
+<span class="s2">"send_callback"</span>
+<span class="s2">"on_frame_send_callback"</span>
+<span class="s2">"before_frame_send_callback"</span>
+<span class="s2">"send_callback"</span>
+<span class="s2">"on_frame_send_callback"</span>
+<span class="s2">"recv_callback"</span>
+<span class="s2">"header callback"</span>
+<span class="s2">"header callback"</span>
+<span class="s2">"header callback"</span>
+<span class="s2">"header callback"</span>
+<span class="s2">"header callback"</span>
+<span class="s2">"header callback"</span>
+<span class="s2">"on_frame_recv_callback"</span>
+<span class="s2">"on_data_chunk_recv_callback"</span>
+<span class="s2">"on_frame_recv_callback"</span>
+<span class="s2">"on_frame_recv_callback"</span>
+<span class="s2">"on_stream_close_callback"</span>
+<span class="s2">"recv_callback"</span>
+<span class="s2">"before_frame_send_callback"</span>
+<span class="s2">"send_callback"</span>
+<span class="s2">"on_frame_send_callback"</span>
+<span class="p">{</span><span class="ss">:body</span><span class="o">=&gt;</span><span class="s2">"hello mruby-http2!!</span><span class="se">\n</span><span class="s2">"</span><span class="p">,</span> <span class="ss">:body_length</span><span class="o">=&gt;</span><span class="mi">20</span><span class="p">,</span> <span class="ss">:recieve_bytes</span><span class="o">=&gt;</span><span class="mi">20</span><span class="o">.</span><span class="mi">0</span><span class="p">,</span> <span class="ss">:response_headers</span><span class="o">=&gt;</span><span class="p">{</span><span class="s2">"last-modified"</span><span class="o">=&gt;</span><span class="s2">"Wed, 19 Mar 2014 08:41:00 GMT"</span><span class="p">,</span> <span class="s2">"server"</span><span class="o">=&gt;</span><span class="s2">"nghttpd nghttp2/0.4.0-DEV"</span><span class="p">,</span> <span class="s2">":status"</span><span class="o">=&gt;</span><span class="s2">"200"</span><span class="p">,</span> <span class="s2">"date"</span><span class="o">=&gt;</span><span class="s2">"Thu, 20 Mar 2014 11:39:34 GMT"</span><span class="p">,</span> <span class="s2">"cache-control"</span><span class="o">=&gt;</span><span class="s2">"max-age=3600"</span><span class="p">,</span> <span class="s2">"content-length"</span><span class="o">=&gt;</span><span class="s2">"20"</span><span class="p">},</span> <span class="ss">:frame_send_header_goway</span><span class="o">=&gt;</span><span class="kp">true</span><span class="p">,</span> <span class="ss">:request_headers</span><span class="o">=&gt;</span><span class="p">{</span><span class="s2">"user-agent"</span><span class="o">=&gt;</span><span class="s2">"mruby-http2/0.0.1"</span><span class="p">,</span> <span class="s2">"accept"</span><span class="o">=&gt;</span><span class="s2">"*/*"</span><span class="p">,</span> <span class="s2">":authority"</span><span class="o">=&gt;</span><span class="s2">"127.0.0.1:8080"</span><span class="p">,</span> <span class="s2">":scheme"</span><span class="o">=&gt;</span><span class="s2">"https"</span><span class="p">,</span> <span class="s2">"accept-encoding"</span><span class="o">=&gt;</span><span class="s2">"gzip"</span><span class="p">,</span> <span class="s2">":method"</span><span class="o">=&gt;</span><span class="s2">"GET"</span><span class="p">,</span> <span class="s2">":path"</span><span class="o">=&gt;</span><span class="s2">"/index.html"</span><span class="p">},</span> <span class="ss">:stream_id</span><span class="o">=&gt;</span><span class="mi">1</span><span class="p">}</span>
+</pre></div>
+
+<h3>
+<a name="http2server" class="anchor" href="#http2server"><span class="octicon octicon-link"></span></a>HTTP2::Server</h3>
+
+<h5>
+<a name="run-http2-server" class="anchor" href="#run-http2-server"><span class="octicon octicon-link"></span></a>run HTTP/2 server</h5>
+
+<div class="highlight highlight-ruby"><pre><span class="n">s</span> <span class="o">=</span> <span class="no">HTTP2</span><span class="o">::</span><span class="no">Server</span><span class="o">.</span><span class="n">new</span><span class="p">({</span>
+  <span class="ss">:port</span> <span class="o">=&gt;</span> <span class="mi">8080</span><span class="p">,</span> 
+  <span class="ss">:key</span> <span class="o">=&gt;</span> <span class="s2">"/path/to/server.key"</span><span class="p">,</span> 
+  <span class="ss">:crt</span> <span class="o">=&gt;</span><span class="s2">"/path/to/server.crt"</span><span class="p">,</span>
+  <span class="ss">:debug</span> <span class="o">=&gt;</span> <span class="kp">nil</span><span class="p">,</span>
+<span class="p">})</span>
+
+<span class="n">s</span><span class="o">.</span><span class="n">run</span>
+</pre></div>
+
+<h5>
+<a name="request-from-http2client" class="anchor" href="#request-from-http2client"><span class="octicon octicon-link"></span></a>request from HTTP2::Client</h5>
+
+<div class="highlight highlight-ruby"><pre><span class="n">r</span> <span class="o">=</span> <span class="no">HTTP2</span><span class="o">::</span><span class="no">Client</span><span class="o">.</span><span class="n">get</span> <span class="s1">'https://127.0.0.1:8080/index.html'</span>
+
+<span class="nb">p</span> <span class="n">r</span><span class="o">.</span><span class="n">response</span>
+<span class="nb">p</span> <span class="n">r</span><span class="o">.</span><span class="n">body</span>
+<span class="nb">p</span> <span class="n">r</span><span class="o">.</span><span class="n">request_headers</span>
+<span class="nb">p</span> <span class="n">r</span><span class="o">.</span><span class="n">response_headers</span>
+<span class="nb">p</span> <span class="n">r</span><span class="o">.</span><span class="n">status</span>
+<span class="nb">p</span> <span class="n">r</span><span class="o">.</span><span class="n">body</span>
+<span class="nb">p</span> <span class="n">r</span><span class="o">.</span><span class="n">body_length</span>
+<span class="nb">p</span> <span class="n">r</span><span class="o">.</span><span class="n">stream_id</span>
+
+<span class="nb">p</span> <span class="s2">"---- set callback version ----"</span>
+
+<span class="n">s</span> <span class="o">=</span> <span class="no">HTTP2</span><span class="o">::</span><span class="no">Client</span><span class="o">.</span><span class="n">new</span>
+<span class="n">s</span><span class="o">.</span><span class="n">uri</span> <span class="o">=</span> <span class="s1">'https://127.0.0.1:8080/index.html'</span>
+<span class="n">s</span><span class="o">.</span><span class="n">on_header_callback</span> <span class="p">{</span>
+  <span class="nb">p</span> <span class="s2">"header callback"</span>
+<span class="p">}</span>
+<span class="n">s</span><span class="o">.</span><span class="n">send_callback</span> <span class="p">{</span>
+  <span class="nb">p</span> <span class="s2">"send_callback"</span>
+<span class="p">}</span>
+<span class="n">s</span><span class="o">.</span><span class="n">recv_callback</span> <span class="p">{</span>
+  <span class="nb">p</span> <span class="s2">"recv_callback"</span>
+<span class="p">}</span>
+<span class="n">s</span><span class="o">.</span><span class="n">before_frame_send_callback</span> <span class="p">{</span>
+  <span class="nb">p</span> <span class="s2">"before_frame_send_callback"</span>
+<span class="p">}</span>
+<span class="n">s</span><span class="o">.</span><span class="n">on_frame_send_callback</span> <span class="p">{</span>
+  <span class="nb">p</span> <span class="s2">"on_frame_send_callback"</span>
+<span class="p">}</span>
+<span class="n">s</span><span class="o">.</span><span class="n">on_frame_recv_callback</span> <span class="p">{</span>
+  <span class="nb">p</span> <span class="s2">"on_frame_recv_callback"</span>
+<span class="p">}</span>
+<span class="n">s</span><span class="o">.</span><span class="n">on_stream_close_callback</span> <span class="p">{</span>
+  <span class="nb">p</span> <span class="s2">"on_stream_close_callback"</span>
+<span class="p">}</span>
+<span class="n">s</span><span class="o">.</span><span class="n">on_data_chunk_recv_callback</span> <span class="p">{</span>
+  <span class="nb">p</span> <span class="s2">"on_data_chunk_recv_callback"</span>
+<span class="p">}</span>
+<span class="n">r</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">get</span>
+<span class="nb">p</span> <span class="n">r</span><span class="o">.</span><span class="n">response</span>
+</pre></div>
+
+<h5>
+<a name="response" class="anchor" href="#response"><span class="octicon octicon-link"></span></a>response</h5>
+
+<div class="highlight highlight-ruby"><pre><span class="p">{</span><span class="ss">:body</span><span class="o">=&gt;</span><span class="s2">"hello mruby-http2!!</span><span class="se">\n</span><span class="s2">"</span><span class="p">,</span> <span class="ss">:body_length</span><span class="o">=&gt;</span><span class="mi">20</span><span class="p">,</span> <span class="ss">:recieve_bytes</span><span class="o">=&gt;</span><span class="mi">20</span><span class="o">.</span><span class="mi">0</span><span class="p">,</span> <span class="ss">:response_headers</span><span class="o">=&gt;</span><span class="p">{</span><span class="s2">":status"</span><span class="o">=&gt;</span><span class="s2">"200"</span><span class="p">},</span> <span class="ss">:frame_send_header_goway</span><span class="o">=&gt;</span><span class="kp">true</span><span class="p">,</span> <span class="ss">:request_headers</span><span class="o">=&gt;</span><span class="p">{</span><span class="s2">"user-agent"</span><span class="o">=&gt;</span><span class="s2">"mruby-http2/0.0.1"</span><span class="p">,</span> <span class="s2">"accept"</span><span class="o">=&gt;</span><span class="s2">"*/*"</span><span class="p">,</span> <span class="s2">":authority"</span><span class="o">=&gt;</span><span class="s2">"127.0.0.1:8080"</span><span class="p">,</span> <span class="s2">":scheme"</span><span class="o">=&gt;</span><span class="s2">"https"</span><span class="p">,</span> <span class="s2">"accept-encoding"</span><span class="o">=&gt;</span><span class="s2">"gzip"</span><span class="p">,</span> <span class="s2">":method"</span><span class="o">=&gt;</span><span class="s2">"GET"</span><span class="p">,</span> <span class="s2">":path"</span><span class="o">=&gt;</span><span class="s2">"/index.html"</span><span class="p">},</span> <span class="ss">:stream_id</span><span class="o">=&gt;</span><span class="mi">1</span><span class="p">}</span>
+<span class="s2">"hello mruby-http2!!</span><span class="se">\n</span><span class="s2">"</span>
+<span class="p">{</span><span class="s2">"user-agent"</span><span class="o">=&gt;</span><span class="s2">"mruby-http2/0.0.1"</span><span class="p">,</span> <span class="s2">"accept"</span><span class="o">=&gt;</span><span class="s2">"*/*"</span><span class="p">,</span> <span class="s2">":authority"</span><span class="o">=&gt;</span><span class="s2">"127.0.0.1:8080"</span><span class="p">,</span> <span class="s2">":scheme"</span><span class="o">=&gt;</span><span class="s2">"https"</span><span class="p">,</span> <span class="s2">"accept-encoding"</span><span class="o">=&gt;</span><span class="s2">"gzip"</span><span class="p">,</span> <span class="s2">":method"</span><span class="o">=&gt;</span><span class="s2">"GET"</span><span class="p">,</span> <span class="s2">":path"</span><span class="o">=&gt;</span><span class="s2">"/index.html"</span><span class="p">}</span>
+<span class="p">{</span><span class="s2">":status"</span><span class="o">=&gt;</span><span class="s2">"200"</span><span class="p">}</span>
+<span class="mi">200</span>
+<span class="s2">"hello mruby-http2!!</span><span class="se">\n</span><span class="s2">"</span>
+<span class="mi">20</span>
+<span class="mi">1</span>
+<span class="s2">"---- set callback version ----"</span>
+<span class="s2">"recv_callback"</span>
+<span class="s2">"before_frame_send_callback"</span>
+<span class="s2">"send_callback"</span>
+<span class="s2">"on_frame_send_callback"</span>
+<span class="s2">"recv_callback"</span>
+<span class="s2">"on_frame_recv_callback"</span>
+<span class="s2">"recv_callback"</span>
+<span class="s2">"before_frame_send_callback"</span>
+<span class="s2">"send_callback"</span>
+<span class="s2">"on_frame_send_callback"</span>
+<span class="s2">"recv_callback"</span>
+<span class="s2">"header callback"</span>
+<span class="s2">"on_frame_recv_callback"</span>
+<span class="s2">"recv_callback"</span>
+<span class="s2">"recv_callback"</span>
+<span class="s2">"on_data_chunk_recv_callback"</span>
+<span class="s2">"on_frame_recv_callback"</span>
+<span class="s2">"recv_callback"</span>
+<span class="s2">"recv_callback"</span>
+<span class="s2">"on_frame_recv_callback"</span>
+<span class="s2">"on_stream_close_callback"</span>
+<span class="s2">"recv_callback"</span>
+<span class="s2">"before_frame_send_callback"</span>
+<span class="s2">"send_callback"</span>
+<span class="s2">"on_frame_send_callback"</span>
+<span class="p">{</span><span class="ss">:body</span><span class="o">=&gt;</span><span class="s2">"hello mruby-http2!!</span><span class="se">\n</span><span class="s2">"</span><span class="p">,</span> <span class="ss">:body_length</span><span class="o">=&gt;</span><span class="mi">20</span><span class="p">,</span> <span class="ss">:recieve_bytes</span><span class="o">=&gt;</span><span class="mi">20</span><span class="o">.</span><span class="mi">0</span><span class="p">,</span> <span class="ss">:response_headers</span><span class="o">=&gt;</span><span class="p">{</span><span class="s2">":status"</span><span class="o">=&gt;</span><span class="s2">"200"</span><span class="p">},</span> <span class="ss">:frame_send_header_goway</span><span class="o">=&gt;</span><span class="kp">true</span><span class="p">,</span> <span class="ss">:request_headers</span><span class="o">=&gt;</span><span class="p">{</span><span class="s2">"user-agent"</span><span class="o">=&gt;</span><span class="s2">"mruby-http2/0.0.1"</span><span class="p">,</span> <span class="s2">"accept"</span><span class="o">=&gt;</span><span class="s2">"*/*"</span><span class="p">,</span> <span class="s2">":authority"</span><span class="o">=&gt;</span><span class="s2">"127.0.0.1:8080"</span><span class="p">,</span> <span class="s2">":scheme"</span><span class="o">=&gt;</span><span class="s2">"https"</span><span class="p">,</span> <span class="s2">"accept-encoding"</span><span class="o">=&gt;</span><span class="s2">"gzip"</span><span class="p">,</span> <span class="s2">":method"</span><span class="o">=&gt;</span><span class="s2">"GET"</span><span class="p">,</span> <span class="s2">":path"</span><span class="o">=&gt;</span><span class="s2">"/index.html"</span><span class="p">},</span> <span class="ss">:stream_id</span><span class="o">=&gt;</span><span class="mi">1</span><span class="p">}</span>
 </pre></div>
 
 <h2>
