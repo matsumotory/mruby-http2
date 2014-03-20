@@ -7,13 +7,7 @@ before_install:
 install:
   - sudo apt-get -qq install rake bison git gperf
 before_script:
-  - cd src/nghttp2
-  - autoreconf -i
-  - automake
-  - autoconf
-  - ./configure
-  - make
-  - cd ../../../
+  - cd ../
   - git clone https://github.com/mruby/mruby.git
   - cd mruby
   - cp -fp ../mruby-http2/.travis_build_config.rb build_config.rb
