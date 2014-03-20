@@ -16,9 +16,9 @@ This is a very early version, please test and report errors. Wellcome pull-reque
 #### HTTP2::Client
 ##### HTTP2 get
 ```ruby
-r = HTTP2::Client.get 'https://106.186.112.116/'
+r = HTTP2::Client.get 'https://127.0.0.1:8080/index.html'
 
-r
+r.response
 r.body
 r.request_headers
 r.response_headers
@@ -29,67 +29,14 @@ r.stream_id
 ```
 ##### HTTP2 get reuslt
 ```ruby
-#r
-
-{
-  :body=>"---- snip ----", 
-  :body_length=>1400, 
-  :stream_id=>1, 
-  :frame_send_header_goway=>true, 
-  :recieve_bytes=>1400.0, 
-  :request_headers=>{
-    ":path"=>"/", 
-    ":scheme"=>"https", 
-    "user-agent"=>"mruby-http2/0.0.1", 
-    ":authority"=>"106.186.112.116", 
-    ":method"=>"GET", 
-    "accept"=>"*/*"
-  }, 
-  :response_headers=>{
-    "last-modified"=>"Wed, 18 Dec 2013 15:12:23 GMT", 
-    "etag"=>"\"52b1bb57-2450\"", 
-    "x-varnish"=>"340171131", 
-    "content-length"=>"9296", 
-    "date"=>"Tue, 31 Dec 2013 11:04:13 GMT", 
-    "age"=>"0", 
-    "accept-ranges"=>"bytes", 
-    "content-type"=>"text/html", 
-    ":status"=>"200", 
-    "server"=>"nginx/1.4.1 (Ubuntu)", 
-    "via"=>"1.1 varnish, 1.1 nghttpx"
-  }
-}
-
-#r,status
+{:body=>"hello mruby-http2!!\n", :body_length=>20, :recieve_bytes=>20.0, :response_headers=>{":status"=>"200"}, :frame_send_header_goway=>true, :request_headers=>{"user-agent"=>"mruby-http2/0.0.1", "accept"=>"*/*", ":authority"=>"127.0.0.1:8080", ":scheme"=>"https", "accept-encoding"=>"gzip", ":method"=>"GET", ":path"=>"/index.html"}, :stream_id=>1}
+"hello mruby-http2!!\n"
+{"user-agent"=>"mruby-http2/0.0.1", "accept"=>"*/*", ":authority"=>"127.0.0.1:8080", ":scheme"=>"https", "accept-encoding"=>"gzip", ":method"=>"GET", ":path"=>"/index.html"}
+{":status"=>"200"}
 200
-
-#r.request_headers
-{
-  ":path"=>"/",
-  ":scheme"=>"https",
-  "user-agent"=>"mruby-http2/0.0.1",
-  ":authority"=>"106.186.112.116",
-  ":method"=>"GET",
-  "accept"=>"*/*"
-}
-
-#r.response_headers
-{
-  "last-modified"=>"Wed, 18 Dec 2013 15:12:23 GMT",
-  "etag"=>"\"52b1bb57-2450\"",
-  "x-varnish"=>"340171131",
-  "content-length"=>"9296",
-  "date"=>"Tue, 31 Dec 2013 11:04:13 GMT",
-  "age"=>"0",
-  "accept-ranges"=>"bytes",
-  "content-type"=>"text/html",
-  ":status"=>"200",
-  "server"=>"nginx/1.4.1 (Ubuntu)",
-  "via"=>"1.1 varnish, 1.1 nghttpx"
-}
-
-#r.body
-
+"hello mruby-http2!!\n"
+20
+1
 ```
 ##### Set callback block from Ruby
 ```ruby
@@ -241,5 +188,4 @@ rake
 under the MIT License:
 
 * http://www.opensource.org/licenses/mit-license.php
-
 
