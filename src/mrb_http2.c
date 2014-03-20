@@ -75,7 +75,7 @@ enum {
   WANT_WRITE
 };
 
-#define MRB_HTTP2_TRACER
+//#define MRB_HTTP2_TRACER
 
 #ifdef MRB_HTTP2_TRACER
 #define TRACER printf("    >>>> %s:%d\n", __func__, __LINE__)
@@ -183,8 +183,8 @@ static void mrb_http2_context_free(mrb_state *mrb, void *p)
   TRACER;
   if (ctx->server) {
     TRACER;
-    //event_base_free(ctx->server->app_ctx.evbase);
-    //SSL_CTX_free(ctx->server->app_ctx.ssl_ctx);
+    event_base_free(ctx->server->app_ctx.evbase);
+    SSL_CTX_free(ctx->server->app_ctx.ssl_ctx);
   }
 }
 
@@ -436,30 +436,28 @@ static int on_frame_recv_callback(nghttp2_session *session, const nghttp2_frame 
        frame->headers.cat != NGHTTP2_HCAT_PUSH_RESPONSE) {
       break;
     }
-    //TRACER;
+    TRACER;
     break;
   case NGHTTP2_RST_STREAM:
-  //TRACER;
+    TRACER;
     mrb_hash_set(conn->mrb, conn->response, 
         mrb_symbol_value(mrb_intern_cstr(conn->mrb, "frame_recv_header_rst_stream")), mrb_true_value());
     break;
   case NGHTTP2_GOAWAY:
-  //TRACER;
+    TRACER;
     mrb_hash_set(conn->mrb, conn->response, 
         mrb_symbol_value(mrb_intern_cstr(conn->mrb, "frame_recv_header_goway")), mrb_true_value());
     break;
   }
-  //TRACER;
-  //mrb_p(conn->mrb, conn->cb_block_hash);
-  //conn->cb_block_hash = mrb_nil_value();
-  //if (!mrb_nil_p(conn->cb_block_hash)) {
-  //TRACER;
-  //  mrb_value cb_block = mrb_hash_get(conn->mrb, conn->cb_block_hash, 
-  //                          mrb_str_new_lit(conn->mrb, "on_frame_recv_callback"));
-  //  if (!mrb_nil_p(cb_block)) {
-  //    mrb_yield_argv(conn->mrb, cb_block, 0, NULL);
-  //  }
-  //}
+  TRACER;
+  if (!mrb_nil_p(conn->cb_block_hash)) {
+  TRACER;
+    mrb_value cb_block = mrb_hash_get(conn->mrb, conn->cb_block_hash, 
+                            mrb_str_new_lit(conn->mrb, "on_frame_recv_callback"));
+    if (!mrb_nil_p(cb_block)) {
+      mrb_yield_argv(conn->mrb, cb_block, 0, NULL);
+    }
+  }
   return 0;
 }
 
@@ -501,12 +499,12 @@ static int on_header_callback(nghttp2_session *session,
         mrb_symbol_value(mrb_intern_cstr(conn->mrb, "on_header_goway")), mrb_true_value());
     break;
   }
-  //if (!mrb_nil_p(conn->cb_block_hash)) {
-  //  mrb_value cb_block = mrb_hash_get(conn->mrb, conn->cb_block_hash, mrb_str_new_cstr(conn->mrb, "on_header_callback"));
-  //  if (!mrb_nil_p(cb_block)) {
-  //    mrb_yield_argv(conn->mrb, cb_block, 0, NULL);
-  //  }
-  //}
+  if (!mrb_nil_p(conn->cb_block_hash)) {
+    mrb_value cb_block = mrb_hash_get(conn->mrb, conn->cb_block_hash, mrb_str_new_cstr(conn->mrb, "on_header_callback"));
+    if (!mrb_nil_p(cb_block)) {
+      mrb_yield_argv(conn->mrb, cb_block, 0, NULL);
+    }
+  }
   return 0;
 }
 
@@ -750,7 +748,7 @@ static void mrb_http2_request_init(mrb_state *mrb, struct mrb_http2_request_t *r
   req->inflater = NULL;
 }
 
-/* TODO: callback block from Ruby
+// TODO: callback block from Ruby
 static mrb_value mrb_http2_cb_block_hash_init(mrb_state *mrb)
 {
   mrb_value hash = mrb_hash_new(mrb);
@@ -763,7 +761,6 @@ static mrb_value mrb_http2_cb_block_hash_init(mrb_state *mrb)
   mrb_hash_set(mrb, hash, mrb_str_new_cstr(mrb, "on_data_chunk_recv_callback"), mrb_nil_value());
   return hash;
 }
-*/
 
 static mrb_value mrb_http2_fetch_uri(mrb_state *mrb, const struct mrb_http2_uri_t *uri)
 {
@@ -981,6 +978,10 @@ static mrb_value mrb_http2_set_on_data_chunk_recv_callback(mrb_state *mrb, mrb_v
   return mrb_http2_set_block_callback(mrb, self, "on_data_chunk_recv_callback");
 }
 
+static mrb_value mrb_http2_set_on_header_callback(mrb_state *mrb, mrb_value self)
+{
+  return mrb_http2_set_block_callback(mrb, self, "on_header_callback");
+}
 static mrb_value mrb_http2_client_set_uri(mrb_state *mrb, mrb_value self)
 {
   mrb_http2_context_t *ctx = DATA_PTR(self);
@@ -995,6 +996,13 @@ static mrb_value mrb_http2_client_set_uri(mrb_state *mrb, mrb_value self)
   if(rv != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "parse_uri failed");
   }
+  if(ctx->uri == NULL) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "not found uri data");
+  }
+  ctx->req = (struct mrb_http2_request_t *)mrb_malloc(mrb, 
+      sizeof(struct mrb_http2_request_t));
+  memset(ctx->req, 0, sizeof(struct mrb_http2_request_t));
+  mrb_http2_request_init(mrb, ctx->req, ctx->uri);
 
   return self;
 }
@@ -1016,10 +1024,10 @@ static mrb_value mrb_http2_client_init(mrb_state *mrb, mrb_value self)
   ctx->uri = NULL;
   ctx->conn = (struct mrb_http2_conn_t *)mrb_malloc(mrb, 
       sizeof(struct mrb_http2_conn_t));
-  memset(ctx, 0, sizeof(struct mrb_http2_conn_t));
+  memset(ctx->conn, 0, sizeof(struct mrb_http2_conn_t));
   ctx->conn->mrb = mrb;
   ctx->conn->response = mrb_hash_new(mrb);
-  ctx->conn->cb_block_hash = mrb_nil_value();
+  ctx->conn->cb_block_hash = mrb_http2_cb_block_hash_init(mrb);
   DATA_PTR(self) = ctx;
 
   memset(&act, 0, sizeof(struct sigaction));
@@ -1891,6 +1899,7 @@ void mrb_mruby_http2_gem_init(mrb_state *mrb)
   mrb_define_method(mrb, client, "on_frame_recv_callback", mrb_http2_set_on_frame_recv_callback, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, client, "on_stream_close_callback", mrb_http2_set_on_stream_close_callback, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, client, "on_data_chunk_recv_callback", mrb_http2_set_on_data_chunk_recv_callback, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, client, "on_header_callback", mrb_http2_set_on_header_callback, MRB_ARGS_REQ(1));
   
   mrb_define_class_method(mrb, client, "http2_get", mrb_http2_client_get, MRB_ARGS_REQ(1));
 
