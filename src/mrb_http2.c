@@ -75,7 +75,7 @@ enum {
   WANT_WRITE
 };
 
-//#define MRB_HTTP2_TRACER
+#define MRB_HTTP2_TRACER
 
 #ifdef MRB_HTTP2_TRACER
 #define TRACER printf("    >>>> %s:%d\n", __func__, __LINE__)
@@ -464,44 +464,36 @@ static int on_frame_recv_callback(nghttp2_session *session, const nghttp2_frame 
 }
 
 //static int on_header_callback(nghttp2_session *session, const nghttp2_frame *frame, void *user_data)
-static int on_header_callback(nghttp2_session *session,
-                       const nghttp2_frame *frame,
-                       const uint8_t *name, size_t namelen,
-                       const uint8_t *value, size_t valuelen,
-                       void *user_data)
+static int on_header_callback(nghttp2_session *session, 
+    const nghttp2_frame *frame, const uint8_t *name, size_t namelen, 
+    const uint8_t *value, size_t valuelen, void *user_data)
 
 {
-  struct mrb_http2_conn_t *conn;
-  //mrb_value reply_headers;
+  struct mrb_http2_conn_t *conn = (struct mrb_http2_conn_t*)user_data;
+  mrb_value response_headers;
   size_t i;
-  struct mrb_http2_request_t *req;
-  conn = (struct mrb_http2_conn_t*)user_data;
+  mrb_state *mrb = conn->mrb;
+
   switch(frame->hd.type) {
   case NGHTTP2_HEADERS:
     if(frame->headers.cat != NGHTTP2_HCAT_RESPONSE &&
        frame->headers.cat != NGHTTP2_HCAT_PUSH_RESPONSE) {
       break;
     }
-    //TRACER;
-    req = nghttp2_session_get_stream_user_data(session, frame->hd.stream_id);
-    if(req) {
-      //TRACER;
-      const nghttp2_nv *nva = frame->headers.nva;
-      //printf("nvlen:%d\n", frame->headers.nvlen);
-      printf("RESPONSE_HEADERS: %s:%s\n", strcopy((const char*)name, namelen), strcopy((const char*)value, valuelen));
-      //printf("%s:%s\n", (char *)nva[1].name, (char *)nva[1].value);
-      mrb_http2_check_gzip(conn->mrb, req, frame->headers.nva, frame->headers.nvlen);
-      //reply_headers = mrb_hash_new(conn->mrb);
-      for(i = 0; i < frame->headers.nvlen; ++i) {
-        printf("%s:%s\n", (char *)nva[i].name, (char *)nva[i].value);
-        //TRACER;
-        //mrb_hash_set(conn->mrb, reply_headers
-        //    , mrb_str_new(conn->mrb, (char *)nva[i].name, nva[i].namelen)
-        //    , mrb_str_new(conn->mrb, (char *)nva[i].value, nva[i].valuelen));
+    TRACER;
+    if(nghttp2_session_get_stream_user_data(session, frame->hd.stream_id)) {
+      mrb_value v = mrb_hash_get(mrb, conn->response, 
+          mrb_symbol_value(mrb_intern_cstr(conn->mrb, "response_headers")));
+      if (mrb_nil_p(v)) {
+        response_headers = mrb_hash_new(mrb);
+      } else {
+        response_headers =  v;
       }
-      //mrb_hash_set(conn->mrb, conn->response, 
-      //    mrb_symbol_value(mrb_intern_cstr(conn->mrb, "response_headers")), reply_headers);
-      //mrb_hash_set(conn->mrb, conn->response, mrb_symbol_value(mrb_intern_cstr(conn->mrb, "response_headers")), mrb_str_new_lit(conn->mrb, "hoge"));
+      const nghttp2_nv *nva = frame->headers.nva;
+      mrb_hash_set(mrb, response_headers, mrb_str_new(mrb, (char *)name, namelen), 
+          mrb_str_new(mrb, (char *)value, valuelen));
+      mrb_hash_set(mrb, conn->response, 
+          mrb_symbol_value(mrb_intern_cstr(conn->mrb, "response_headers")), response_headers);
     }
     break;
   case NGHTTP2_GOAWAY:
@@ -937,6 +929,7 @@ static mrb_value mrb_http2_client_request(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_RUNTIME_ERROR, "not found uri data");
   }
   ctx->req = (struct mrb_http2_request_t *)mrb_malloc(mrb, sizeof(struct mrb_http2_request_t));
+  memset(ctx->req, 0, sizeof(struct mrb_http2_request_t));
   mrb_http2_request_init(mrb, ctx->req, ctx->uri);
 
   return self;
@@ -995,6 +988,7 @@ static mrb_value mrb_http2_client_set_uri(mrb_state *mrb, mrb_value self)
   char *uri;
   ctx->uri = (struct mrb_http2_uri_t *)mrb_malloc(mrb, 
       sizeof(struct mrb_http2_uri_t));
+  memset(ctx->uri, 0, sizeof(struct mrb_http2_uri_t));
 
   mrb_get_args(mrb, "z", &uri);
   rv = parse_uri(ctx->uri, uri);
@@ -1018,9 +1012,11 @@ static mrb_value mrb_http2_client_init(mrb_state *mrb, mrb_value self)
   DATA_PTR(self) = NULL;
 
   ctx = (mrb_http2_context_t *)mrb_malloc(mrb, sizeof(mrb_http2_context_t));
+  memset(ctx, 0, sizeof(mrb_http2_context_t));
   ctx->uri = NULL;
   ctx->conn = (struct mrb_http2_conn_t *)mrb_malloc(mrb, 
       sizeof(struct mrb_http2_conn_t));
+  memset(ctx, 0, sizeof(struct mrb_http2_conn_t));
   ctx->conn->mrb = mrb;
   ctx->conn->response = mrb_hash_new(mrb);
   ctx->conn->cb_block_hash = mrb_nil_value();

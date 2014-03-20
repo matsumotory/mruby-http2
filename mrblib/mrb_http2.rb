@@ -13,6 +13,7 @@ module HTTP2
     def initialize(response_hash)
       @response = response_hash
     end
+    def response; @response; end
     def request_headers; @response[:request_headers]; end
     def response_headers; @response[:response_headers]; end
     def status; @response[:response_headers][":status"].to_i; end
