@@ -215,39 +215,14 @@ p r.response
 ```
 
 ## install by mrbgems
- - Download
-
-```
-git clone https://github.com/mruby/mruby.git
-git clone https://github.com/matsumoto-r/mruby-http2.git
-```
-
- - nghttp2 build
-
-```
-cd mruby-http2
-git submodule init
-git submodule update
-cd src/nghttp2
-autoreconf -i
-automake
-autoconf
-./configure
-make
-cd ../../../
-```
-
  - add conf.gem line to `build_config.rb`
 
-```
-cd mruby
-```
 ```ruby
 MRuby::Build.new do |conf|
 
   # ... (snip) ...
 
-  conf.gem '../mruby-http2'
+  conf.gem :github => 'matsumoto-r/mruby-http2'
 end
 ```
 
