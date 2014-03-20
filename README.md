@@ -94,6 +94,87 @@ r.stream_id
 
 ```
 
+##### Set callback block from Ruby
+```ruby
+r = HTTP2::Client.get 'https://127.0.0.1:8080/index.html'
+
+p r.response
+p r.body
+p r.request_headers
+p r.response_headers
+p r.status
+p r.body
+p r.body_length
+p r.stream_id
+
+p "---- set callback version ----"
+
+s = HTTP2::Client.new
+s.uri = 'https://127.0.0.1:8080/index.html'
+s.on_header_callback {
+  p "header callback"
+}
+s.send_callback {
+  p "send_callback"
+}
+s.recv_callback {
+  p "recv_callback"
+}
+s.before_frame_send_callback {
+  p "before_frame_send_callback"
+}
+s.on_frame_send_callback {
+  p "on_frame_send_callback"
+}
+s.on_frame_recv_callback {
+  p "on_frame_recv_callback"
+}
+s.on_stream_close_callback {
+  p "on_stream_close_callback"
+}
+s.on_data_chunk_recv_callback {
+  p "on_data_chunk_recv_callback"
+}
+r = s.get
+p r.response
+
+```
+##### Result
+```
+{:body=>"hello mruby-http2!!\n", :body_length=>20, :recieve_bytes=>20.0, :response_headers=>{":status"=>"200"}, :frame_send_header_goway=>true, :request_headers=>{"user-agent"=>"mruby-http2/0.0.1", "accept"=>"*/*", ":authority"=>"127.0.0.1:8080", ":scheme"=>"https", "accept-encoding"=>"gzip", ":method"=>"GET", ":path"=>"/index.html"}, :stream_id=>1}
+"hello mruby-http2!!\n"
+{"user-agent"=>"mruby-http2/0.0.1", "accept"=>"*/*", ":authority"=>"127.0.0.1:8080", ":scheme"=>"https", "accept-encoding"=>"gzip", ":method"=>"GET", ":path"=>"/index.html"}
+{":status"=>"200"}
+200
+"hello mruby-http2!!\n"
+20
+1
+"---- set callback version ----"
+"recv_callback"
+"before_frame_send_callback"
+"send_callback"
+"on_frame_send_callback"
+"recv_callback"
+"on_frame_recv_callback"
+"recv_callback"
+"header callback"
+"on_frame_recv_callback"
+"recv_callback"
+"on_data_chunk_recv_callback"
+"on_frame_recv_callback"
+"recv_callback"
+"on_frame_recv_callback"
+"on_stream_close_callback"
+"recv_callback"
+"before_frame_send_callback"
+"send_callback"
+"on_frame_send_callback"
+"before_frame_send_callback"
+"send_callback"
+"on_frame_send_callback"
+{:body=>"hello mruby-http2!!\n", :body_length=>20, :recieve_bytes=>20.0, :response_headers=>{":status"=>"200"}, :frame_send_header_goway=>true, :request_headers=>{"user-agent"=>"mruby-http2/0.0.1", "accept"=>"*/*", ":authority"=>"127.0.0.1:8080", ":scheme"=>"https", "accept-encoding"=>"gzip", ":method"=>"GET", ":path"=>"/index.html"}, :stream_id=>1}
+```
+
 ## install by mrbgems
  - Download
 
