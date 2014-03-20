@@ -1,13 +1,28 @@
-#assert("SPDY::Response#request_headers") do
-#  r = HTTP2::Client.get "https://106.186.112.116/"
-#  assert_equal("GET", r.request_headers[":method"])
-#  assert_equal("/", r.request_headers[":path"])
-#  assert_equal("https", r.request_headers[":scheme"])
-#  assert_equal("106.186.112.116", r.request_headers[":authority"])
-#  assert_equal("*/*", r.request_headers["accept"])
-#end
-#
-#assert("SPDY::Response#status") do
-#  r = HTTP2::Client.get "https://106.186.112.116/"
-#  assert_equal(200, r.status)
-#end
+test_site = 'https://http2.matsumoto-r.jp:58080/index.html'
+assert("HTTP2::Client#request_headers") do
+  r = HTTP2::Client.get test_site
+  assert_equal("GET", r.request_headers[":method"])
+  assert_equal("/index.html", r.request_headers[":path"])
+  assert_equal("https", r.request_headers[":scheme"])
+  assert_equal("http2.matsumoto-r.jp:58080", r.request_headers[":authority"])
+  assert_equal("*/*", r.request_headers["accept"])
+end
+assert("HTTP2::Client#status") do
+  r = HTTP2::Client.get test_site
+  assert_equal(200, r.status)
+end
+assert("HTTP2::Client#body") do
+  r = HTTP2::Client.get test_site
+  assert_equal("hello mruby-http2 world.\n", r.body)
+end
+assert("HTTP2::Client#body_length") do
+  r = HTTP2::Client.get test_site
+  assert_equal(25, r.body_length)
+end
+assert("HTTP2::Client#uri,get") do
+  s = HTTP2::Client.new
+  s.uri = test_site
+  r = s.get
+  assert_equal("hello mruby-http2 world.\n", r.body)
+  assert_equal(25, r.body_length)
+end
