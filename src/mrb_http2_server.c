@@ -17,6 +17,7 @@ typedef struct {
   const char *cert;
   const char *service;
   const char *document_root;
+  const char *server_name;
 } mrb_http2_config_t;
 
 typedef struct {
@@ -424,7 +425,8 @@ static int server_on_request_recv(nghttp2_session *session,
   mrb_http2_config_t *config = session_data->app_ctx->server->config;
 
   nghttp2_nv hdrs[] = {
-    MAKE_NV(":status", "200")
+    MAKE_NV(":status", "200"),
+    MAKE_NV_CS("server", config->server_name)
   };
   char *rel_path;
 
@@ -845,6 +847,18 @@ static mrb_http2_request_rec *mrb_http2_request_rec_init(mrb_state *mrb)
   return r;
 }
 
+static char *must_get_config_str_to_cstr(mrb_state *mrb, mrb_value args, 
+    const char *name)
+{
+  mrb_value val;
+  if (mrb_nil_p(val = mrb_hash_get(mrb, args,
+                  mrb_symbol_value(mrb_intern_cstr(mrb, name))))) {
+    mrb_raisef(mrb, E_ARGUMENT_ERROR, "%S not found", mrb_str_new_cstr(mrb, name));
+  }
+
+  return mrb_str_to_cstr(mrb, val);
+}
+
 static mrb_http2_config_t *mrb_http2_s_config_init(mrb_state *mrb, mrb_value args)
 {
   mrb_value port, debug, docroot;
@@ -856,22 +870,13 @@ static mrb_http2_config_t *mrb_http2_s_config_init(mrb_state *mrb, mrb_value arg
 
   port = mrb_hash_get(mrb, args, mrb_symbol_value(mrb_intern_lit(mrb, "port")));
   service = mrb_str_to_cstr(mrb, mrb_fixnum_to_str(mrb, port, 10));
-  key_file = mrb_str_to_cstr(mrb, mrb_hash_get(mrb, args,
-        mrb_symbol_value(mrb_intern_lit(mrb, "key"))));
-  cert_file = mrb_str_to_cstr(mrb, mrb_hash_get(mrb, args,
-        mrb_symbol_value(mrb_intern_lit(mrb, "crt"))));
-  debug = mrb_hash_get(mrb, args, mrb_symbol_value(mrb_intern_lit(mrb, "debug")));
-
   config->service = service;
-  config->key = key_file;
-  config->cert = cert_file;
 
-  if (mrb_nil_p(docroot = mrb_hash_get(mrb, args,
-                  mrb_symbol_value(mrb_intern_lit(mrb, "document_root"))))) {
-    mrb_raise(mrb, E_ARGUMENT_ERROR, "document_root not found");
-  } else {
-    config->document_root = mrb_str_to_cstr(mrb, docroot);
-  }
+  config->key = must_get_config_str_to_cstr(mrb, args, "key");
+  config->cert = must_get_config_str_to_cstr(mrb, args, "crt");
+  config->document_root = must_get_config_str_to_cstr(mrb, args, "document_root");
+  config->server_name = must_get_config_str_to_cstr(mrb, args, "server_name");
+  
   if (!mrb_nil_p(debug)) {
     config->debug = MRB_HTTP2_CONFIG_ENABLED;
   } else {

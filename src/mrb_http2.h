@@ -45,6 +45,7 @@
 #define DONE mrb_gc_arena_restore(mrb, 0);
 #define MRUBY_HTTP2_NAME "mruby-http2"
 #define MRUBY_HTTP2_VERSION "0.0.1"
+#define MRUBY_HTTP2_SERVER MRUBY_HTTP2_NAME "/" MRUBY_HTTP2_VERSION
 
 #ifdef MRB_HTTP2_TRACER
 #define TRACER printf("    >>>> %s:%d\n", __func__, __LINE__)
