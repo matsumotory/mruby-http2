@@ -123,10 +123,15 @@ p r.response
 ##### run HTTP/2 server
 ```ruby
 s = HTTP2::Server.new({
+
+  # required
   :port => 8080, 
   :key => "/path/to/server.key", 
   :crt =>"/path/to/server.crt",
   :document_root => "/path/to/document_root",
+  :server_name => "mruby-http2 server",
+
+  # optional
   :debug => nil,
 })
 
