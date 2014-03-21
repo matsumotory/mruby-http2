@@ -98,6 +98,7 @@ typedef struct {
   const char *key;
   const char *cert;
   const char *service;
+  const char *document_root;
 } mrb_http2_config_t;
 
 typedef struct {
@@ -1503,13 +1504,32 @@ static int server_on_request_recv(nghttp2_session *session,
   }
   TRACER;
   if(!check_path(stream_data->request_path)) {
+    if (config->debug) {
+      fprintf(stderr, "%s invalid request_path: %s\n", session_data->client_addr, 
+          stream_data->request_path);
+    }
     if(error_reply(session, stream_data) != 0) {
       return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
     return 0;
   }
   for(rel_path = stream_data->request_path; *rel_path == '/'; ++rel_path);
-  fd = open(rel_path, O_RDONLY);
+  if (config->document_root) {
+    char *full_path = NULL;
+    size_t path_len = sizeof(config->document_root) + 
+      sizeof(stream_data->request_path);
+
+    full_path = (char *)mrb_malloc(mrb, path_len);
+    snprintf(full_path, path_len, "%s%s", config->document_root, 
+        stream_data->request_path);
+    if (config->debug) {
+      fprintf(stderr, "%s %s is mapped to %s\n", session_data->client_addr, 
+          stream_data->request_path, full_path);
+    }
+    fd = open(full_path, O_RDONLY);
+  } else {
+    fd = open(rel_path, O_RDONLY);
+  }
   TRACER;
   if(fd == -1) {
     if(error_reply(session, stream_data) != 0) {
@@ -1879,7 +1899,7 @@ static mrb_value mrb_http2_server_init(mrb_state *mrb, mrb_value self)
 {
   mrb_http2_server_t *server;
   struct sigaction act;
-  mrb_value args, port, debug;
+  mrb_value args, port, debug, docroot;
   char *service, *key_file, *cert_file;
 
   memset(&act, 0, sizeof(struct sigaction));
@@ -1912,6 +1932,13 @@ static mrb_value mrb_http2_server_init(mrb_state *mrb, mrb_value self)
   server->config->service = service;
   server->config->key = key_file;
   server->config->cert = cert_file;
+
+  if (mrb_nil_p(docroot = mrb_hash_get(mrb, args,
+                  mrb_symbol_value(mrb_intern_lit(mrb, "document_root"))))) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "document_root not found");
+  } else {
+    server->config->document_root = mrb_str_to_cstr(mrb, docroot);
+  }
 
   if (!mrb_nil_p(debug)) {
     server->config->debug = MRB_HTTP2_CONFIG_ENABLED;
