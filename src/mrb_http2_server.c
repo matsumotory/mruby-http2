@@ -27,9 +27,20 @@ typedef struct {
 } mrb_http2_server_t;
 
 typedef struct {
+  char *uri;
+  char *filename;
+} mrb_http2_request_rec;
+
+typedef struct {
+  mrb_http2_server_t *s;
+  mrb_http2_request_rec *r;
+} mrb_http2_data_t;
+
+typedef struct {
   SSL_CTX *ssl_ctx;
   struct event_base *evbase;
   mrb_http2_server_t *server;
+  mrb_http2_request_rec *r;
 } app_context;
 
 typedef struct http2_stream_data {
@@ -50,9 +61,11 @@ typedef struct http2_session_data {
 
 static void mrb_http2_server_free(mrb_state *mrb, void *p)
 {
-  mrb_http2_server_t *server = (mrb_http2_server_t *)p;
-  mrb_free(mrb, server->config);
-  mrb_free(mrb, server);
+  mrb_http2_data_t *data = (mrb_http2_data_t *)p;
+  mrb_free(mrb, data->s->config);
+  mrb_free(mrb, data->s);
+  mrb_free(mrb, data->r);
+  mrb_free(mrb, data);
   TRACER;
 }
 
@@ -799,7 +812,9 @@ static void mrb_start_listen(struct event_base *evbase, const char *service,
 
 static mrb_value mrb_http2_server_run(mrb_state *mrb, mrb_value self)
 {
-  mrb_http2_server_t *server = DATA_PTR(self);  
+  mrb_http2_data_t *data = DATA_PTR(self);  
+  mrb_http2_server_t *server = data->s;
+  mrb_http2_request_rec *r = data->r;
   SSL_CTX *ssl_ctx;
   struct event_base *evbase;
   app_context app_ctx;
@@ -809,6 +824,7 @@ static mrb_value mrb_http2_server_run(mrb_state *mrb, mrb_value self)
 
   init_app_context(&app_ctx, ssl_ctx, evbase);
   app_ctx.server = server;
+  app_ctx.r = r;
 
   TRACER;
   mrb_start_listen(evbase, server->config->service, &app_ctx);
@@ -820,12 +836,57 @@ static mrb_value mrb_http2_server_run(mrb_state *mrb, mrb_value self)
   return self;
 }
 
+static mrb_http2_request_rec *mrb_http2_request_rec_init(mrb_state *mrb)
+{
+  mrb_http2_request_rec *r = (mrb_http2_request_rec *)mrb_malloc(mrb, 
+      sizeof(mrb_http2_request_rec));
+  memset(r, 0, sizeof(mrb_http2_request_rec));
+  return r;
+}
+
+static mrb_http2_config_t *mrb_http2_s_config_init(mrb_state *mrb, mrb_value args)
+{
+  mrb_value port, debug, docroot;
+  char *service, *key_file, *cert_file;
+
+  mrb_http2_config_t *config = (mrb_http2_config_t *)mrb_malloc(mrb, 
+      sizeof(mrb_http2_config_t));
+  memset(config, 0, sizeof(mrb_http2_config_t));
+
+  port = mrb_hash_get(mrb, args, mrb_symbol_value(mrb_intern_lit(mrb, "port")));
+  service = mrb_str_to_cstr(mrb, mrb_fixnum_to_str(mrb, port, 10));
+  key_file = mrb_str_to_cstr(mrb, mrb_hash_get(mrb, args,
+        mrb_symbol_value(mrb_intern_lit(mrb, "key"))));
+  cert_file = mrb_str_to_cstr(mrb, mrb_hash_get(mrb, args,
+        mrb_symbol_value(mrb_intern_lit(mrb, "crt"))));
+  debug = mrb_hash_get(mrb, args, mrb_symbol_value(mrb_intern_lit(mrb, "debug")));
+
+  config->service = service;
+  config->key = key_file;
+  config->cert = cert_file;
+
+  if (mrb_nil_p(docroot = mrb_hash_get(mrb, args,
+                  mrb_symbol_value(mrb_intern_lit(mrb, "document_root"))))) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "document_root not found");
+  } else {
+    config->document_root = mrb_str_to_cstr(mrb, docroot);
+  }
+  if (!mrb_nil_p(debug)) {
+    config->debug = MRB_HTTP2_CONFIG_ENABLED;
+  } else {
+    config->debug = MRB_HTTP2_CONFIG_DISABLED;
+  }
+
+  return config;
+}
+
 static mrb_value mrb_http2_server_init(mrb_state *mrb, mrb_value self)
 {
   mrb_http2_server_t *server;
   struct sigaction act;
-  mrb_value args, port, debug, docroot;
-  char *service, *key_file, *cert_file;
+  mrb_value args;
+  mrb_http2_data_t *data = (mrb_http2_data_t *)mrb_malloc(mrb, 
+      sizeof(mrb_http2_data_t));
 
   memset(&act, 0, sizeof(struct sigaction));
   act.sa_handler = SIG_IGN;
@@ -835,13 +896,6 @@ static mrb_value mrb_http2_server_init(mrb_state *mrb, mrb_value self)
   SSL_library_init();
 
   mrb_get_args(mrb, "H", &args);
-  port = mrb_hash_get(mrb, args, mrb_symbol_value(mrb_intern_lit(mrb, "port")));
-  service = mrb_str_to_cstr(mrb, mrb_fixnum_to_str(mrb, port, 10));
-  key_file = mrb_str_to_cstr(mrb, mrb_hash_get(mrb, args, 
-        mrb_symbol_value(mrb_intern_lit(mrb, "key"))));
-  cert_file = mrb_str_to_cstr(mrb, mrb_hash_get(mrb, args, 
-        mrb_symbol_value(mrb_intern_lit(mrb, "crt"))));
-  debug = mrb_hash_get(mrb, args, mrb_symbol_value(mrb_intern_lit(mrb, "debug")));
 
   // server context
   server = (mrb_http2_server_t *)mrb_malloc(mrb, sizeof(mrb_http2_server_t));
@@ -849,30 +903,12 @@ static mrb_value mrb_http2_server_init(mrb_state *mrb, mrb_value self)
   server->args = args;
   server->mrb = mrb;
 
-  // server config create
-  server->config = (mrb_http2_config_t *)mrb_malloc(mrb, 
-      sizeof(mrb_http2_config_t));
-  memset(server->config, 0, sizeof(mrb_http2_config_t));
-
-  server->config->service = service;
-  server->config->key = key_file;
-  server->config->cert = cert_file;
-
-  if (mrb_nil_p(docroot = mrb_hash_get(mrb, args,
-                  mrb_symbol_value(mrb_intern_lit(mrb, "document_root"))))) {
-    mrb_raise(mrb, E_ARGUMENT_ERROR, "document_root not found");
-  } else {
-    server->config->document_root = mrb_str_to_cstr(mrb, docroot);
-  }
-
-  if (!mrb_nil_p(debug)) {
-    server->config->debug = MRB_HTTP2_CONFIG_ENABLED;
-  } else {
-    server->config->debug = MRB_HTTP2_CONFIG_DISABLED;
-  }
+  server->config = mrb_http2_s_config_init(mrb, args);
+  data->s = server;
+  data->r = mrb_http2_request_rec_init(mrb);
 
   DATA_TYPE(self) = &mrb_http2_server_type;
-  DATA_PTR(self) = server;
+  DATA_PTR(self) = data;
   TRACER;
 
   return self;
