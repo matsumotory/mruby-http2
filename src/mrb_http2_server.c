@@ -762,7 +762,8 @@ static void init_app_context(app_context *actx, SSL_CTX *ssl_ctx,
   actx->evbase = evbase;
 }
 
-static void mrb_start_listen(struct event_base *evbase, const char *service, app_context *app_ctx)
+static void mrb_start_listen(struct event_base *evbase, const char *service, 
+    app_context *app_ctx)
 {
   int rv;
   struct addrinfo hints;
