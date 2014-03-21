@@ -1,16 +1,16 @@
 # HTTP2 Module for mruby  [![Build Status](https://travis-ci.org/matsumoto-r/mruby-http2.png?branch=master)](https://travis-ci.org/matsumoto-r/mruby-http2)
-HTTP2 module for mruby using [nghttp2](https://github.com/tatsuhiro-t/nghttp2). You can access Web site using HTTP/2.0 protocol from mruby applications or devices with mruby.
+HTTP2 module for mruby using [nghttp2](https://github.com/tatsuhiro-t/nghttp2). You can access Web site using HTTP/2 protocol from mruby applications or devices with mruby, and run HTTP/2 Web server easily.
 
-- [HTTP/2.0](http://http2.github.io/) 
+- [HTTP/2](http://http2.github.io/) 
 
-    HTTP/2.0 is a replacement for how HTTP is expressed "on the wire". It is not a ground-up rewrite of the protocol; HTTP methods, status codes and semantics will be the same, and it should be possible to use the same APIs as HTTP/1.x (possibly with some small additions) to represent the protocol.
+    HTTP/2 is a replacement for how HTTP is expressed "on the wire". It is not a ground-up rewrite of the protocol; HTTP methods, status codes and semantics will be the same, and it should be possible to use the same APIs as HTTP/1.x (possibly with some small additions) to represent the protocol.
 
 ## TODO
 This is a very early version, please test and report errors. Wellcome pull-request.
-- replace uri parser to mruby-http
+- replace some function to mrbgem
+- more customizable Web server config
+- implement some class (Proxy...)
 - implement some method (post...)
-- implement some class (Server, Proxy...)
-- write HTTP2 callback function by Ruby block
 
 ## example
 ### mruby-http2 Test Site
