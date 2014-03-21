@@ -1,7 +1,7 @@
 /*
 ** mrb_http2 - http2 class for mruby
 **
-** Copyright (c) mod_mruby developers 2012-
+** Copyright (c) MATSUMOTO, Ryosuke 2013-
 **
 ** Permission is hereby granted, free of charge, to any person obtaining
 ** a copy of this software and associated documentation files (the
