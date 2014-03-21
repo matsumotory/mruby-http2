@@ -464,6 +464,7 @@ static int server_on_request_recv(nghttp2_session *session,
           stream_data->request_path, full_path);
     }
     fd = open(full_path, O_RDONLY);
+    mrb_free(mrb, full_path);
   } else {
     fd = open(rel_path, O_RDONLY);
   }
