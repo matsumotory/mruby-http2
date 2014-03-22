@@ -22,7 +22,7 @@ This is a very early version, please test and report errors. Wellcome pull-reque
 ## Install by mrbgems
 #### Download mruby
 ```
-git clone https://github.com/mruby/mruby
+git clone https://github.com/mruby/mruby.git
 ```
 #### Add conf.gem line to `mruby/build_config.rb`
 ```ruby
