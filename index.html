@@ -45,12 +45,20 @@
 <p>HTTP2 module for mruby using <a href="https://github.com/tatsuhiro-t/nghttp2">nghttp2</a>. You can access Web site using HTTP/2 protocol from mruby applications or devices with mruby, and run HTTP/2 Web server easily.</p>
 
 <ul>
-<li>
-<p><a href="http://http2.github.io/">HTTP/2</a> </p>
+<li><a href="https://github.com/matsumoto-r/mruby-http2/blob/master/README.md#http2server">HTTP/2 Web Server by mruby-http2</a></li>
+<li><a href="https://github.com/matsumoto-r/mruby-http2/blob/master/README.md#http2client">HTTP/2 Client by mruby-http2</a></li>
+</ul><h4>
+<a name="http2" class="anchor" href="#http2"><span class="octicon octicon-link"></span></a><a href="http://http2.github.io/">HTTP/2</a>
+</h4>
 
 <p>HTTP/2 is a replacement for how HTTP is expressed "on the wire". It is not a ground-up rewrite of the protocol; HTTP methods, status codes and semantics will be the same, and it should be possible to use the same APIs as HTTP/1.x (possibly with some small additions) to represent the protocol.</p>
-</li>
-</ul><h2>
+
+<h2>
+<a name="benchmark" class="anchor" href="#benchmark"><span class="octicon octicon-link"></span></a>Benchmark</h2>
+
+<p>Please see <a href="https://gist.github.com/matsumoto-r/9702123">link</a>.</p>
+
+<h2>
 <a name="todo" class="anchor" href="#todo"><span class="octicon octicon-link"></span></a>TODO</h2>
 
 <p>This is a very early version, please test and report errors. Wellcome pull-request.</p>
@@ -189,24 +197,27 @@
 <h5>
 <a name="run-http2-server" class="anchor" href="#run-http2-server"><span class="octicon octicon-link"></span></a>run HTTP/2 server</h5>
 
-<div class="highlight highlight-ruby"><pre><span class="n">s</span> <span class="o">=</span> <span class="no">HTTP2</span><span class="o">::</span><span class="no">Server</span><span class="o">.</span><span class="n">new</span><span class="p">({</span>
+<div class="highlight highlight-ruby"><pre><span class="n">root_dir</span> <span class="o">=</span> <span class="s2">"/usr/local/trusterd"</span>
 
-  <span class="c1"># required</span>
-  <span class="ss">:port</span> <span class="o">=&gt;</span> <span class="mi">8080</span><span class="p">,</span> 
-  <span class="ss">:key</span> <span class="o">=&gt;</span> <span class="s2">"/path/to/server.key"</span><span class="p">,</span> 
-  <span class="ss">:crt</span> <span class="o">=&gt;</span><span class="s2">"/path/to/server.crt"</span><span class="p">,</span>
-  <span class="ss">:document_root</span> <span class="o">=&gt;</span> <span class="s2">"/path/to/document_root"</span><span class="p">,</span>
-  <span class="ss">:server_name</span> <span class="o">=&gt;</span> <span class="s2">"mruby-http2 server"</span><span class="p">,</span>
+<span class="n">s</span> <span class="o">=</span> <span class="no">HTTP2</span><span class="o">::</span><span class="no">Server</span><span class="o">.</span><span class="n">new</span><span class="p">({</span>
+  <span class="ss">:port</span>           <span class="o">=&gt;</span> <span class="mi">8080</span><span class="p">,</span>
+  <span class="ss">:key</span>            <span class="o">=&gt;</span> <span class="s2">"</span><span class="si">#{</span><span class="n">root_dir</span><span class="si">}</span><span class="s2">/ssl/server.key"</span><span class="p">,</span>
+  <span class="ss">:crt</span>            <span class="o">=&gt;</span> <span class="s2">"</span><span class="si">#{</span><span class="n">root_dir</span><span class="si">}</span><span class="s2">/ssl/server.crt"</span><span class="p">,</span>
+  <span class="ss">:document_root</span>  <span class="o">=&gt;</span> <span class="s2">"</span><span class="si">#{</span><span class="n">root_dir</span><span class="si">}</span><span class="s2">/htdocs"</span><span class="p">,</span>
+  <span class="ss">:server_name</span>    <span class="o">=&gt;</span> <span class="s2">"mruby-http2 server"</span><span class="p">,</span>
 
   <span class="c1">#</span>
-  <span class="c1"># optional</span>
+  <span class="c1"># optional config</span>
   <span class="c1">#</span>
-  <span class="c1"># debug defualt: false</span>
-  <span class="c1">#:debug =&gt; true,</span>
 
-  <span class="c1"># tls defualt: true</span>
-  <span class="c1"># ignore :key and :crt when :tls is false</span>
-  <span class="c1">#:tls =&gt; false,</span>
+  <span class="c1"># debug default: false</span>
+  <span class="c1"># :debug  =&gt;  true,</span>
+
+  <span class="c1"># tls default: true</span>
+  <span class="c1"># :tls =&gt; false,</span>
+
+  <span class="c1"># damone default: false</span>
+  <span class="c1"># :daemon =&gt; true,</span>
 <span class="p">})</span>
 
 <span class="n">s</span><span class="o">.</span><span class="n">run</span>
