@@ -4,7 +4,15 @@ s = HTTP2::Server.new({
   :crt    =>  "/path/to/server.crt",
   :document_root => "/path/to/docment_root",
   :server_name => "mruby-http2 server",
-  :debug  =>  true,
+
+  #
+  # optional
+  #
+  # debug default: false
+  #:debug  =>  true,
+
+  # tls default: true
+  #:tls => false,
 })
 
 s.run

@@ -131,8 +131,15 @@ s = HTTP2::Server.new({
   :document_root => "/path/to/document_root",
   :server_name => "mruby-http2 server",
 
+  #
   # optional
-  :debug => nil,
+  #
+  # debug defualt: false
+  #:debug => true,
+
+  # tls defualt: true
+  # ignore :key and :crt when :tls is false
+  #:tls => false,
 })
 
 s.run

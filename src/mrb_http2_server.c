@@ -3,16 +3,17 @@
 //
 // See Copyright Notice in mrb_http2.c
 */
-
 #include "mrb_http2.h"
 
 #include <event.h>
 #include <event2/event.h>
+#include <event2/bufferevent.h>
 #include <event2/bufferevent_ssl.h>
 #include <event2/listener.h>
 
 typedef struct {
   unsigned int debug;
+  unsigned int tls;
   const char *key;
   const char *cert;
   const char *service;
@@ -133,8 +134,8 @@ static void delete_http2_stream_data(mrb_state *mrb,
 
 static void delete_http2_session_data(http2_session_data *session_data)
 {
+  SSL *ssl;
   http2_stream_data *stream_data;
-  SSL *ssl = bufferevent_openssl_get_ssl(session_data->bev);
   mrb_state *mrb = session_data->app_ctx->server->mrb;
   mrb_http2_config_t *config = session_data->app_ctx->server->config;
 
@@ -142,8 +143,11 @@ static void delete_http2_session_data(http2_session_data *session_data)
   if (config->debug) {
     fprintf(stderr, "%s disconnected\n", session_data->client_addr);
   }
-  if(ssl) {
-    SSL_shutdown(ssl);
+  if (config->tls) {
+    ssl = bufferevent_openssl_get_ssl(session_data->bev);
+    if(ssl) {
+      SSL_shutdown(ssl);
+    }
   }
   bufferevent_free(session_data->bev);
   nghttp2_session_del(session_data->session);
@@ -203,9 +207,9 @@ static ssize_t server_send_callback(nghttp2_session *session,
     const uint8_t *data, size_t length, int flags, void *user_data)
 {
   http2_session_data *session_data = (http2_session_data *)user_data;
-  mrb_state *mrb = session_data->app_ctx->server->mrb;
+  //mrb_state *mrb = session_data->app_ctx->server->mrb;
 
-  http2_stream_data *stream_data;
+  //http2_stream_data *stream_data;
 
   struct bufferevent *bev = session_data->bev;
   TRACER;
@@ -492,7 +496,7 @@ static int server_on_frame_recv_callback(nghttp2_session *session,
     const nghttp2_frame *frame, void *user_data)
 {
   http2_session_data *session_data = (http2_session_data *)user_data;
-  mrb_state *mrb = session_data->app_ctx->server->mrb;
+  //mrb_state *mrb = session_data->app_ctx->server->mrb;
   http2_stream_data *stream_data;
 
   TRACER;
@@ -569,6 +573,63 @@ static int send_server_connection_header(http2_session_data *session_data)
   return 0;
 }
 
+static SSL* mrb_http2_create_ssl(mrb_state *mrb, SSL_CTX *ssl_ctx)
+{
+  SSL *ssl;
+
+  if (ssl_ctx == NULL) {
+    return NULL;
+  }
+  ssl = SSL_new(ssl_ctx);
+
+  TRACER;
+  if(!ssl) {
+    mrb_raisef(mrb, E_RUNTIME_ERROR, "Could not create SSL/TLS session object: %S", 
+        mrb_str_new_cstr(mrb, ERR_error_string(ERR_get_error(), NULL)));
+  }
+  TRACER;
+  return ssl;
+}
+
+static http2_session_data* create_http2_session_data(mrb_state *mrb, 
+    app_context *app_ctx, int fd, struct sockaddr *addr, int addrlen)
+{
+  int rv;
+  http2_session_data *session_data;
+  SSL *ssl;
+  char host[NI_MAXHOST];
+  int val = 1;
+
+  ssl = mrb_http2_create_ssl(mrb, app_ctx->ssl_ctx);
+  session_data = (http2_session_data *)mrb_malloc(mrb, sizeof(http2_session_data));
+  memset(session_data, 0, sizeof(http2_session_data));
+  session_data->app_ctx = app_ctx;
+
+  setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char *)&val, sizeof(val));
+
+  // ssl is NULL when config->tls is disabled
+  if (ssl == NULL) {
+    TRACER;
+    session_data->bev = bufferevent_socket_new(app_ctx->evbase, fd, 
+        BEV_OPT_DEFER_CALLBACKS | BEV_OPT_CLOSE_ON_FREE);
+  } else {
+    TRACER;
+    session_data->bev = bufferevent_openssl_socket_new (app_ctx->evbase, fd, ssl, 
+        BUFFEREVENT_SSL_ACCEPTING, BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS);
+  }
+
+  session_data->handshake_leftlen = NGHTTP2_CLIENT_CONNECTION_HEADER_LEN;
+  rv = getnameinfo(addr, addrlen, host, sizeof(host), NULL, 0, NI_NUMERICHOST);
+  if(rv != 0) {
+    session_data->client_addr = strdup("(unknown)");
+  } else {
+    session_data->client_addr = strdup(host);
+  }
+  TRACER;
+
+  return session_data;
+}
+
 /* readcb for bufferevent after client connection header was
    checked. */
 static void mrb_http2_server_readcb(struct bufferevent *bev, void *ptr)
@@ -602,6 +663,7 @@ static void mrb_http2_server_writecb(struct bufferevent *bev, void *ptr)
     delete_http2_session_data(session_data);
     return;
   }
+  TRACER;
 }
 
 /* eventcb for bufferevent */
@@ -609,7 +671,7 @@ static void mrb_http2_server_eventcb(struct bufferevent *bev, short events,
     void *ptr)
 {
   http2_session_data *session_data = (http2_session_data *)ptr;
-  mrb_state *mrb = session_data->app_ctx->server->mrb;
+  //mrb_state *mrb = session_data->app_ctx->server->mrb;
   mrb_http2_config_t *config = session_data->app_ctx->server->config;
 
   TRACER;
@@ -637,7 +699,7 @@ static void mrb_http2_server_eventcb(struct bufferevent *bev, short events,
 static void mrb_http2_server_handshake_readcb(struct bufferevent *bev, void *ptr)
 {
   http2_session_data *session_data = (http2_session_data *)ptr;
-  mrb_state *mrb = session_data->app_ctx->server->mrb;
+  //mrb_state *mrb = session_data->app_ctx->server->mrb;
 
   uint8_t data[24];
   struct evbuffer *input = bufferevent_get_input(session_data->bev);
@@ -657,59 +719,19 @@ static void mrb_http2_server_handshake_readcb(struct bufferevent *bev, void *ptr
         mrb_http2_server_writecb, mrb_http2_server_eventcb, session_data);
     /* Process pending data in buffer since they are not notified
        further */
+    TRACER;
     mrb_http2_server_session_init(session_data);
     if(send_server_connection_header(session_data) != 0) {
       delete_http2_session_data(session_data);
       return;
     }
+    TRACER;
     if(session_recv(session_data) != 0) {
       delete_http2_session_data(session_data);
       return;
     }
+    TRACER;
   }
-}
-
-static SSL* mrb_http2_create_ssl(mrb_state *mrb, SSL_CTX *ssl_ctx)
-{
-  SSL *ssl;
-  ssl = SSL_new(ssl_ctx);
-
-  TRACER;
-  if(!ssl) {
-    mrb_raisef(mrb, E_RUNTIME_ERROR, "Could not create SSL/TLS session object: %S", 
-        mrb_str_new_cstr(mrb, ERR_error_string(ERR_get_error(), NULL)));
-  }
-  TRACER;
-  return ssl;
-}
-
-static http2_session_data* create_http2_session_data(mrb_state *mrb, 
-    app_context *app_ctx, int fd, struct sockaddr *addr, int addrlen)
-{
-  int rv;
-  http2_session_data *session_data;
-  SSL *ssl;
-  char host[NI_MAXHOST];
-  int val = 1;
-
-  TRACER;
-  ssl = mrb_http2_create_ssl(mrb, app_ctx->ssl_ctx);
-  session_data = (http2_session_data *)mrb_malloc(mrb, sizeof(http2_session_data));
-  memset(session_data, 0, sizeof(http2_session_data));
-  session_data->app_ctx = app_ctx;
-  setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char *)&val, sizeof(val));
-  session_data->bev = bufferevent_openssl_socket_new (app_ctx->evbase, fd, ssl,
-     BUFFEREVENT_SSL_ACCEPTING, BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS);
-  session_data->handshake_leftlen = NGHTTP2_CLIENT_CONNECTION_HEADER_LEN;
-  rv = getnameinfo(addr, addrlen, host, sizeof(host), NULL, 0, NI_NUMERICHOST);
-  if(rv != 0) {
-    session_data->client_addr = strdup("(unknown)");
-  } else {
-    session_data->client_addr = strdup(host);
-  }
-  TRACER;
-
-  return session_data;
 }
 
 static void mrb_http2_acceptcb(struct evconnlistener *listener, int fd, 
@@ -718,13 +740,25 @@ static void mrb_http2_acceptcb(struct evconnlistener *listener, int fd,
   app_context *app_ctx = (app_context *)ptr;
   http2_session_data *session_data;
   mrb_state *mrb = app_ctx->server->mrb;
+  mrb_http2_config_t *config = app_ctx->server->config;
 
   TRACER;
-  session_data = create_http2_session_data(mrb, app_ctx, 
-      fd, addr, addrlen);
-  bufferevent_setcb(session_data->bev, mrb_http2_server_handshake_readcb, 
-      NULL, mrb_http2_server_eventcb, session_data);
-  TRACER;
+  session_data = create_http2_session_data(mrb, app_ctx, fd, 
+      addr, addrlen);
+  if (config->tls) {
+    // setcb for https, first ssl handshek readcb
+    bufferevent_setcb(session_data->bev, mrb_http2_server_handshake_readcb, 
+        NULL, mrb_http2_server_eventcb, session_data);
+    TRACER;
+  } else {
+    // setcb for http
+    // NOTE: need bufferevent_enable when use bufferevent_socket_new
+    mrb_http2_server_session_init(session_data);
+    bufferevent_setcb(session_data->bev, mrb_http2_server_handshake_readcb, 
+        mrb_http2_server_writecb, mrb_http2_server_eventcb, session_data);
+    bufferevent_enable(session_data->bev, EV_READ | EV_WRITE);
+    TRACER;
+  }
 }
 
 static int next_proto_cb(SSL *s, const unsigned char **data, 
@@ -818,11 +852,14 @@ static mrb_value mrb_http2_server_run(mrb_state *mrb, mrb_value self)
   mrb_http2_data_t *data = DATA_PTR(self);  
   mrb_http2_server_t *server = data->s;
   mrb_http2_request_rec *r = data->r;
-  SSL_CTX *ssl_ctx;
-  struct event_base *evbase;
+  SSL_CTX *ssl_ctx = NULL;
   app_context app_ctx;
+  struct event_base *evbase;
 
-  ssl_ctx = mrb_http2_create_ssl_ctx(mrb, server->config->key, server->config->cert);
+  if (server->config->tls) {
+    ssl_ctx = mrb_http2_create_ssl_ctx(mrb, server->config->key, server->config->cert);
+  }
+
   evbase = event_base_new();
 
   init_app_context(&app_ctx, ssl_ctx, evbase);
@@ -833,7 +870,9 @@ static mrb_value mrb_http2_server_run(mrb_state *mrb, mrb_value self)
   mrb_start_listen(evbase, server->config->service, &app_ctx);
   event_base_loop(app_ctx.evbase, 0);
   event_base_free(app_ctx.evbase);
-  SSL_CTX_free(app_ctx.ssl_ctx);
+  if (server->config->tls) {
+    SSL_CTX_free(app_ctx.ssl_ctx);
+  }
   TRACER;
 
   return self;
@@ -861,28 +900,43 @@ static char *must_get_config_str_to_cstr(mrb_state *mrb, mrb_value args,
 
 static mrb_http2_config_t *mrb_http2_s_config_init(mrb_state *mrb, mrb_value args)
 {
-  mrb_value port, debug, docroot;
-  char *service, *key_file, *cert_file;
+  mrb_value port, debug, tls;
+  char *service;
 
   mrb_http2_config_t *config = (mrb_http2_config_t *)mrb_malloc(mrb, 
       sizeof(mrb_http2_config_t));
   memset(config, 0, sizeof(mrb_http2_config_t));
 
+  debug = mrb_hash_get(mrb, args, mrb_symbol_value(mrb_intern_lit(mrb, "debug")));
+  tls = mrb_hash_get(mrb, args, mrb_symbol_value(mrb_intern_lit(mrb, "tls")));
   port = mrb_hash_get(mrb, args, mrb_symbol_value(mrb_intern_lit(mrb, "port")));
   service = mrb_str_to_cstr(mrb, mrb_fixnum_to_str(mrb, port, 10));
   config->service = service;
 
-  config->key = must_get_config_str_to_cstr(mrb, args, "key");
-  config->cert = must_get_config_str_to_cstr(mrb, args, "crt");
+  
+  // DEBUG options: defulat DISABLED
+  config->debug = MRB_HTTP2_CONFIG_DISABLED;
+  if (!mrb_nil_p(debug) && mrb_obj_equal(mrb, debug, mrb_true_value())) {
+      config->debug = MRB_HTTP2_CONFIG_ENABLED;
+  }
+
+  // TLS options: defulat ENABLED
+  config->tls = MRB_HTTP2_CONFIG_ENABLED;
+  if (!mrb_nil_p(tls) && mrb_obj_equal(mrb, tls, mrb_false_value())) {
+      config->tls = MRB_HTTP2_CONFIG_DISABLED;
+  }
+
+  if (config->tls) {
+    config->key = must_get_config_str_to_cstr(mrb, args, "key");
+    config->cert = must_get_config_str_to_cstr(mrb, args, "crt");
+  } else {
+    config->key = NULL;
+    config->cert = NULL;
+  }
+
   config->document_root = must_get_config_str_to_cstr(mrb, args, "document_root");
   config->server_name = must_get_config_str_to_cstr(mrb, args, "server_name");
   
-  if (!mrb_nil_p(debug)) {
-    config->debug = MRB_HTTP2_CONFIG_ENABLED;
-  } else {
-    config->debug = MRB_HTTP2_CONFIG_DISABLED;
-  }
-
   return config;
 }
 
@@ -898,9 +952,6 @@ static mrb_value mrb_http2_server_init(mrb_state *mrb, mrb_value self)
   act.sa_handler = SIG_IGN;
   sigaction(SIGPIPE, &act, NULL);
 
-  SSL_load_error_strings();
-  SSL_library_init();
-
   mrb_get_args(mrb, "H", &args);
 
   // server context
@@ -912,6 +963,11 @@ static mrb_value mrb_http2_server_init(mrb_state *mrb, mrb_value self)
   server->config = mrb_http2_s_config_init(mrb, args);
   data->s = server;
   data->r = mrb_http2_request_rec_init(mrb);
+
+  if (server->config->tls) {
+    SSL_load_error_strings();
+    SSL_library_init();
+  }
 
   DATA_TYPE(self) = &mrb_http2_server_type;
   DATA_PTR(self) = data;
