@@ -12,6 +12,7 @@
 #include <event2/listener.h>
 
 typedef struct {
+  unsigned int daemon;
   unsigned int debug;
   unsigned int tls;
   const char *key;
@@ -900,7 +901,7 @@ static char *must_get_config_str_to_cstr(mrb_state *mrb, mrb_value args,
 
 static mrb_http2_config_t *mrb_http2_s_config_init(mrb_state *mrb, mrb_value args)
 {
-  mrb_value port, debug, tls;
+  mrb_value port, debug, tls, daemon;
   char *service;
 
   mrb_http2_config_t *config = (mrb_http2_config_t *)mrb_malloc(mrb, 
@@ -909,10 +910,16 @@ static mrb_http2_config_t *mrb_http2_s_config_init(mrb_state *mrb, mrb_value arg
 
   debug = mrb_hash_get(mrb, args, mrb_symbol_value(mrb_intern_lit(mrb, "debug")));
   tls = mrb_hash_get(mrb, args, mrb_symbol_value(mrb_intern_lit(mrb, "tls")));
+  daemon = mrb_hash_get(mrb, args, mrb_symbol_value(mrb_intern_lit(mrb, "daemon")));
   port = mrb_hash_get(mrb, args, mrb_symbol_value(mrb_intern_lit(mrb, "port")));
   service = mrb_str_to_cstr(mrb, mrb_fixnum_to_str(mrb, port, 10));
   config->service = service;
 
+  // DEBUG options: defulat DISABLED
+  config->daemon = MRB_HTTP2_CONFIG_DISABLED;
+  if (!mrb_nil_p(daemon) && mrb_obj_equal(mrb, daemon, mrb_true_value())) {
+      config->daemon = MRB_HTTP2_CONFIG_ENABLED;
+  }
   
   // DEBUG options: defulat DISABLED
   config->debug = MRB_HTTP2_CONFIG_DISABLED;
@@ -972,6 +979,12 @@ static mrb_value mrb_http2_server_init(mrb_state *mrb, mrb_value self)
   DATA_TYPE(self) = &mrb_http2_server_type;
   DATA_PTR(self) = data;
   TRACER;
+
+  if (server->config->daemon) {
+    if (daemon(0, 0) == -1) {
+      mrb_raise(mrb, E_RUNTIME_ERROR, "daemonize failed");
+    }
+  }
 
   return self;
 }
