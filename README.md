@@ -19,7 +19,7 @@ This is a very early version, please test and report errors. Wellcome pull-reque
 - implement some class (Proxy...)
 - implement some method (post...)
 
-## install by mrbgems
+## Install by mrbgems
 #### Add conf.gem line to `build_config.rb`
 ```ruby
 MRuby::Build.new do |conf|
