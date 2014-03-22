@@ -700,6 +700,7 @@ static void mrb_http2_server_eventcb(struct bufferevent *bev, short events,
 static void mrb_http2_server_handshake_readcb(struct bufferevent *bev, void *ptr)
 {
   http2_session_data *session_data = (http2_session_data *)ptr;
+  mrb_http2_config_t *config = session_data->app_ctx->server->config;
   //mrb_state *mrb = session_data->app_ctx->server->mrb;
 
   uint8_t data[24];
@@ -721,7 +722,9 @@ static void mrb_http2_server_handshake_readcb(struct bufferevent *bev, void *ptr
     /* Process pending data in buffer since they are not notified
        further */
     TRACER;
-    mrb_http2_server_session_init(session_data);
+    if (config->tls) {
+      mrb_http2_server_session_init(session_data);
+    }
     if(send_server_connection_header(session_data) != 0) {
       delete_http2_session_data(session_data);
       return;
@@ -754,6 +757,7 @@ static void mrb_http2_acceptcb(struct evconnlistener *listener, int fd,
   } else {
     // setcb for http
     // NOTE: need bufferevent_enable when use bufferevent_socket_new
+    mrb_http2_server_session_init(session_data);
     bufferevent_setcb(session_data->bev, mrb_http2_server_handshake_readcb, 
         mrb_http2_server_writecb, mrb_http2_server_eventcb, session_data);
     bufferevent_enable(session_data->bev, EV_READ | EV_WRITE);
