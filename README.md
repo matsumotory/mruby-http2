@@ -13,6 +13,7 @@ Please see [link](https://gist.github.com/matsumoto-r/9702123).
 
 ## TODO
 This is a very early version, please test and report errors. Wellcome pull-request.
+- Support http scheme for HTTP::Client
 - replace some function to mrbgem
 - more customizable Web server config
 - implement some class (Proxy...)
