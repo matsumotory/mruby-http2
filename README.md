@@ -20,7 +20,11 @@ This is a very early version, please test and report errors. Wellcome pull-reque
 - implement some method (post...)
 
 ## Install by mrbgems
-#### Add conf.gem line to `build_config.rb`
+#### Download mruby
+```
+git clone https://github.com/mruby/mruby
+```
+#### Add conf.gem line to `mruby/build_config.rb`
 ```ruby
 MRuby::Build.new do |conf|
 
@@ -32,6 +36,7 @@ end
 
 #### build
 ```
+cd mruby
 rake
 ```
 
