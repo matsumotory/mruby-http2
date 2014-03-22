@@ -14,7 +14,7 @@ MRuby::Gem::Specification.new('mruby-http2') do |spec|
 
   def run_command env, command
     STDOUT.sync = true
-    p "exec #{command}"
+    puts "mruby-http2 build: [exec] #{command}"
     Open3.popen2e(env, command) do |stdin, stdout, thread|
       print stdout.read
       fail "#{command} failed" if thread.value != 0
@@ -33,7 +33,7 @@ MRuby::Gem::Specification.new('mruby-http2') do |spec|
   if ! File.exists? libnghttp2a
     Dir.chdir nghttp2_dir do
       e = {}
-      run_command e, "git checkout #{nghttp2_ver}"
+      run_command e, "git checkout #{nghttp2_ver} ."
       run_command e, 'git submodule init'
       run_command e, 'git submodule update'
       run_command e, 'autoreconf -i'
