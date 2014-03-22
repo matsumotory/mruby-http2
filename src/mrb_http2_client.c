@@ -151,7 +151,6 @@ static int parse_uri(struct mrb_http2_uri_t *res, const char *uri)
   return 0;
 }
 
-
 static void mrb_http2_check_gzip(mrb_state *mrb, 
     struct mrb_http2_request_t *req, nghttp2_nv *nva, size_t nvlen)
 {
@@ -334,7 +333,6 @@ static int on_frame_recv_callback(nghttp2_session *session,
   }
   TRACER;
   if (!mrb_nil_p(conn->cb_block_hash)) {
-  TRACER;
     mrb_value cb_block = mrb_hash_get(conn->mrb, conn->cb_block_hash, 
                             mrb_str_new_lit(conn->mrb, "on_frame_recv_callback"));
     if (!mrb_nil_p(cb_block)) {
@@ -352,7 +350,7 @@ static int on_header_callback(nghttp2_session *session,
 {
   struct mrb_http2_conn_t *conn = (struct mrb_http2_conn_t*)user_data;
   mrb_value response_headers;
-  size_t i;
+  //size_t i;
   mrb_state *mrb = conn->mrb;
 
   switch(frame->hd.type) {
@@ -370,7 +368,7 @@ static int on_header_callback(nghttp2_session *session,
       } else {
         response_headers =  v;
       }
-      const nghttp2_nv *nva = frame->headers.nva;
+      //const nghttp2_nv *nva = frame->headers.nva;
       mrb_hash_set(mrb, response_headers, mrb_str_new(mrb, (char *)name, namelen), 
           mrb_str_new(mrb, (char *)value, valuelen));
       mrb_hash_set(mrb, conn->response, 
