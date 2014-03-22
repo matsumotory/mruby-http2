@@ -754,7 +754,6 @@ static void mrb_http2_acceptcb(struct evconnlistener *listener, int fd,
   } else {
     // setcb for http
     // NOTE: need bufferevent_enable when use bufferevent_socket_new
-    mrb_http2_server_session_init(session_data);
     bufferevent_setcb(session_data->bev, mrb_http2_server_handshake_readcb, 
         mrb_http2_server_writecb, mrb_http2_server_eventcb, session_data);
     bufferevent_enable(session_data->bev, EV_READ | EV_WRITE);
