@@ -9,9 +9,12 @@ MRuby::Gem::Specification.new('mruby-http2') do |spec|
 
   nghttp2_dir = "#{build_dir}/nghttp2"
   nghttp2_lib = "#{build_dir}/nghttp2/lib/.libs"
+  libnghttp2a = "#{nghttp2_lib}/libnghttp2.a"
+  nghttp2_ver = "8ccb6e463d52928f6704b5a749107065f9468dc2"
 
   def run_command env, command
     STDOUT.sync = true
+    p "exec #{command}"
     Open3.popen2e(env, command) do |stdin, stdout, thread|
       print stdout.read
       fail "#{command} failed" if thread.value != 0
@@ -27,9 +30,10 @@ MRuby::Gem::Specification.new('mruby-http2') do |spec|
     end
   end
 
-  if ! File.exists? nghttp2_lib
+  if ! File.exists? libnghttp2a
     Dir.chdir nghttp2_dir do
       e = {}
+      run_command e, "git checkout #{nghttp2_ver}"
       run_command e, 'git submodule init'
       run_command e, 'git submodule update'
       run_command e, 'autoreconf -i'
@@ -40,6 +44,6 @@ MRuby::Gem::Specification.new('mruby-http2') do |spec|
     end
   end
 
-  spec.linker.flags_before_libraries << "#{nghttp2_lib}/libnghttp2.a"
+  spec.linker.flags_before_libraries << libnghttp2a
   spec.cc.flags << "-I#{nghttp2_dir}/lib/includes"
 end
