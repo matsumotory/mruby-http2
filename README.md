@@ -19,7 +19,23 @@ This is a very early version, please test and report errors. Wellcome pull-reque
 - implement some class (Proxy...)
 - implement some method (post...)
 
-## example
+## install by mrbgems
+#### Add conf.gem line to `build_config.rb`
+```ruby
+MRuby::Build.new do |conf|
+
+  # ... (snip) ...
+
+  conf.gem :github => 'matsumoto-r/mruby-http2'
+end
+```
+
+#### build
+```
+rake
+```
+
+## Example
 ### mruby-http2 Test Site
 ```
 https://http2.matsumoto-r.jp:58080/index.html
@@ -235,24 +251,6 @@ p r.response
 "send_callback"
 "on_frame_send_callback"
 {:body=>"hello mruby-http2!!\n", :body_length=>20, :recieve_bytes=>20.0, :response_headers=>{":status"=>"200"}, :frame_send_header_goway=>true, :request_headers=>{"user-agent"=>"mruby-http2/0.0.1", "accept"=>"*/*", ":authority"=>"127.0.0.1:8080", ":scheme"=>"https", "accept-encoding"=>"gzip", ":method"=>"GET", ":path"=>"/index.html"}, :stream_id=>1}
-```
-
-## install by mrbgems
- - add conf.gem line to `build_config.rb`
-
-```ruby
-MRuby::Build.new do |conf|
-
-  # ... (snip) ...
-
-  conf.gem :github => 'matsumoto-r/mruby-http2'
-end
-```
-
- - build
-
-```
-rake
 ```
 
 # License
