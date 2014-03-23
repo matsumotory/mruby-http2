@@ -459,25 +459,11 @@ static int check_path(const char *path)
     !ends_with(path, "/..") && !ends_with(path, "/.");
 }
 
-/*
-static nghttp2_nv *create_hdrs(app_context *app_ctx)
+static void callback_ruby_block(mrb_state *mrb, unsigned int flag, mrb_value b)
 {
-  mrb_http2_config_t *config = app_ctx->server->config;
-  mrb_http2_request_rec *r = app_ctx->r;
-  char status[3];
-  snprintf(status, 3, "%d", r->status);
-
-  nghttp2_nv hdrs[] = {
-    MAKE_NV_CS(":status", status),
-    MAKE_NV_CS("server", config->server_name)
-  };
-
-  return hdrs;
-}
-*/
-
-static void callback_ruby_block(mrb_state *mrb, mrb_value b)
-{
+  if (!flag) {
+    return;
+  }
   if (!mrb_nil_p(b)) {
     mrb_yield_argv(mrb, b, 0, NULL);
   }
@@ -550,7 +536,7 @@ static int server_on_request_recv(nghttp2_session *session,
   //
   // "set_map_to_storage" callback ruby block
   // 
-  callback_ruby_block(mrb, config->cb_list->map_to_strage_cb);
+  callback_ruby_block(mrb, config->callback, config->cb_list->map_to_strage_cb);
 
   if (config->debug) {
     fprintf(stderr, "%s %s is mapped to %s\n", session_data->client_addr, 
