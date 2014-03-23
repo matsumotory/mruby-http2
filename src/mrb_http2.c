@@ -28,8 +28,8 @@
 #include "mrb_http2.h"
 
 void mrb_http2_client_class_init(mrb_state *mrb, struct RClass *http2);
-void mrb_http2_request_class_init(mrb_state *mrb, struct RClass *http2);
 void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2);
+void mrb_http2_request_class_init(mrb_state *mrb, struct RClass *http2);
 
 
 char *mrb_http2_strcopy(mrb_state *mrb, const char *s, size_t len)
