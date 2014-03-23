@@ -4,6 +4,7 @@
 // See Copyright Notice in mrb_http2.c
 */
 #include "mrb_http2.h"
+#include "mrb_http2_request.h"
 
 #include <event.h>
 #include <event2/event.h>
@@ -28,11 +29,6 @@ typedef struct {
   mrb_http2_config_t *config;
   mrb_state *mrb;
 } mrb_http2_server_t;
-
-typedef struct {
-  char *uri;
-  char *filename;
-} mrb_http2_request_rec;
 
 typedef struct {
   mrb_http2_server_t *s;
@@ -303,16 +299,25 @@ static ssize_t file_read_callback(nghttp2_session *session,
   return r;
 }
 
-static int send_response(nghttp2_session *session, int32_t stream_id, 
+static void mrb_http2_request_rec_free(mrb_state *mrb, mrb_http2_request_rec *r)
+{
+  mrb_free(mrb, r->filename);
+}
+
+static int send_response(app_context *app_ctx, nghttp2_session *session, int32_t stream_id, 
     nghttp2_nv *nva, size_t nvlen, int fd)
 {
   int rv;
+  mrb_state *mrb = app_ctx->server->mrb;
+  mrb_http2_request_rec *r = app_ctx->r;
+
   nghttp2_data_provider data_prd;
   data_prd.source.fd = fd;
   data_prd.read_callback = file_read_callback;
 
   TRACER;
   rv = nghttp2_submit_response(session, stream_id, nva, nvlen, &data_prd);
+  mrb_http2_request_rec_free(mrb, r);
   if(rv != 0) {
     fprintf(stderr, "Fatal error: %s", nghttp2_strerror(rv));
     return -1;
@@ -324,7 +329,7 @@ static int send_response(nghttp2_session *session, int32_t stream_id,
 const char ERROR_HTML[] = "<html><head><title>404</title></head>"
   "<body><h1>404 Not Found</h1></body></html>";
 
-static int error_reply(nghttp2_session *session, http2_stream_data *stream_data)
+static int error_reply(app_context *app_ctx, nghttp2_session *session, http2_stream_data *stream_data)
 {
   int rv;
   int pipefd[2];
@@ -347,7 +352,7 @@ static int error_reply(nghttp2_session *session, http2_stream_data *stream_data)
   close(pipefd[1]);
   stream_data->fd = pipefd[0];
   TRACER;
-  if(send_response(session, stream_data->stream_id, hdrs, ARRLEN(hdrs), 
+  if(send_response(app_ctx, session, stream_data->stream_id, hdrs, ARRLEN(hdrs), 
         pipefd[0]) != 0) {
     close(pipefd[0]);
     return -1;
@@ -428,6 +433,7 @@ static int server_on_request_recv(nghttp2_session *session,
   int fd;
   mrb_state *mrb = session_data->app_ctx->server->mrb;
   mrb_http2_config_t *config = session_data->app_ctx->server->config;
+  mrb_http2_request_rec *r = session_data->app_ctx->r;
 
   nghttp2_nv hdrs[] = {
     MAKE_NV(":status", "200"),
@@ -437,7 +443,7 @@ static int server_on_request_recv(nghttp2_session *session,
 
   TRACER;
   if(!stream_data->request_path) {
-    if(error_reply(session, stream_data) != 0) {
+    if(error_reply(session_data->app_ctx, session, stream_data) != 0) {
       return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
     return 0;
@@ -452,39 +458,40 @@ static int server_on_request_recv(nghttp2_session *session,
       fprintf(stderr, "%s invalid request_path: %s\n", session_data->client_addr, 
           stream_data->request_path);
     }
-    if(error_reply(session, stream_data) != 0) {
+    if(error_reply(session_data->app_ctx, session, stream_data) != 0) {
       return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
     return 0;
   }
   for(rel_path = stream_data->request_path; *rel_path == '/'; ++rel_path);
   if (config->document_root) {
-    char *full_path = NULL;
     size_t path_len = strlen(config->document_root) + 
       strlen(stream_data->request_path) + 1;
 
-    full_path = (char *)mrb_malloc(mrb, path_len);
-    snprintf(full_path, path_len, "%s%s", config->document_root, 
-        stream_data->request_path);
+    r->uri = stream_data->request_path;
+    // will free in mrb_http2_request_rec_free()
+    r->filename = (char *)mrb_malloc(mrb, path_len);
+
+    snprintf(r->filename, path_len, "%s%s", config->document_root, 
+        r->uri);
     if (config->debug) {
       fprintf(stderr, "%s %s is mapped to %s\n", session_data->client_addr, 
-          stream_data->request_path, full_path);
+          r->uri, r->filename);
     }
-    fd = open(full_path, O_RDONLY);
-    mrb_free(mrb, full_path);
+    fd = open(r->filename, O_RDONLY);
   } else {
     fd = open(rel_path, O_RDONLY);
   }
   TRACER;
   if(fd == -1) {
-    if(error_reply(session, stream_data) != 0) {
+    if(error_reply(session_data->app_ctx, session, stream_data) != 0) {
       return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
     return 0;
   }
   stream_data->fd = fd;
 
-  if(send_response(session, stream_data->stream_id, hdrs, 
+  if(send_response(session_data->app_ctx, session, stream_data->stream_id, hdrs, 
         ARRLEN(hdrs), fd) != 0) {
     close(fd);
     return NGHTTP2_ERR_CALLBACK_FAILURE;
