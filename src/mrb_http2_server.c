@@ -427,19 +427,50 @@ static int check_path(const char *path)
     !ends_with(path, "/..") && !ends_with(path, "/.");
 }
 
+/*
+static nghttp2_nv *create_hdrs(app_context *app_ctx)
+{
+  mrb_http2_config_t *config = app_ctx->server->config;
+  mrb_http2_request_rec *r = app_ctx->r;
+  char status[3];
+  snprintf(status, 3, "%d", r->status);
+
+  nghttp2_nv hdrs[] = {
+    MAKE_NV_CS(":status", status),
+    MAKE_NV_CS("server", config->server_name)
+  };
+
+  return hdrs;
+}
+*/
+
+static int mrb_http2_send_response(app_context *app_ctx, nghttp2_session *session, 
+    int32_t stream_id, int fd) {
+  
+  mrb_http2_config_t *config = app_ctx->server->config;
+  mrb_http2_request_rec *r = app_ctx->r;
+
+  nghttp2_nv hdrs[] = {
+    MAKE_NV_CS(":status", r->status_line),
+    MAKE_NV_CS("server", config->server_name)
+  };
+
+  if(send_response(app_ctx, session, stream_id, hdrs, ARRLEN(hdrs), 
+        fd) != 0) {
+    close(fd);
+    return NGHTTP2_ERR_CALLBACK_FAILURE;
+  }
+  return 0;
+}
+
 static int server_on_request_recv(nghttp2_session *session, 
     http2_session_data *session_data, http2_stream_data *stream_data)
 {
   int fd;
+  char *rel_path;
   mrb_state *mrb = session_data->app_ctx->server->mrb;
   mrb_http2_config_t *config = session_data->app_ctx->server->config;
   mrb_http2_request_rec *r = session_data->app_ctx->r;
-
-  nghttp2_nv hdrs[] = {
-    MAKE_NV(":status", "200"),
-    MAKE_NV_CS("server", config->server_name)
-  };
-  char *rel_path;
 
   TRACER;
   if(!stream_data->request_path) {
@@ -490,6 +521,7 @@ static int server_on_request_recv(nghttp2_session *session,
   } else {
     fd = open(rel_path, O_RDONLY);
   }
+  
   TRACER;
   if(fd == -1) {
     if(error_reply(session_data->app_ctx, session, stream_data) != 0) {
@@ -497,15 +529,14 @@ static int server_on_request_recv(nghttp2_session *session,
     }
     return 0;
   }
-  stream_data->fd = fd;
 
-  if(send_response(session_data->app_ctx, session, stream_data->stream_id, hdrs, 
-        ARRLEN(hdrs), fd) != 0) {
-    close(fd);
-    return NGHTTP2_ERR_CALLBACK_FAILURE;
-  }
+  stream_data->fd = fd;
+  r->status = HTTP_OK;
+  snprintf(r->status_line, 4, "%d", r->status);
+
   TRACER;
-  return 0;
+  return mrb_http2_send_response(session_data->app_ctx, session, 
+      stream_data->stream_id, fd);
 }
 
 static int server_on_frame_recv_callback(nghttp2_session *session, 
