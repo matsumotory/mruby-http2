@@ -28,6 +28,7 @@
 #include "mrb_http2.h"
 #include "mrb_http2_client.h"
 #include "mrb_http2_server.h"
+#include "mrb_http2_request.h"
 
 char *strcopy(const char *s, size_t len)
 {
@@ -38,6 +39,23 @@ char *strcopy(const char *s, size_t len)
   return dst;
 }
 
+mrb_value mrb_http2_class_obj(mrb_state *mrb, mrb_value self,
+    char *obj_id, char *class_name)
+{ 
+  mrb_value obj;
+  struct RClass *target, *http2;
+
+  obj = mrb_iv_get(mrb, self, mrb_intern_cstr(mrb, obj_id));
+  if (mrb_nil_p(obj)) {
+    http2 = mrb_module_get(mrb, "HTTP2");
+    target = (struct RClass *)mrb_class_ptr(mrb_const_get(mrb, 
+          mrb_obj_value(http2), mrb_intern_cstr(mrb, class_name)));
+    obj = mrb_obj_new(mrb, target, 0, NULL);
+    mrb_iv_set(mrb, self, mrb_intern_cstr(mrb, obj_id), obj);
+  }
+  return obj;
+}
+
 void mrb_mruby_http2_gem_init(mrb_state *mrb)
 {
   struct RClass *http2;
@@ -46,6 +64,7 @@ void mrb_mruby_http2_gem_init(mrb_state *mrb)
 
   mrb_http2_client_class_init(mrb, http2);
   mrb_http2_server_class_init(mrb, http2);
+  mrb_http2_request_class_init(mrb, http2);
 
   DONE;
 }

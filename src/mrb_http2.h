@@ -66,6 +66,8 @@
     (uint16_t)(sizeof(NAME) - 1), (uint16_t)(strlen(VALUE)) }
 
 char *strcopy(const char *s, size_t len);
+mrb_value mrb_http2_class_obj(mrb_state *mrb, mrb_value self,
+        char *obj_id, char *class_name);
 void mrb_mruby_http2_gem_init(mrb_state *mrb);
 
 #endif
