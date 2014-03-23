@@ -1088,6 +1088,14 @@ static mrb_value mrb_http2_server_filename(mrb_state *mrb, mrb_value self)
   return mrb_str_new_cstr(mrb, r->filename);
 }
 
+static mrb_value mrb_http2_server_uri(mrb_state *mrb, mrb_value self)
+{
+  mrb_http2_data_t *data = DATA_PTR(self);
+  mrb_http2_request_rec *r = data->r;
+
+  return mrb_str_new_cstr(mrb, r->uri);
+}
+
 void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
 {
   struct RClass *server;
@@ -1097,8 +1105,9 @@ void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
 
   mrb_define_method(mrb, server, "initialize", mrb_http2_server_init, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, server, "run", mrb_http2_server_run, MRB_ARGS_NONE());
-  mrb_define_method(mrb, server, "filename", mrb_http2_server_filename, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "request", mrb_http2_req_obj, MRB_ARGS_NONE());
+  mrb_define_method(mrb, server, "filename", mrb_http2_server_filename, MRB_ARGS_NONE());
+  mrb_define_method(mrb, server, "uri", mrb_http2_server_uri, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "set_map_to_strage_cb", mrb_http2_server_set_map_to_strage_cb, MRB_ARGS_REQ(1));
   DONE;
 }
