@@ -185,7 +185,6 @@ static ssize_t server_send_callback(nghttp2_session *session,
 {
   http2_session_data *session_data = (http2_session_data *)user_data;
   //mrb_state *mrb = session_data->app_ctx->server->mrb;
-
   //http2_stream_data *stream_data;
 
   struct bufferevent *bev = session_data->bev;
@@ -1124,12 +1123,7 @@ static mrb_value mrb_http2_server_uri(mrb_state *mrb, mrb_value self)
 {
   mrb_http2_data_t *data = DATA_PTR(self);
   mrb_http2_request_rec *r = data->r;
-  //size_t uri_len = strlen(r->uri);
-  //char *uri = mrb_malloc(mrb, uri_len + 1);
-  //memcpy(uri, r->uri, uri_len + 1);
-  //printf("uri=%s r->uri=%s r->filename=%s\n", uri, r->uri, r->filename);
 
-  //return mrb_str_new_static(mrb, uri, uri_len);
   return mrb_str_new_cstr(mrb, r->uri);
 }
 
