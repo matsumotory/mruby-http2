@@ -16,6 +16,7 @@ typedef struct {
   unsigned int daemon;
   unsigned int debug;
   unsigned int tls;
+  unsigned int callback;
   const char *key;
   const char *cert;
   const char *service;
@@ -28,6 +29,9 @@ typedef struct {
   mrb_value args;
   mrb_http2_config_t *config;
   mrb_state *mrb;
+  
+  // callback Ruby block hash table
+  mrb_value cb_hash;
 } mrb_http2_server_t;
 
 typedef struct {
@@ -465,6 +469,17 @@ static nghttp2_nv *create_hdrs(app_context *app_ctx)
 }
 */
 
+static void callback_ruby_block(mrb_state *mrb, mrb_value hash, mrb_value cb_type)
+{
+  int ai = mrb_gc_arena_save(mrb);
+  mrb_value cbb = mrb_hash_get(mrb, hash, cb_type);
+  if (!mrb_nil_p(cbb)) {
+    mrb_yield_argv(mrb, cbb, 0, NULL);
+  }
+  mrb_gc_arena_restore(mrb, ai);
+  mrb_gc_protect(mrb, hash);
+}
+
 static int mrb_http2_send_response(app_context *app_ctx, nghttp2_session *session, 
     int32_t stream_id, int fd) {
   
@@ -488,10 +503,12 @@ static int server_on_request_recv(nghttp2_session *session,
     http2_session_data *session_data, http2_stream_data *stream_data)
 {
   int fd;
-  char *rel_path;
+  struct stat finfo;
+  size_t path_len;
   mrb_state *mrb = session_data->app_ctx->server->mrb;
   mrb_http2_config_t *config = session_data->app_ctx->server->config;
   mrb_http2_request_rec *r = session_data->app_ctx->r;
+  mrb_http2_server_t *server = session_data->app_ctx->server;
 
   TRACER;
   if(!stream_data->request_path) {
@@ -518,37 +535,39 @@ static int server_on_request_recv(nghttp2_session *session,
     return 0;
   }
   
-  for(rel_path = stream_data->request_path; *rel_path == '/'; ++rel_path);
+  path_len = strlen(config->document_root) + 
+    strlen(stream_data->request_path) + 1;
 
-  if (config->document_root) {
-    struct stat finfo;
-    size_t path_len = strlen(config->document_root) + 
-      strlen(stream_data->request_path) + 1;
+  r->uri = stream_data->request_path;
+  r->filename = (char *)mrb_malloc(mrb, path_len);
+  
+  // will free in mrb_http2_request_rec_free()
+  snprintf(r->filename, path_len, "%s%s", config->document_root, r->uri);
 
-    r->uri = stream_data->request_path;
-    // will free in mrb_http2_request_rec_free()
-    r->filename = (char *)mrb_malloc(mrb, path_len);
-
-    snprintf(r->filename, path_len, "%s%s", config->document_root, 
-        r->uri);
-    if (config->debug) {
-      fprintf(stderr, "%s %s is mapped to %s\n", session_data->client_addr, 
-          r->uri, r->filename);
-    }
-    TRACER;
-    if (stat(r->filename, &finfo) != 0) {
-      set_status_record(r, HTTP_NOT_FOUND);
-      if(error_reply(session_data->app_ctx, session, stream_data) != 0) {
-        return NGHTTP2_ERR_CALLBACK_FAILURE;
-      }
-      return 0;
-    }
-    r->finfo = &finfo;
-
-    fd = open(r->filename, O_RDONLY);
-  } else {
-    fd = open(rel_path, O_RDONLY);
+  //
+  // "set_map_to_storage" callback ruby block
+  // 
+  if (config->callback) {
+    callback_ruby_block(mrb, server->cb_hash, 
+        mrb_str_new_lit(mrb, "set_map_to_strage_cb"));
   }
+
+  if (config->debug) {
+    fprintf(stderr, "%s %s is mapped to %s\n", session_data->client_addr, 
+        r->uri, r->filename);
+  }
+
+  TRACER;
+  if (stat(r->filename, &finfo) != 0) {
+    set_status_record(r, HTTP_NOT_FOUND);
+    if(error_reply(session_data->app_ctx, session, stream_data) != 0) {
+      return NGHTTP2_ERR_CALLBACK_FAILURE;
+    }
+    return 0;
+  }
+  r->finfo = &finfo;
+
+  fd = open(r->filename, O_RDONLY);
   
   TRACER;
   if(fd == -1) {
@@ -982,36 +1001,44 @@ static char *must_get_config_str_to_cstr(mrb_state *mrb, mrb_value args,
 
 static mrb_http2_config_t *mrb_http2_s_config_init(mrb_state *mrb, mrb_value args)
 {
-  mrb_value port, debug, tls, daemon;
+  mrb_value port, debug, tls, daemon, cb;
   char *service;
 
   mrb_http2_config_t *config = (mrb_http2_config_t *)mrb_malloc(mrb, 
       sizeof(mrb_http2_config_t));
   memset(config, 0, sizeof(mrb_http2_config_t));
 
+  cb = mrb_hash_get(mrb, args, mrb_symbol_value(mrb_intern_lit(mrb, "callback")));
   debug = mrb_hash_get(mrb, args, mrb_symbol_value(mrb_intern_lit(mrb, "debug")));
   tls = mrb_hash_get(mrb, args, mrb_symbol_value(mrb_intern_lit(mrb, "tls")));
   daemon = mrb_hash_get(mrb, args, mrb_symbol_value(mrb_intern_lit(mrb, "daemon")));
   port = mrb_hash_get(mrb, args, mrb_symbol_value(mrb_intern_lit(mrb, "port")));
   service = mrb_str_to_cstr(mrb, mrb_fixnum_to_str(mrb, port, 10));
+
   config->service = service;
 
-  // DEBUG options: defulat DISABLED
+  // CALLBACK options: defulat DISABLED
+  config->callback = MRB_HTTP2_CONFIG_DISABLED;
+  if (!mrb_nil_p(cb) && mrb_obj_equal(mrb, cb, mrb_true_value())) {
+    config->callback = MRB_HTTP2_CONFIG_ENABLED;
+  }
+
+  // DAEMON options: defulat DISABLED
   config->daemon = MRB_HTTP2_CONFIG_DISABLED;
   if (!mrb_nil_p(daemon) && mrb_obj_equal(mrb, daemon, mrb_true_value())) {
-      config->daemon = MRB_HTTP2_CONFIG_ENABLED;
+    config->daemon = MRB_HTTP2_CONFIG_ENABLED;
   }
   
   // DEBUG options: defulat DISABLED
   config->debug = MRB_HTTP2_CONFIG_DISABLED;
   if (!mrb_nil_p(debug) && mrb_obj_equal(mrb, debug, mrb_true_value())) {
-      config->debug = MRB_HTTP2_CONFIG_ENABLED;
+    config->debug = MRB_HTTP2_CONFIG_ENABLED;
   }
 
   // TLS options: defulat ENABLED
   config->tls = MRB_HTTP2_CONFIG_ENABLED;
   if (!mrb_nil_p(tls) && mrb_obj_equal(mrb, tls, mrb_false_value())) {
-      config->tls = MRB_HTTP2_CONFIG_DISABLED;
+    config->tls = MRB_HTTP2_CONFIG_DISABLED;
   }
 
   if (config->tls) {
@@ -1026,6 +1053,40 @@ static mrb_http2_config_t *mrb_http2_s_config_init(mrb_state *mrb, mrb_value arg
   config->server_name = must_get_config_str_to_cstr(mrb, args, "server_name");
   
   return config;
+}
+
+static mrb_value mrb_http2_server_setcb(mrb_state *mrb, mrb_value self,
+    mrb_value cb_type)
+{
+  mrb_http2_data_t *data = DATA_PTR(self);
+  mrb_http2_server_t *server = data->s;
+  mrb_value cbb;
+
+  mrb_get_args(mrb, "&", &cbb);
+  mrb_hash_set(mrb, server->cb_hash, cb_type, cbb);
+  mrb_gc_protect(mrb, server->cb_hash);
+
+  return self;
+}
+
+static mrb_value mrb_http2_server_set_map_to_strage_cb(mrb_state *mrb, 
+    mrb_value self)
+{
+  return mrb_http2_server_setcb(mrb, self, 
+      mrb_str_new_lit(mrb, "set_map_to_strage_cb"));
+}
+
+static mrb_value mrb_http2_server_cb_hash_init(mrb_state *mrb)
+{
+  mrb_value hash = mrb_hash_new(mrb);
+  mrb_hash_set(mrb, hash, mrb_str_new_lit(mrb, "set_map_to_strage_cb"), mrb_nil_value());
+  //mrb_hash_set(mrb, hash, mrb_str_new_cstr(mrb, "recv_callback"), mrb_nil_value());
+  //mrb_hash_set(mrb, hash, mrb_str_new_cstr(mrb, "before_frame_send_callback"), mrb_nil_value());
+  //mrb_hash_set(mrb, hash, mrb_str_new_cstr(mrb, "on_frame_send_callback"), mrb_nil_value());
+  //mrb_hash_set(mrb, hash, mrb_str_new_cstr(mrb, "on_frame_recv_callback"), mrb_nil_value());
+  //mrb_hash_set(mrb, hash, mrb_str_new_cstr(mrb, "on_stream_close_callback"), mrb_nil_value());
+  //mrb_hash_set(mrb, hash, mrb_str_new_cstr(mrb, "on_data_chunk_recv_callback"), mrb_nil_value());
+  return hash;
 }
 
 static mrb_value mrb_http2_server_init(mrb_state *mrb, mrb_value self)
@@ -1047,6 +1108,8 @@ static mrb_value mrb_http2_server_init(mrb_state *mrb, mrb_value self)
   memset(server, 0, sizeof(mrb_http2_server_t));
   server->args = args;
   server->mrb = mrb;
+  server->cb_hash = mrb_http2_server_cb_hash_init(mrb);
+  mrb_gc_protect(mrb, server->cb_hash);
 
   server->config = mrb_http2_s_config_init(mrb, args);
   data->s = server;
@@ -1079,5 +1142,6 @@ void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
 
   mrb_define_method(mrb, server, "initialize", mrb_http2_server_init, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, server, "run", mrb_http2_server_run, MRB_ARGS_NONE());
+  mrb_define_method(mrb, server, "set_map_to_strage_cb", mrb_http2_server_set_map_to_strage_cb, MRB_ARGS_REQ(1));
   DONE;
 }

@@ -171,7 +171,15 @@ s = HTTP2::Server.new({
 
   # damone default: false
   # :daemon => true,
+
+  # callback default: false
+  # :callback => true,
 })
+
+# when :callback option true
+# s.set_map_to_strage_cb {
+#   p "callback bloack at set_map_to_strage_cb"
+# }
 
 s.run
 ```
