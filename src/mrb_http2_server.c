@@ -465,6 +465,7 @@ static int server_on_request_recv(nghttp2_session *session,
   }
   for(rel_path = stream_data->request_path; *rel_path == '/'; ++rel_path);
   if (config->document_root) {
+    struct stat finfo;
     size_t path_len = strlen(config->document_root) + 
       strlen(stream_data->request_path) + 1;
 
@@ -478,6 +479,13 @@ static int server_on_request_recv(nghttp2_session *session,
       fprintf(stderr, "%s %s is mapped to %s\n", session_data->client_addr, 
           r->uri, r->filename);
     }
+    if (stat(r->filename, &finfo) != 0) {
+      if(error_reply(session_data->app_ctx, session, stream_data) != 0) {
+        return NGHTTP2_ERR_CALLBACK_FAILURE;
+      }
+    }
+    r->finfo = &finfo;
+
     fd = open(r->filename, O_RDONLY);
   } else {
     fd = open(rel_path, O_RDONLY);
