@@ -7,6 +7,4 @@
 #ifndef MRB_HTTP2_CLIENT_H
 #define MRB_HTTP2_CLIENT_H
 
-void mrb_http2_client_class_init(mrb_state *mrb, struct RClass *http2);
-
 #endif

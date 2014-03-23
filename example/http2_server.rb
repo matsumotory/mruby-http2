@@ -24,9 +24,21 @@ s = HTTP2::Server.new({
   # :callback => true,
 })
 
-# when :callback option true
+#
+# when :callback option is true,
+#
 # s.set_map_to_strage_cb {
+#
 #   p "callback bloack at set_map_to_strage_cb"
+#   p s.request.uri
+#   p s.request.filename
+#
+#   # location setting
+#   if s.request.uri == "/index.html"
+#     s.request.filename = "#{root_dir}/htdocs/hoge"
+#   end
+#   p s.request.filename
+#
 # }
 
 s.run

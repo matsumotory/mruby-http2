@@ -87,6 +87,4 @@ typedef struct {
 
 } mrb_http2_request_rec;
 
-void mrb_http2_request_class_init(mrb_state *mrb, struct RClass *http2);
-
 #endif

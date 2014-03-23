@@ -1,4 +1,5 @@
 /*
+  snprintf
 // mrb_http2_server.c - to provide http2 methods
 //
 // See Copyright Notice in mrb_http2.c
@@ -11,6 +12,8 @@
 #include <event2/bufferevent.h>
 #include <event2/bufferevent_ssl.h>
 #include <event2/listener.h>
+
+#include "mruby/string.h"
 
 typedef struct {
   SSL_CTX *ssl_ctx;
@@ -283,6 +286,10 @@ static void mrb_http2_request_rec_free(mrb_state *mrb,
     mrb_free(mrb, r->filename);
     r->filename = NULL;
   }
+  if (r->uri != NULL) {
+    mrb_free(mrb, r->uri);
+    r->uri = NULL;
+  }
 }
 
 static int send_response(app_context *app_ctx, nghttp2_session *session, 
@@ -459,7 +466,7 @@ static int server_on_request_recv(nghttp2_session *session,
 {
   int fd;
   struct stat finfo;
-  size_t path_len;
+  size_t root_len, uri_len;
   mrb_state *mrb = session_data->app_ctx->server->mrb;
   mrb_http2_config_t *config = session_data->app_ctx->server->config;
   mrb_http2_request_rec *r = session_data->app_ctx->r;
@@ -490,15 +497,19 @@ static int server_on_request_recv(nghttp2_session *session,
     return 0;
   }
   
-  path_len = strlen(config->document_root) + 
-    strlen(stream_data->request_path) + 1;
-
-  r->uri = stream_data->request_path;
-  r->filename = (char *)mrb_malloc(mrb, path_len);
+  root_len = strlen(config->document_root);
+  uri_len = strlen(stream_data->request_path);
   
-  // will free in mrb_http2_request_rec_free()
-  snprintf(r->filename, path_len, "%s%s", config->document_root, r->uri);
+  // r-> will free at request_rec_free
+  r->filename = (char *)mrb_malloc(mrb, root_len + uri_len + 1);
+  memcpy(r->filename, config->document_root, root_len);
+  memcpy(r->filename + root_len, stream_data->request_path, uri_len + 1);
+  r->uri = mrb_http2_strcopy(mrb, stream_data->request_path, uri_len);
 
+  if (config->debug) {
+    fprintf(stderr, "%s %s is mapped to %s document_root=%s before map_to_strage_cb\n", 
+        session_data->client_addr, r->uri, r->filename, config->document_root);
+  }
   //
   // "set_map_to_storage" callback ruby block
   // 
@@ -935,6 +946,7 @@ static mrb_http2_request_rec *mrb_http2_request_rec_init(mrb_state *mrb)
   
   // NULL check when request_rec freed
   r->filename = NULL;
+  r->uri = NULL;
 
   return r;
 }
@@ -948,7 +960,8 @@ static char *must_get_config_str_to_cstr(mrb_state *mrb, mrb_value args,
     mrb_raisef(mrb, E_ARGUMENT_ERROR, "%S not found", mrb_str_new_cstr(mrb, name));
   }
 
-  return mrb_str_to_cstr(mrb, val);
+  //return mrb_str_to_cstr(mrb, val);
+  return mrb_http2_strcopy(mrb, RSTRING_PTR(val), RSTRING_LEN(val));
 }
 
 static mrb_value mrb_http2_server_set_map_to_strage_cb(mrb_state *mrb, 
@@ -1052,7 +1065,9 @@ static mrb_value mrb_http2_server_init(mrb_state *mrb, mrb_value self)
   server->args = args;
   server->mrb = mrb;
 
-  server->config = mrb_http2_s_config_init(mrb, args);
+  mrb_gc_protect(mrb, server->args);
+  server->config = mrb_http2_s_config_init(mrb, server->args);
+
   data->s = server;
   data->r = mrb_http2_request_rec_init(mrb);
 
@@ -1088,11 +1103,33 @@ static mrb_value mrb_http2_server_filename(mrb_state *mrb, mrb_value self)
   return mrb_str_new_cstr(mrb, r->filename);
 }
 
+static mrb_value mrb_http2_server_set_filename(mrb_state *mrb, mrb_value self)
+{
+  mrb_http2_data_t *data = DATA_PTR(self);
+  mrb_http2_request_rec *r = data->r;
+  char *filename;
+  mrb_int len;
+
+  mrb_get_args(mrb, "s", &filename, &len);
+  mrb_free(mrb, r->filename);
+
+  r->filename = (char *)mrb_malloc(mrb, len);
+  strncpy(r->filename, filename, len);
+  r->filename[len] = '\0';
+
+  return self;
+}
+
 static mrb_value mrb_http2_server_uri(mrb_state *mrb, mrb_value self)
 {
   mrb_http2_data_t *data = DATA_PTR(self);
   mrb_http2_request_rec *r = data->r;
+  //size_t uri_len = strlen(r->uri);
+  //char *uri = mrb_malloc(mrb, uri_len + 1);
+  //memcpy(uri, r->uri, uri_len + 1);
+  //printf("uri=%s r->uri=%s r->filename=%s\n", uri, r->uri, r->filename);
 
+  //return mrb_str_new_static(mrb, uri, uri_len);
   return mrb_str_new_cstr(mrb, r->uri);
 }
 
@@ -1107,6 +1144,7 @@ void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
   mrb_define_method(mrb, server, "run", mrb_http2_server_run, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "request", mrb_http2_req_obj, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "filename", mrb_http2_server_filename, MRB_ARGS_NONE());
+  mrb_define_method(mrb, server, "filename=", mrb_http2_server_set_filename, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, server, "uri", mrb_http2_server_uri, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "set_map_to_strage_cb", mrb_http2_server_set_map_to_strage_cb, MRB_ARGS_REQ(1));
   DONE;

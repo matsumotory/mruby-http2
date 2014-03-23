@@ -26,10 +26,22 @@
 */
 
 #include "mrb_http2.h"
-#include "mrb_http2_client.h"
-#include "mrb_http2_server.h"
-#include "mrb_http2_request.h"
 
+void mrb_http2_client_class_init(mrb_state *mrb, struct RClass *http2);
+void mrb_http2_request_class_init(mrb_state *mrb, struct RClass *http2);
+void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2);
+
+
+char *mrb_http2_strcopy(mrb_state *mrb, const char *s, size_t len)
+{
+  char *dst;
+  dst = mrb_malloc(mrb, len+1);
+  memcpy(dst, s, len);
+  dst[len] = '\0';
+  return dst;
+}
+
+// will remove
 char *strcopy(const char *s, size_t len)
 {
   char *dst;
