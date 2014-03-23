@@ -74,7 +74,7 @@ typedef struct {
   unsigned int status;
 
   // http status code line
-  char status_line[3];
+  char status_line[4];
 
   // request uri
   char *uri;

@@ -302,7 +302,10 @@ static ssize_t file_read_callback(nghttp2_session *session,
 static void mrb_http2_request_rec_free(mrb_state *mrb,
     mrb_http2_request_rec *r)
 {
-  mrb_free(mrb, r->filename);
+  if (r->filename != NULL) {
+    mrb_free(mrb, r->filename);
+    r->filename = NULL;
+  }
 }
 
 static int send_response(app_context *app_ctx, nghttp2_session *session, 
@@ -327,16 +330,26 @@ static int send_response(app_context *app_ctx, nghttp2_session *session,
   return 0;
 }
 
-const char ERROR_HTML[] = "<html><head><title>404</title></head>"
+const char ERROR_404_HTML[] = "<html><head><title>404</title></head>"
   "<body><h1>404 Not Found</h1></body></html>";
+
+const char ERROR_503_HTML[] = "<html><head><title>503</title></head>"
+  "<body><h1>503 Service Unavailable</h1></body></html>";
+
+static void set_status_record(mrb_http2_request_rec *r, int status)
+{
+  r->status = status;
+  snprintf(r->status_line, 4, "%d", r->status);
+}
 
 static int error_reply(app_context *app_ctx, nghttp2_session *session, 
     http2_stream_data *stream_data)
 {
+  mrb_http2_request_rec *r = app_ctx->r;
   int rv;
   int pipefd[2];
   nghttp2_nv hdrs[] = {
-    MAKE_NV(":status", "404")
+    MAKE_NV_CS(":status", r->status_line)
   };
 
   TRACER;
@@ -345,12 +358,18 @@ static int error_reply(app_context *app_ctx, nghttp2_session *session,
     rv = nghttp2_submit_rst_stream(session, NGHTTP2_FLAG_NONE, 
         stream_data->stream_id, NGHTTP2_INTERNAL_ERROR);
     if(rv != 0) {
-    fprintf(stderr, "Fatal error: %s", nghttp2_strerror(rv));
+      fprintf(stderr, "Fatal error: %s", nghttp2_strerror(rv));
       return -1;
     }
     return 0;
   }
-  write(pipefd[1], ERROR_HTML, sizeof(ERROR_HTML) - 1);
+
+  if (r->status == HTTP_SERVICE_UNAVAILABLE) {
+    write(pipefd[1], ERROR_503_HTML, sizeof(ERROR_503_HTML) - 1);
+  } else {
+    write(pipefd[1], ERROR_404_HTML, sizeof(ERROR_404_HTML) - 1);
+  }
+
   close(pipefd[1]);
   stream_data->fd = pipefd[0];
   TRACER;
@@ -476,6 +495,7 @@ static int server_on_request_recv(nghttp2_session *session,
 
   TRACER;
   if(!stream_data->request_path) {
+    set_status_record(r, HTTP_SERVICE_UNAVAILABLE);
     if(error_reply(session_data->app_ctx, session, stream_data) != 0) {
       return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
@@ -491,12 +511,15 @@ static int server_on_request_recv(nghttp2_session *session,
       fprintf(stderr, "%s invalid request_path: %s\n", session_data->client_addr, 
           stream_data->request_path);
     }
+    set_status_record(r, HTTP_SERVICE_UNAVAILABLE);
     if(error_reply(session_data->app_ctx, session, stream_data) != 0) {
       return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
     return 0;
   }
+  
   for(rel_path = stream_data->request_path; *rel_path == '/'; ++rel_path);
+
   if (config->document_root) {
     struct stat finfo;
     size_t path_len = strlen(config->document_root) + 
@@ -512,10 +535,13 @@ static int server_on_request_recv(nghttp2_session *session,
       fprintf(stderr, "%s %s is mapped to %s\n", session_data->client_addr, 
           r->uri, r->filename);
     }
+    TRACER;
     if (stat(r->filename, &finfo) != 0) {
+      set_status_record(r, HTTP_NOT_FOUND);
       if(error_reply(session_data->app_ctx, session, stream_data) != 0) {
         return NGHTTP2_ERR_CALLBACK_FAILURE;
       }
+      return 0;
     }
     r->finfo = &finfo;
 
@@ -526,6 +552,7 @@ static int server_on_request_recv(nghttp2_session *session,
   
   TRACER;
   if(fd == -1) {
+    set_status_record(r, HTTP_NOT_FOUND);
     if(error_reply(session_data->app_ctx, session, stream_data) != 0) {
       return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
@@ -533,8 +560,7 @@ static int server_on_request_recv(nghttp2_session *session,
   }
 
   stream_data->fd = fd;
-  r->status = HTTP_OK;
-  snprintf(r->status_line, 4, "%d", r->status);
+  set_status_record(r, HTTP_OK);
 
   TRACER;
   return mrb_http2_send_response(session_data->app_ctx, session, 
@@ -935,6 +961,10 @@ static mrb_http2_request_rec *mrb_http2_request_rec_init(mrb_state *mrb)
   mrb_http2_request_rec *r = (mrb_http2_request_rec *)mrb_malloc(mrb, 
       sizeof(mrb_http2_request_rec));
   memset(r, 0, sizeof(mrb_http2_request_rec));
+  
+  // NULL check when request_rec freed
+  r->filename = NULL;
+
   return r;
 }
 
