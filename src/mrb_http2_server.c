@@ -299,13 +299,14 @@ static ssize_t file_read_callback(nghttp2_session *session,
   return r;
 }
 
-static void mrb_http2_request_rec_free(mrb_state *mrb, mrb_http2_request_rec *r)
+static void mrb_http2_request_rec_free(mrb_state *mrb,
+    mrb_http2_request_rec *r)
 {
   mrb_free(mrb, r->filename);
 }
 
-static int send_response(app_context *app_ctx, nghttp2_session *session, int32_t stream_id, 
-    nghttp2_nv *nva, size_t nvlen, int fd)
+static int send_response(app_context *app_ctx, nghttp2_session *session, 
+    int32_t stream_id, nghttp2_nv *nva, size_t nvlen, int fd)
 {
   int rv;
   mrb_state *mrb = app_ctx->server->mrb;
@@ -329,7 +330,8 @@ static int send_response(app_context *app_ctx, nghttp2_session *session, int32_t
 const char ERROR_HTML[] = "<html><head><title>404</title></head>"
   "<body><h1>404 Not Found</h1></body></html>";
 
-static int error_reply(app_context *app_ctx, nghttp2_session *session, http2_stream_data *stream_data)
+static int error_reply(app_context *app_ctx, nghttp2_session *session, 
+    http2_stream_data *stream_data)
 {
   int rv;
   int pipefd[2];
@@ -352,8 +354,8 @@ static int error_reply(app_context *app_ctx, nghttp2_session *session, http2_str
   close(pipefd[1]);
   stream_data->fd = pipefd[0];
   TRACER;
-  if(send_response(app_ctx, session, stream_data->stream_id, hdrs, ARRLEN(hdrs), 
-        pipefd[0]) != 0) {
+  if(send_response(app_ctx, session, stream_data->stream_id, hdrs, 
+        ARRLEN(hdrs), pipefd[0]) != 0) {
     close(pipefd[0]);
     return -1;
   }
