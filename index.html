@@ -1,43 +1,36 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
+
   <head>
-    <meta charset="utf-8">
-    <meta http-equiv="X-UA-Compatible" content="chrome=1">
-    <title>mruby-http2 by matsumoto-r</title>
-    <link rel="stylesheet" href="stylesheets/styles.css">
-    <link rel="stylesheet" href="stylesheets/pygment_trac.css">
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
-    <script src="javascripts/respond.js"></script>
-    <!--[if lt IE 9]>
-      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
-    <![endif]-->
-    <!--[if lt IE 8]>
-    <link rel="stylesheet" href="stylesheets/ie.css">
-    <![endif]-->
-    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <meta charset='utf-8' />
+    <meta http-equiv="X-UA-Compatible" content="chrome=1" />
+    <meta name="description" content="mruby-http2 : HTTP2 Module for mruby" />
 
+    <link rel="stylesheet" type="text/css" media="screen" href="stylesheets/stylesheet.css">
+
+    <title>mruby-http2</title>
   </head>
+
   <body>
-      <div id="header">
-        <nav>
-          <li class="fork"><a href="https://github.com/matsumoto-r/mruby-http2">View On GitHub</a></li>
-          <li class="downloads"><a href="https://github.com/matsumoto-r/mruby-http2/zipball/master">ZIP</a></li>
-          <li class="downloads"><a href="https://github.com/matsumoto-r/mruby-http2/tarball/master">TAR</a></li>
-          <li class="title">DOWNLOADS</li>
-        </nav>
-      </div><!-- end header -->
 
-    <div class="wrapper">
+    <!-- HEADER -->
+    <div id="header_wrap" class="outer">
+        <header class="inner">
+          <a id="forkme_banner" href="https://github.com/matsumoto-r/mruby-http2">View on GitHub</a>
 
-      <section>
-        <div id="title">
-          <h1>mruby-http2</h1>
-          <p>HTTP2 Module for mruby</p>
-          <hr>
-          <span class="credits left">Project maintained by <a href="https://github.com/matsumoto-r">matsumoto-r</a></span>
-          <span class="credits right">Hosted on GitHub Pages &mdash; Theme by <a href="https://twitter.com/michigangraham">mattgraham</a></span>
-        </div>
+          <h1 id="project_title">mruby-http2</h1>
+          <h2 id="project_tagline">HTTP2 Module for mruby</h2>
 
+            <section id="downloads">
+              <a class="zip_download_link" href="https://github.com/matsumoto-r/mruby-http2/zipball/master">Download this project as a .zip file</a>
+              <a class="tar_download_link" href="https://github.com/matsumoto-r/mruby-http2/tarball/master">Download this project as a tar.gz file</a>
+            </section>
+        </header>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div id="main_content_wrap" class="outer">
+      <section id="main_content" class="inner">
         <h1>
 <a name="http2-module-for-mruby--" class="anchor" href="#http2-module-for-mruby--"><span class="octicon octicon-link"></span></a>HTTP2 Module for mruby  <a href="https://travis-ci.org/matsumoto-r/mruby-http2"><img src="https://travis-ci.org/matsumoto-r/mruby-http2.png?branch=master" alt="Build Status"></a>
 </h1>
@@ -64,12 +57,41 @@
 <p>This is a very early version, please test and report errors. Wellcome pull-request.</p>
 
 <ul>
+<li>Support http scheme for HTTP::Client</li>
 <li>replace some function to mrbgem</li>
 <li>more customizable Web server config</li>
 <li>implement some class (Proxy...)</li>
 <li>implement some method (post...)</li>
 </ul><h2>
-<a name="example" class="anchor" href="#example"><span class="octicon octicon-link"></span></a>example</h2>
+<a name="install-by-mrbgems" class="anchor" href="#install-by-mrbgems"><span class="octicon octicon-link"></span></a>Install by mrbgems</h2>
+
+<h4>
+<a name="download-mruby" class="anchor" href="#download-mruby"><span class="octicon octicon-link"></span></a>Download mruby</h4>
+
+<pre><code>git clone https://github.com/mruby/mruby.git
+</code></pre>
+
+<h4>
+<a name="add-confgem-line-to-mrubybuild_configrb" class="anchor" href="#add-confgem-line-to-mrubybuild_configrb"><span class="octicon octicon-link"></span></a>Add conf.gem line to <code>mruby/build_config.rb</code>
+</h4>
+
+<div class="highlight highlight-ruby"><pre><span class="no">MRuby</span><span class="o">::</span><span class="no">Build</span><span class="o">.</span><span class="n">new</span> <span class="k">do</span> <span class="o">|</span><span class="n">conf</span><span class="o">|</span>
+
+  <span class="c1"># ... (snip) ...</span>
+
+  <span class="n">conf</span><span class="o">.</span><span class="n">gem</span> <span class="ss">:github</span> <span class="o">=&gt;</span> <span class="s1">'matsumoto-r/mruby-http2'</span>
+<span class="k">end</span>
+</pre></div>
+
+<h4>
+<a name="build" class="anchor" href="#build"><span class="octicon octicon-link"></span></a>build</h4>
+
+<pre><code>cd mruby
+rake
+</code></pre>
+
+<h2>
+<a name="example" class="anchor" href="#example"><span class="octicon octicon-link"></span></a>Example</h2>
 
 <h3>
 <a name="mruby-http2-test-site" class="anchor" href="#mruby-http2-test-site"><span class="octicon octicon-link"></span></a>mruby-http2 Test Site</h3>
@@ -218,7 +240,15 @@
 
   <span class="c1"># damone default: false</span>
   <span class="c1"># :daemon =&gt; true,</span>
+
+  <span class="c1"># callback default: false</span>
+  <span class="c1"># :callback =&gt; true,</span>
 <span class="p">})</span>
+
+<span class="c1"># when :callback option true</span>
+<span class="c1"># s.set_map_to_strage_cb {</span>
+<span class="c1">#   p "callback bloack at set_map_to_strage_cb"</span>
+<span class="c1"># }</span>
 
 <span class="n">s</span><span class="o">.</span><span class="n">run</span>
 </pre></div>
@@ -309,25 +339,6 @@
 <span class="p">{</span><span class="ss">:body</span><span class="o">=&gt;</span><span class="s2">"hello mruby-http2!!</span><span class="se">\n</span><span class="s2">"</span><span class="p">,</span> <span class="ss">:body_length</span><span class="o">=&gt;</span><span class="mi">20</span><span class="p">,</span> <span class="ss">:recieve_bytes</span><span class="o">=&gt;</span><span class="mi">20</span><span class="o">.</span><span class="mi">0</span><span class="p">,</span> <span class="ss">:response_headers</span><span class="o">=&gt;</span><span class="p">{</span><span class="s2">":status"</span><span class="o">=&gt;</span><span class="s2">"200"</span><span class="p">},</span> <span class="ss">:frame_send_header_goway</span><span class="o">=&gt;</span><span class="kp">true</span><span class="p">,</span> <span class="ss">:request_headers</span><span class="o">=&gt;</span><span class="p">{</span><span class="s2">"user-agent"</span><span class="o">=&gt;</span><span class="s2">"mruby-http2/0.0.1"</span><span class="p">,</span> <span class="s2">"accept"</span><span class="o">=&gt;</span><span class="s2">"*/*"</span><span class="p">,</span> <span class="s2">":authority"</span><span class="o">=&gt;</span><span class="s2">"127.0.0.1:8080"</span><span class="p">,</span> <span class="s2">":scheme"</span><span class="o">=&gt;</span><span class="s2">"https"</span><span class="p">,</span> <span class="s2">"accept-encoding"</span><span class="o">=&gt;</span><span class="s2">"gzip"</span><span class="p">,</span> <span class="s2">":method"</span><span class="o">=&gt;</span><span class="s2">"GET"</span><span class="p">,</span> <span class="s2">":path"</span><span class="o">=&gt;</span><span class="s2">"/index.html"</span><span class="p">},</span> <span class="ss">:stream_id</span><span class="o">=&gt;</span><span class="mi">1</span><span class="p">}</span>
 </pre></div>
 
-<h2>
-<a name="install-by-mrbgems" class="anchor" href="#install-by-mrbgems"><span class="octicon octicon-link"></span></a>install by mrbgems</h2>
-
-<ul>
-<li>add conf.gem line to <code>build_config.rb</code>
-</li>
-</ul><div class="highlight highlight-ruby"><pre><span class="no">MRuby</span><span class="o">::</span><span class="no">Build</span><span class="o">.</span><span class="n">new</span> <span class="k">do</span> <span class="o">|</span><span class="n">conf</span><span class="o">|</span>
-
-  <span class="c1"># ... (snip) ...</span>
-
-  <span class="n">conf</span><span class="o">.</span><span class="n">gem</span> <span class="ss">:github</span> <span class="o">=&gt;</span> <span class="s1">'matsumoto-r/mruby-http2'</span>
-<span class="k">end</span>
-</pre></div>
-
-<ul>
-<li>build</li>
-</ul><pre><code>rake
-</code></pre>
-
 <h1>
 <a name="license" class="anchor" href="#license"><span class="octicon octicon-link"></span></a>License</h1>
 
@@ -337,9 +348,17 @@
 <li><a href="http://www.opensource.org/licenses/mit-license.php">http://www.opensource.org/licenses/mit-license.php</a></li>
 </ul>
       </section>
-
     </div>
-    <!--[if !IE]><script>fixScale(document);</script><![endif]-->
+
+    <!-- FOOTER  -->
+    <div id="footer_wrap" class="outer">
+      <footer class="inner">
+        <p class="copyright">mruby-http2 maintained by <a href="https://github.com/matsumoto-r">matsumoto-r</a></p>
+        <p>Published with <a href="http://pages.github.com">GitHub Pages</a></p>
+      </footer>
+    </div>
+
     
+
   </body>
 </html>
