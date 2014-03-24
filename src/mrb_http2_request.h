@@ -86,7 +86,7 @@ typedef struct {
   struct stat *finfo;
 
   // previous request time for strftime cache per sec
-  time_t now;
+  time_t prev_req_time;
   time_t prev_last_modified;
 
   // date header

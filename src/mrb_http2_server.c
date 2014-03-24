@@ -555,8 +555,8 @@ static int server_on_request_recv(nghttp2_session *session,
   }
 
   // cached time string created strftime()
-  if (now != r->now) {
-    r->now = now;
+  if (now != r->prev_req_time) {
+    r->prev_req_time = now;
     set_http_date_str(&now, r->date);
   }
   if (r->finfo->st_mtime != r->prev_last_modified) {
@@ -970,7 +970,7 @@ static mrb_http2_request_rec *mrb_http2_request_rec_init(mrb_state *mrb)
   // NULL check when request_rec freed
   r->filename = NULL;
   r->uri = NULL;
-  r->now = 0;
+  r->prev_req_time = 0;
   r->prev_last_modified = 0;
 
   return r;
