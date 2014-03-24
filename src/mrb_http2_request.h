@@ -85,6 +85,10 @@ typedef struct {
   // file stat infomation from fstat
   struct stat *finfo;
 
+  // previous request time for strftime cache per sec
+  time_t now;
+  time_t prev_last_modified;
+
   // date header
   char date[64];
 
