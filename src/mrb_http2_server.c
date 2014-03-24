@@ -71,6 +71,14 @@ static void callback_ruby_block(mrb_state *mrb, unsigned int flag, mrb_value *b)
   }
 }
 
+static void set_http_date_str(time_t *now, char *date)
+{
+  struct tm *t;
+
+  t = localtime(now);
+  strftime(date, 127, "%a, %d %b %Y %H:%M:%S %Z", t);
+}
+
 static void add_stream(http2_session_data *session_data, 
     http2_stream_data *stream_data)
 {
@@ -457,6 +465,8 @@ static int mrb_http2_send_response(app_context *app_ctx, nghttp2_session *sessio
   nghttp2_nv hdrs[] = {
     MAKE_NV_CS(":status", r->status_line),
     MAKE_NV_CS("server", config->server_name)
+    //MAKE_NV_CS("date", r->date),
+    //MAKE_NV_CS("last-modified", r->last_modified)
   };
 
   if(send_response(app_ctx, session, stream_id, hdrs, ARRLEN(hdrs), 
@@ -473,6 +483,7 @@ static int server_on_request_recv(nghttp2_session *session,
   int fd;
   struct stat finfo;
   size_t root_len, uri_len;
+  //time_t now = time(NULL);
   mrb_state *mrb = session_data->app_ctx->server->mrb;
   mrb_http2_config_t *config = session_data->app_ctx->server->config;
   mrb_http2_request_rec *r = session_data->app_ctx->r;
@@ -547,6 +558,8 @@ static int server_on_request_recv(nghttp2_session *session,
     return 0;
   }
 
+  //set_http_date_str(&now, r->date);
+  //set_http_date_str(&r->finfo->st_mtime, r->last_modified);
   stream_data->fd = fd;
   set_status_record(r, HTTP_OK);
 

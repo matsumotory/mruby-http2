@@ -85,6 +85,12 @@ typedef struct {
   // file stat infomation from fstat
   struct stat *finfo;
 
+  // date header
+  char date[64];
+
+  // last_modified header
+  char last_modified[64];
+
 } mrb_http2_request_rec;
 
 #endif
