@@ -61,6 +61,16 @@ static const struct mrb_data_type mrb_http2_server_type = {
 static unsigned char next_proto_list[256];
 static size_t next_proto_list_len;
 
+static void callback_ruby_block(mrb_state *mrb, unsigned int flag, mrb_value b)
+{
+  if (!flag) {
+    return;
+  }
+  if (!mrb_nil_p(b)) {
+    mrb_yield_argv(mrb, b, 0, NULL);
+  }
+}
+
 static void add_stream(http2_session_data *session_data, 
     http2_stream_data *stream_data)
 {
@@ -297,6 +307,7 @@ static int send_response(app_context *app_ctx, nghttp2_session *session,
   int rv;
   mrb_state *mrb = app_ctx->server->mrb;
   mrb_http2_request_rec *r = app_ctx->r;
+  mrb_http2_config_t *config = app_ctx->server->config;
 
   nghttp2_data_provider data_prd;
   data_prd.source.fd = fd;
@@ -309,6 +320,10 @@ static int send_response(app_context *app_ctx, nghttp2_session *session,
     mrb_http2_request_rec_free(mrb, r);
     return -1;
   }
+  //
+  // "set_logging_cb" callback ruby block
+  // 
+  callback_ruby_block(mrb, config->callback, config->cb_list->logging_cb);
 
   mrb_http2_request_rec_free(mrb, r);
   TRACER;
@@ -431,16 +446,6 @@ static int check_path(const char *path)
     strstr(path, "/../") == NULL &&
     strstr(path, "/./") == NULL &&
     !ends_with(path, "/..") && !ends_with(path, "/.");
-}
-
-static void callback_ruby_block(mrb_state *mrb, unsigned int flag, mrb_value b)
-{
-  if (!flag) {
-    return;
-  }
-  if (!mrb_nil_p(b)) {
-    mrb_yield_argv(mrb, b, 0, NULL);
-  }
 }
 
 static int mrb_http2_send_response(app_context *app_ctx, nghttp2_session *session, 
@@ -969,14 +974,28 @@ static mrb_value mrb_http2_server_set_map_to_strage_cb(mrb_state *mrb,
     mrb_value self)
 {
   mrb_http2_data_t *data = DATA_PTR(self);
-  mrb_http2_config_t *config = data->s->config;
-  mrb_value cbb;
+  mruby_cb_list *list = data->s->config->cb_list;
+  mrb_value b;
 
-  mrb_get_args(mrb, "&", &cbb);
-  config->cb_list->map_to_strage_cb = cbb;
-  mrb_gc_protect(mrb, config->cb_list->map_to_strage_cb);
+  mrb_get_args(mrb, "&", &b);
+  list->map_to_strage_cb = b;
+  mrb_gc_protect(mrb, list->map_to_strage_cb);
 
-  return self;
+  return list->map_to_strage_cb;
+}
+
+static mrb_value mrb_http2_server_set_logging_cb(mrb_state *mrb, 
+    mrb_value self)
+{
+  mrb_http2_data_t *data = DATA_PTR(self);
+  mruby_cb_list *list = data->s->config->cb_list;
+  mrb_value b;
+
+  mrb_get_args(mrb, "&", &b);
+  list->logging_cb = b;
+  mrb_gc_protect(mrb, list->logging_cb);
+
+  return list->logging_cb;
 }
 
 static mruby_cb_list *mruby_cb_list_init(mrb_state *mrb)
@@ -985,6 +1004,8 @@ static mruby_cb_list *mruby_cb_list_init(mrb_state *mrb)
 
   list->map_to_strage_cb = mrb_nil_value();
   mrb_gc_protect(mrb, list->map_to_strage_cb);
+  list->logging_cb = mrb_nil_value();
+  mrb_gc_protect(mrb, list->logging_cb);
 
   return list;
 }
@@ -1153,5 +1174,6 @@ void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
   mrb_define_method(mrb, server, "uri", mrb_http2_server_uri, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "document_root", mrb_http2_server_document_root, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "set_map_to_strage_cb", mrb_http2_server_set_map_to_strage_cb, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, server, "set_logging_cb", mrb_http2_server_set_logging_cb, MRB_ARGS_REQ(1));
   DONE;
 }

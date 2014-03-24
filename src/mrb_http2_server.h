@@ -13,6 +13,8 @@ typedef struct {
   // set callbacked block at map_to_storage
   mrb_value map_to_strage_cb;
 
+  mrb_value logging_cb;
+
 } mruby_cb_list;
 
 typedef struct {
