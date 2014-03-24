@@ -61,13 +61,13 @@ static const struct mrb_data_type mrb_http2_server_type = {
 static unsigned char next_proto_list[256];
 static size_t next_proto_list_len;
 
-static void callback_ruby_block(mrb_state *mrb, unsigned int flag, mrb_value b)
+static void callback_ruby_block(mrb_state *mrb, unsigned int flag, mrb_value *b)
 {
   if (!flag) {
     return;
   }
-  if (!mrb_nil_p(b)) {
-    mrb_yield_argv(mrb, b, 0, NULL);
+  if (b) {
+    mrb_yield_argv(mrb, *b, 0, NULL);
   }
 }
 
@@ -978,10 +978,10 @@ static mrb_value mrb_http2_server_set_map_to_strage_cb(mrb_state *mrb,
   mrb_value b;
 
   mrb_get_args(mrb, "&", &b);
-  list->map_to_strage_cb = b;
-  mrb_gc_protect(mrb, list->map_to_strage_cb);
+  mrb_gc_protect(mrb, b);
+  list->map_to_strage_cb = &b;
 
-  return list->map_to_strage_cb;
+  return self;
 }
 
 static mrb_value mrb_http2_server_set_logging_cb(mrb_state *mrb, 
@@ -992,20 +992,19 @@ static mrb_value mrb_http2_server_set_logging_cb(mrb_state *mrb,
   mrb_value b;
 
   mrb_get_args(mrb, "&", &b);
-  list->logging_cb = b;
-  mrb_gc_protect(mrb, list->logging_cb);
+  mrb_gc_protect(mrb, b);
+  list->logging_cb = &b;
 
-  return list->logging_cb;
+  return self;
 }
 
 static mruby_cb_list *mruby_cb_list_init(mrb_state *mrb)
 {
   mruby_cb_list *list = (mruby_cb_list *)mrb_malloc(mrb, sizeof(mruby_cb_list));
+  memset(list, 0, sizeof(mruby_cb_list));
 
-  list->map_to_strage_cb = mrb_nil_value();
-  mrb_gc_protect(mrb, list->map_to_strage_cb);
-  list->logging_cb = mrb_nil_value();
-  mrb_gc_protect(mrb, list->logging_cb);
+  list->map_to_strage_cb = NULL;
+  list->logging_cb = NULL;
 
   return list;
 }
