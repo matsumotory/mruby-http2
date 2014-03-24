@@ -95,6 +95,9 @@ typedef struct {
   // last_modified header
   char last_modified[64];
 
+  // content_length header
+  char content_length[64];
+
 } mrb_http2_request_rec;
 
 #endif

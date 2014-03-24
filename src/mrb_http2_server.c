@@ -466,6 +466,7 @@ static int mrb_http2_send_response(app_context *app_ctx, nghttp2_session *sessio
     MAKE_NV_CS(":status", r->status_line),
     MAKE_NV_CS("server", config->server_name),
     MAKE_NV_CS("date", r->date),
+    MAKE_NV_CS("content-length", r->content_length),
     MAKE_NV_CS("last-modified", r->last_modified)
   };
 
@@ -563,6 +564,9 @@ static int server_on_request_recv(nghttp2_session *session,
     r->prev_last_modified = r->finfo->st_mtime;
     set_http_date_str(&r->finfo->st_mtime, r->last_modified);
   }
+  
+  // set content-length: max 10^64
+  snprintf(r->content_length, 64, "%ld", r->finfo->st_size);
 
   stream_data->fd = fd;
   set_status_record(r, HTTP_OK);
