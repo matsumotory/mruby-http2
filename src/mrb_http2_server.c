@@ -357,7 +357,8 @@ static int error_reply(app_context *app_ctx, nghttp2_session *session,
   int rv;
   int pipefd[2];
   nghttp2_nv hdrs[] = {
-    MAKE_NV_CS(":status", r->status_line)
+    MAKE_NV_CS(":status", r->status_line),
+    MAKE_NV_CS("date", r->date)
   };
 
   TRACER;
@@ -490,6 +491,13 @@ static int server_on_request_recv(nghttp2_session *session,
   mrb_http2_request_rec *r = session_data->app_ctx->r;
   //mrb_http2_server_t *server = session_data->app_ctx->server;
 
+  // cached time string created strftime()
+  // First, create r->date for error_reply
+  if (now != r->prev_req_time) {
+    r->prev_req_time = now;
+    set_http_date_str(&now, r->date);
+  }
+
   TRACER;
   if(!stream_data->request_path) {
     set_status_record(r, HTTP_SERVICE_UNAVAILABLE);
@@ -556,10 +564,6 @@ static int server_on_request_recv(nghttp2_session *session,
   }
 
   // cached time string created strftime()
-  if (now != r->prev_req_time) {
-    r->prev_req_time = now;
-    set_http_date_str(&now, r->date);
-  }
   if (r->finfo->st_mtime != r->prev_last_modified) {
     r->prev_last_modified = r->finfo->st_mtime;
     set_http_date_str(&r->finfo->st_mtime, r->last_modified);
