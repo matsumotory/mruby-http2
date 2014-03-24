@@ -1112,9 +1112,7 @@ static mrb_value mrb_http2_server_set_filename(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "s", &filename, &len);
   mrb_free(mrb, r->filename);
 
-  r->filename = (char *)mrb_malloc(mrb, len);
-  strncpy(r->filename, filename, len);
-  r->filename[len] = '\0';
+  r->filename = mrb_http2_strcopy(mrb, filename, len);
 
   return self;
 }
