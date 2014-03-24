@@ -482,7 +482,7 @@ static int server_on_request_recv(nghttp2_session *session,
 {
   int fd;
   struct stat finfo;
-  size_t root_len, uri_len;
+  size_t uri_len;
   time_t now = time(NULL);
   mrb_state *mrb = session_data->app_ctx->server->mrb;
   mrb_http2_config_t *config = session_data->app_ctx->server->config;
@@ -514,13 +514,9 @@ static int server_on_request_recv(nghttp2_session *session,
     return 0;
   }
   
-  root_len = strlen(config->document_root);
-  uri_len = strlen(stream_data->request_path);
-  
   // r-> will free at request_rec_free
-  r->filename = (char *)mrb_malloc(mrb, root_len + uri_len + 1);
-  memcpy(r->filename, config->document_root, root_len);
-  memcpy(r->filename + root_len, stream_data->request_path, uri_len + 1);
+  r->filename = mrb_http2_strcat(mrb, config->document_root, stream_data->request_path);
+  uri_len = strlen(stream_data->request_path);
   r->uri = mrb_http2_strcopy(mrb, stream_data->request_path, uri_len);
 
   if (config->debug) {

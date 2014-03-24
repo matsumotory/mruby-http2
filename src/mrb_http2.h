@@ -65,6 +65,7 @@
   {(uint8_t*)NAME, (uint8_t*)VALUE,                                    \
     (uint16_t)(sizeof(NAME) - 1), (uint16_t)(strlen(VALUE)) }
 
+char *mrb_http2_strcat(mrb_state *mrb, const char *s1, const char *s2);
 char *mrb_http2_strcopy(mrb_state *mrb, const char *s, size_t len);
 char *strcopy(const char *s, size_t len);
 mrb_value mrb_http2_class_obj(mrb_state *mrb, mrb_value self,

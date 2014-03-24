@@ -31,6 +31,17 @@ void mrb_http2_client_class_init(mrb_state *mrb, struct RClass *http2);
 void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2);
 void mrb_http2_request_class_init(mrb_state *mrb, struct RClass *http2);
 
+char *mrb_http2_strcat(mrb_state *mrb, const char *s1, const char *s2)
+{
+  size_t len1 = strlen(s1);
+  size_t len2 = strlen(s2);
+
+  char *s3 = (char *)mrb_malloc(mrb, len1 + len2 + 1);
+  memcpy(s3, s1, len1);
+  memcpy(s3 + len1, s2, len2 + 1);
+
+  return s3;
+}
 
 char *mrb_http2_strcopy(mrb_state *mrb, const char *s, size_t len)
 {
