@@ -193,6 +193,11 @@ s = HTTP2::Server.new({
 #
 # }
 
+#s.set_map_to_strage_cb {
+#  p "callback bloack at set_map_to_strage_cb"
+#  p "rquest uri: #{s.request.uri}"
+#}
+
 s.run
 ```
 ##### request from HTTP2::Client 
