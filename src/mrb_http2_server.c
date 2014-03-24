@@ -75,7 +75,7 @@ static void set_http_date_str(time_t *now, char *date)
 {
   struct tm *t;
 
-  t = localtime(now);
+  t = gmtime(now);
   strftime(date, 127, "%a, %d %b %Y %H:%M:%S %Z", t);
 }
 
