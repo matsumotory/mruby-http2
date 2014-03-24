@@ -987,45 +987,48 @@ static mruby_cb_list *mruby_cb_list_init(mrb_state *mrb)
   return list;
 }
 
+#define mrb_http2_config_get_obj(mrb, args, lit) mrb_hash_get(mrb, args, \
+    mrb_symbol_value(mrb_intern_lit(mrb, lit)))
+
 static mrb_http2_config_t *mrb_http2_s_config_init(mrb_state *mrb, mrb_value args)
 {
-  mrb_value port, debug, tls, daemon, cb;
+  mrb_value port, flag;
   char *service;
 
   mrb_http2_config_t *config = (mrb_http2_config_t *)mrb_malloc(mrb, 
       sizeof(mrb_http2_config_t));
   memset(config, 0, sizeof(mrb_http2_config_t));
 
-  cb = mrb_hash_get(mrb, args, mrb_symbol_value(mrb_intern_lit(mrb, "callback")));
-  debug = mrb_hash_get(mrb, args, mrb_symbol_value(mrb_intern_lit(mrb, "debug")));
-  tls = mrb_hash_get(mrb, args, mrb_symbol_value(mrb_intern_lit(mrb, "tls")));
-  daemon = mrb_hash_get(mrb, args, mrb_symbol_value(mrb_intern_lit(mrb, "daemon")));
-  port = mrb_hash_get(mrb, args, mrb_symbol_value(mrb_intern_lit(mrb, "port")));
+  port = mrb_http2_config_get_obj(mrb, args, "port");
   service = mrb_str_to_cstr(mrb, mrb_fixnum_to_str(mrb, port, 10));
 
   config->service = service;
 
   // CALLBACK options: defulat DISABLED
   config->callback = MRB_HTTP2_CONFIG_DISABLED;
-  if (!mrb_nil_p(cb) && mrb_obj_equal(mrb, cb, mrb_true_value())) {
+  if (!mrb_nil_p(flag = mrb_http2_config_get_obj(mrb, args, "callback")) 
+      && mrb_obj_equal(mrb, flag, mrb_true_value())) {
     config->callback = MRB_HTTP2_CONFIG_ENABLED;
   }
 
   // DAEMON options: defulat DISABLED
   config->daemon = MRB_HTTP2_CONFIG_DISABLED;
-  if (!mrb_nil_p(daemon) && mrb_obj_equal(mrb, daemon, mrb_true_value())) {
+  if (!mrb_nil_p(flag = mrb_http2_config_get_obj(mrb, args, "daemon")) 
+      && mrb_obj_equal(mrb, flag, mrb_true_value())) {
     config->daemon = MRB_HTTP2_CONFIG_ENABLED;
   }
   
   // DEBUG options: defulat DISABLED
   config->debug = MRB_HTTP2_CONFIG_DISABLED;
-  if (!mrb_nil_p(debug) && mrb_obj_equal(mrb, debug, mrb_true_value())) {
+  if (!mrb_nil_p(flag = mrb_http2_config_get_obj(mrb, args, "debug")) 
+      && mrb_obj_equal(mrb, flag, mrb_true_value())) {
     config->debug = MRB_HTTP2_CONFIG_ENABLED;
   }
 
   // TLS options: defulat ENABLED
   config->tls = MRB_HTTP2_CONFIG_ENABLED;
-  if (!mrb_nil_p(tls) && mrb_obj_equal(mrb, tls, mrb_false_value())) {
+  if (!mrb_nil_p(flag = mrb_http2_config_get_obj(mrb, args, "tls")) 
+      && mrb_obj_equal(mrb, flag, mrb_false_value())) {
     config->tls = MRB_HTTP2_CONFIG_DISABLED;
   }
 
