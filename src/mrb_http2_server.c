@@ -304,11 +304,13 @@ static int send_response(app_context *app_ctx, nghttp2_session *session,
 
   TRACER;
   rv = nghttp2_submit_response(session, stream_id, nva, nvlen, &data_prd);
-  mrb_http2_request_rec_free(mrb, r);
   if(rv != 0) {
     fprintf(stderr, "Fatal error: %s", nghttp2_strerror(rv));
+    mrb_http2_request_rec_free(mrb, r);
     return -1;
   }
+
+  mrb_http2_request_rec_free(mrb, r);
   TRACER;
   return 0;
 }
