@@ -47,6 +47,8 @@
 #define MRUBY_HTTP2_VERSION "0.0.1"
 #define MRUBY_HTTP2_SERVER MRUBY_HTTP2_NAME "/" MRUBY_HTTP2_VERSION
 
+#define MRB_HTTP2_HEADER_MAX 128
+
 //#define MRB_HTTP2_TRACER
 
 #ifdef MRB_HTTP2_TRACER
@@ -64,6 +66,11 @@
 #define MAKE_NV_CS(NAME, VALUE)                                        \
   {(uint8_t*)NAME, (uint8_t*)VALUE,                                    \
     (uint16_t)(sizeof(NAME) - 1), (uint16_t)(strlen(VALUE)) }
+
+
+void mrb_http2_create_nv(mrb_state *mrb, nghttp2_nv *nv, const uint8_t *name,
+    size_t namelen, const uint8_t *value, size_t valuelen);
+size_t mrb_http2_add_nv(nghttp2_nv *nva, size_t nvlen, nghttp2_nv *nv);
 
 char *mrb_http2_strcat(mrb_state *mrb, const char *s1, const char *s2);
 char *mrb_http2_strcopy(mrb_state *mrb, const char *s, size_t len);

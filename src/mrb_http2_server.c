@@ -14,8 +14,6 @@
 
 #include "mruby/string.h"
 
-#define MRB_HTTP2_HEADER_MAX 128
-
 typedef struct {
   SSL_CTX *ssl_ctx;
   struct event_base *evbase;
@@ -422,29 +420,6 @@ static int error_reply(app_context *app_ctx, nghttp2_session *session,
   }
   TRACER;
   return 0;
-}
-
-// create nghttp2_nv
-static void mrb_http2_create_nv(mrb_state *mrb, nghttp2_nv *nv, const uint8_t *name, 
-    size_t namelen, const uint8_t *value, size_t valuelen)
-{
-  nv->name = (uint8_t *)name;
-  nv->namelen = namelen;
-  nv->value = (uint8_t *)value;
-  nv->valuelen = valuelen;
-}
-
-// add nghttp2_nv into existing nghttp2_nv array
-static size_t mrb_http2_add_nv(nghttp2_nv *nva, size_t nvlen, nghttp2_nv *nv)
-{
-  if (nvlen > MRB_HTTP2_HEADER_MAX) {
-    return -1;
-  }
-  nva[nvlen] = *nv;
-  //fprintf(stderr, "%s: nvlen=%ld ARRLEN=%ld\n", __func__, nvlen, ARRLEN(nva));
-  nvlen++;
-
-  return nvlen;
 }
 
 static int server_on_header_callback(nghttp2_session *session, 

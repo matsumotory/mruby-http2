@@ -31,6 +31,29 @@ void mrb_http2_client_class_init(mrb_state *mrb, struct RClass *http2);
 void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2);
 void mrb_http2_request_class_init(mrb_state *mrb, struct RClass *http2);
 
+// create nghttp2_nv
+void mrb_http2_create_nv(mrb_state *mrb, nghttp2_nv *nv, const uint8_t *name,
+    size_t namelen, const uint8_t *value, size_t valuelen)
+{
+  nv->name = (uint8_t *)name;
+  nv->namelen = namelen;
+  nv->value = (uint8_t *)value;
+  nv->valuelen = valuelen;
+}
+
+// add nghttp2_nv into existing nghttp2_nv array
+size_t mrb_http2_add_nv(nghttp2_nv *nva, size_t nvlen, nghttp2_nv *nv)
+{
+  if (nvlen > MRB_HTTP2_HEADER_MAX) {
+    return -1;
+  }
+  nva[nvlen] = *nv;
+  //fprintf(stderr, "%s: nvlen=%ld ARRLEN=%ld\n", __func__, nvlen, ARRLEN(nva));
+  nvlen++;
+
+  return nvlen;
+}
+
 char *mrb_http2_strcat(mrb_state *mrb, const char *s1, const char *s2)
 {
   size_t len1 = strlen(s1);
