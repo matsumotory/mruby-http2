@@ -14,6 +14,8 @@
 
 #include "mruby/string.h"
 
+#define MRB_HTTP2_HEADER_MAX 128
+
 typedef struct {
   SSL_CTX *ssl_ctx;
   struct event_base *evbase;
@@ -27,6 +29,8 @@ typedef struct http2_stream_data {
   char *request_path;
   int32_t stream_id;
   int fd;
+  nghttp2_nv nva[MRB_HTTP2_HEADER_MAX];
+  size_t nvlen;
 } http2_stream_data;
 
 typedef struct http2_session_data {
@@ -140,6 +144,7 @@ static http2_stream_data* create_http2_stream_data(mrb_state *mrb,
   memset(stream_data, 0, sizeof(http2_stream_data));
   stream_data->stream_id = stream_id;
   stream_data->fd = -1;
+  stream_data->nvlen = 0;
 
   add_stream(session_data, stream_data);
   return stream_data;
@@ -332,10 +337,21 @@ static int send_response(app_context *app_ctx, nghttp2_session *session,
   mrb_state *mrb = app_ctx->server->mrb;
   mrb_http2_request_rec *r = app_ctx->r;
   mrb_http2_config_t *config = app_ctx->server->config;
+  int i;
 
   nghttp2_data_provider data_prd;
   data_prd.source.fd = fd;
   data_prd.read_callback = file_read_callback;
+
+  if (config->debug) {
+    for (i = 0; i < nvlen; i++) {
+      char *name = mrb_http2_strcopy(mrb, (char *)nva[i].name, nva[i].namelen);
+      char *value = mrb_http2_strcopy(mrb, (char *)nva[i].value, nva[i].valuelen);
+      fprintf(stderr, "%s: nva[%d]={name=%s, value=%s}\n", __func__, i, name, value);
+      mrb_free(mrb, name);
+      mrb_free(mrb, value);
+    }
+  }
 
   TRACER;
   rv = nghttp2_submit_response(session, stream_id, nva, nvlen, &data_prd);
@@ -408,6 +424,29 @@ static int error_reply(app_context *app_ctx, nghttp2_session *session,
   return 0;
 }
 
+// create nghttp2_nv
+static void mrb_http2_create_nv(mrb_state *mrb, nghttp2_nv *nv, const uint8_t *name, 
+    size_t namelen, const uint8_t *value, size_t valuelen)
+{
+  nv->name = (uint8_t *)name;
+  nv->namelen = namelen;
+  nv->value = (uint8_t *)value;
+  nv->valuelen = valuelen;
+}
+
+// add nghttp2_nv into existing nghttp2_nv array
+static size_t mrb_http2_add_nv(nghttp2_nv *nva, size_t nvlen, nghttp2_nv *nv)
+{
+  if (nvlen > MRB_HTTP2_HEADER_MAX) {
+    return -1;
+  }
+  nva[nvlen] = *nv;
+  //fprintf(stderr, "%s: nvlen=%ld ARRLEN=%ld\n", __func__, nvlen, ARRLEN(nva));
+  nvlen++;
+
+  return nvlen;
+}
+
 static int server_on_header_callback(nghttp2_session *session, 
     const nghttp2_frame *frame, const uint8_t *name, size_t namelen, 
     const uint8_t *value, size_t valuelen, void *user_data)
@@ -416,6 +455,7 @@ static int server_on_header_callback(nghttp2_session *session,
   mrb_state *mrb = session_data->app_ctx->server->mrb;
 
   http2_stream_data *stream_data;
+  nghttp2_nv nv;
 
   const char PATH[] = ":path";
   TRACER;
@@ -426,9 +466,18 @@ static int server_on_header_callback(nghttp2_session *session,
     }
     stream_data = nghttp2_session_get_stream_user_data(session, 
         frame->hd.stream_id);
-    if(!stream_data || stream_data->request_path) {
+    if(!stream_data) {
       break;
     }
+
+    // create nv and add stream_data->nva
+    mrb_http2_create_nv(mrb, &nv, name, namelen, value, valuelen);
+    stream_data->nvlen = mrb_http2_add_nv(stream_data->nva, stream_data->nvlen, &nv);
+
+    //if(stream_data->request_path) {
+    //  break;
+    //}
+
     if(namelen == sizeof(PATH) - 1 && memcmp(PATH, name, namelen) == 0) {
       size_t j;
       for(j = 0; j < valuelen && value[j] != '?'; ++j);
@@ -499,6 +548,7 @@ static int server_on_request_recv(nghttp2_session *session,
     http2_session_data *session_data, http2_stream_data *stream_data)
 {
   int fd;
+  int i;
   struct stat finfo;
   size_t uri_len;
   time_t now = time(NULL);
@@ -510,6 +560,16 @@ static int server_on_request_recv(nghttp2_session *session,
   // Request process phase
   //
   r->conn = session_data->conn;
+
+  if (config->debug) {
+    for (i = 0; i < stream_data->nvlen; i++) {
+      char *name = mrb_http2_strcopy(mrb, (char *)stream_data->nva[i].name, stream_data->nva[i].namelen);
+      char *value = mrb_http2_strcopy(mrb, (char *)stream_data->nva[i].value, stream_data->nva[i].valuelen);
+      fprintf(stderr, "%s: nva[%d]={name=%s, value=%s}\n", __func__, i, name, value);
+      mrb_free(mrb, name);
+      mrb_free(mrb, value);
+    }
+  }
 
   // cached time string created strftime()
   // First, create r->date for error_reply
@@ -621,6 +681,7 @@ static int server_on_frame_recv_callback(nghttp2_session *session,
       if(!stream_data) {
         return 0;
       }
+
       return server_on_request_recv(session, session_data, stream_data);
     }
     break;
