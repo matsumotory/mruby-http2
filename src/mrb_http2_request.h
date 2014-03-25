@@ -107,6 +107,9 @@ typedef struct {
   // connection record
   mrb_http2_conn_rec *conn;
 
+  // user-agent
+  char *user_agent;
+
 } mrb_http2_request_rec;
 
 #endif

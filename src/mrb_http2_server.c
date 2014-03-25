@@ -104,6 +104,10 @@ static void mrb_http2_request_rec_free(mrb_state *mrb,
     mrb_free(mrb, r->uri);
     r->uri = NULL;
   }
+  if (r->user_agent != NULL) {
+    mrb_free(mrb, r->user_agent);
+    r->user_agent = NULL;
+  }
   // for conn_rec_free when disconnected
   if (r->conn != NULL) {
     r->conn = NULL;
@@ -435,8 +439,8 @@ static int server_on_header_callback(nghttp2_session *session,
 
   http2_stream_data *stream_data;
   nghttp2_nv nv;
-
   const char PATH[] = ":path";
+
   TRACER;
   switch(frame->hd.type) {
   case NGHTTP2_HEADERS:
@@ -539,6 +543,14 @@ static int server_on_request_recv(nghttp2_session *session,
   //
   // Request process phase
   //
+  
+  // cached time string created strftime()
+  // First, create r->date for error_reply
+  if (now != r->prev_req_time) {
+    r->prev_req_time = now;
+    set_http_date_str(&now, r->date);
+  }
+
   r->conn = session_data->conn;
 
   if (config->debug) {
@@ -554,11 +566,13 @@ static int server_on_request_recv(nghttp2_session *session,
     }
   }
 
-  // cached time string created strftime()
-  // First, create r->date for error_reply
-  if (now != r->prev_req_time) {
-    r->prev_req_time = now;
-    set_http_date_str(&now, r->date);
+  // get request header by key
+  //
+  // for user-agent
+  i = mrb_http2_get_nv_id(stream_data->nva, stream_data->nvlen, "user-agent");
+  if (i != MRB_HTTP2_HEADER_NOT_FOUND) {
+    r->user_agent = mrb_http2_strcopy(mrb, (char *)stream_data->nva[i].value, 
+        stream_data->nva[i].valuelen);
   }
 
   TRACER;
@@ -1060,6 +1074,7 @@ static mrb_http2_request_rec *mrb_http2_request_rec_init(mrb_state *mrb)
   // NULL check when request_rec freed
   r->filename = NULL;
   r->uri = NULL;
+  r->user_agent = NULL;
   r->prev_req_time = 0;
   r->prev_last_modified = 0;
 
@@ -1289,6 +1304,16 @@ static mrb_value mrb_http2_server_client_ip(mrb_state *mrb, mrb_value self)
   return mrb_str_new_cstr(mrb, r->conn->client_ip);
 }
 
+static mrb_value mrb_http2_server_user_agent(mrb_state *mrb, mrb_value self)
+{
+  mrb_http2_data_t *data = DATA_PTR(self);
+
+  if (!data->r->user_agent) {
+    return mrb_nil_value();
+  }
+  return mrb_str_new_cstr(mrb, data->r->user_agent);
+}
+
 void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
 {
   struct RClass *server;
@@ -1308,5 +1333,6 @@ void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
   mrb_define_method(mrb, server, "uri", mrb_http2_server_uri, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "document_root", mrb_http2_server_document_root, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "client_ip", mrb_http2_server_client_ip, MRB_ARGS_NONE());
+  mrb_define_method(mrb, server, "user_agent", mrb_http2_server_user_agent, MRB_ARGS_NONE());
   DONE;
 }

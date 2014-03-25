@@ -31,6 +31,20 @@ void mrb_http2_client_class_init(mrb_state *mrb, struct RClass *http2);
 void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2);
 void mrb_http2_request_class_init(mrb_state *mrb, struct RClass *http2);
 
+// get nghttp2_nv by name
+int mrb_http2_get_nv_id(nghttp2_nv *nva, size_t nvlen, const char *key)
+{
+  int i;
+  size_t len = strlen(key);
+
+  for (i = 0; i < nvlen; i++) {
+    if(nva[i].namelen == len && memcmp(key, nva[i].name, nva[i].namelen) == 0) {
+      return i;
+    }
+  }
+  return MRB_HTTP2_HEADER_NOT_FOUND;
+}
+
 // create nghttp2_nv
 void mrb_http2_create_nv(mrb_state *mrb, nghttp2_nv *nv, const uint8_t *name,
     size_t namelen, const uint8_t *value, size_t valuelen)
