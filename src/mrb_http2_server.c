@@ -20,7 +20,6 @@ typedef struct {
   struct event_base *evbase;
   mrb_http2_server_t *server;
   mrb_http2_request_rec *r;
-  mrb_http2_conn_rec *conn;
   mrb_value self;
 } app_context;
 
@@ -38,6 +37,7 @@ typedef struct http2_session_data {
   nghttp2_session *session;
   char *client_addr;
   size_t handshake_leftlen;
+  mrb_http2_conn_rec *conn;
 } http2_session_data;
 
 static void mrb_http2_server_free(mrb_state *mrb, void *p)
@@ -46,7 +46,6 @@ static void mrb_http2_server_free(mrb_state *mrb, void *p)
   mrb_free(mrb, data->s->config);
   mrb_free(mrb, data->s);
   mrb_free(mrb, data->r);
-  mrb_free(mrb, data->conn);
   mrb_free(mrb, data);
   TRACER;
 }
@@ -88,10 +87,8 @@ static void mrb_http2_conn_rec_free(mrb_state *mrb,
     mrb_http2_conn_rec *conn)
 {
   TRACER;
-  if (conn->client_ip != NULL) {
-    mrb_free(mrb, conn->client_ip);
-    conn->client_ip = NULL;
-  }
+  mrb_free(mrb, conn->client_ip);
+  mrb_free(mrb, conn);
 }
 
 static void mrb_http2_request_rec_free(mrb_state *mrb,
@@ -162,7 +159,6 @@ static void delete_http2_session_data(http2_session_data *session_data)
   http2_stream_data *stream_data;
   mrb_state *mrb = session_data->app_ctx->server->mrb;
   mrb_http2_config_t *config = session_data->app_ctx->server->config;
-  mrb_http2_conn_rec *conn = session_data->app_ctx->conn;
 
   TRACER;
   if (config->debug) {
@@ -181,9 +177,9 @@ static void delete_http2_session_data(http2_session_data *session_data)
     delete_http2_stream_data(mrb, stream_data);
     stream_data = next;
   }
+  mrb_http2_conn_rec_free(mrb, session_data->conn);
   mrb_free(mrb, session_data->client_addr);
   mrb_free(mrb, session_data);
-  mrb_http2_conn_rec_free(mrb, conn);
 }
 
 /* Serialize the frame and send (or buffer) the data to
@@ -698,6 +694,17 @@ static SSL* mrb_http2_create_ssl(mrb_state *mrb, SSL_CTX *ssl_ctx)
   return ssl;
 }
 
+static mrb_http2_conn_rec *mrb_http2_conn_rec_init(mrb_state *mrb)
+{
+  mrb_http2_conn_rec *conn = (mrb_http2_conn_rec *)mrb_malloc(mrb, 
+      sizeof(mrb_http2_conn_rec));
+  memset(conn, 0, sizeof(mrb_http2_conn_rec));
+  
+  conn->client_ip = NULL;
+
+  return conn;
+}
+
 static http2_session_data* create_http2_session_data(mrb_state *mrb, 
     app_context *app_ctx, int fd, struct sockaddr *addr, int addrlen)
 {
@@ -706,13 +713,15 @@ static http2_session_data* create_http2_session_data(mrb_state *mrb,
   SSL *ssl;
   char host[NI_MAXHOST];
   int val = 1;
-  mrb_http2_conn_rec *conn = app_ctx->conn;
 
   TRACER;
   ssl = mrb_http2_create_ssl(mrb, app_ctx->ssl_ctx);
+
   session_data = (http2_session_data *)mrb_malloc(mrb, sizeof(http2_session_data));
   memset(session_data, 0, sizeof(http2_session_data));
+
   session_data->app_ctx = app_ctx;
+  session_data->conn = mrb_http2_conn_rec_init(mrb);
 
   setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char *)&val, sizeof(val));
 
@@ -734,11 +743,8 @@ static http2_session_data* create_http2_session_data(mrb_state *mrb,
   } else {
     session_data->client_addr = mrb_http2_strcopy(mrb, host, strlen(host));
   }
-  if (conn->client_ip != NULL) {
-    mrb_free(mrb, conn->client_ip);
-  }
-  conn->client_ip = mrb_http2_strcopy(mrb, session_data->client_addr, 
-      strlen(session_data->client_addr));
+  session_data->conn->client_ip = mrb_http2_strcopy(mrb, 
+      session_data->client_addr, strlen(session_data->client_addr));
 
   return session_data;
 }
@@ -968,7 +974,6 @@ static mrb_value mrb_http2_server_run(mrb_state *mrb, mrb_value self)
   mrb_http2_data_t *data = DATA_PTR(self);  
   mrb_http2_server_t *server = data->s;
   mrb_http2_request_rec *r = data->r;
-  mrb_http2_conn_rec *conn = data->conn;
   SSL_CTX *ssl_ctx = NULL;
   app_context app_ctx;
   struct event_base *evbase;
@@ -982,7 +987,6 @@ static mrb_value mrb_http2_server_run(mrb_state *mrb, mrb_value self)
   init_app_context(&app_ctx, ssl_ctx, evbase);
   app_ctx.server = server;
   app_ctx.r = r;
-  app_ctx.conn = conn;
   app_ctx.self = self;
 
   TRACER;
@@ -995,17 +999,6 @@ static mrb_value mrb_http2_server_run(mrb_state *mrb, mrb_value self)
   TRACER;
 
   return self;
-}
-
-static mrb_http2_conn_rec *mrb_http2_conn_rec_init(mrb_state *mrb)
-{
-  mrb_http2_conn_rec *conn = (mrb_http2_conn_rec *)mrb_malloc(mrb, 
-      sizeof(mrb_http2_conn_rec));
-  memset(conn, 0, sizeof(mrb_http2_conn_rec));
-  
-  conn->client_ip = NULL;
-
-  return conn;
 }
 
 static mrb_http2_request_rec *mrb_http2_request_rec_init(mrb_state *mrb)
@@ -1165,7 +1158,6 @@ static mrb_value mrb_http2_server_init(mrb_state *mrb, mrb_value self)
 
   data->s = server;
   data->r = mrb_http2_request_rec_init(mrb);
-  data->conn = mrb_http2_conn_rec_init(mrb);
 
   if (server->config->tls) {
     SSL_load_error_strings();

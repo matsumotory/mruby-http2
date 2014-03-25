@@ -47,7 +47,6 @@ typedef struct {
 typedef struct {
   mrb_http2_server_t *s;
   mrb_http2_request_rec *r;
-  mrb_http2_conn_rec *conn;
 } mrb_http2_data_t;
 
 void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2);
