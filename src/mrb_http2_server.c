@@ -138,7 +138,8 @@ static http2_stream_data* create_http2_stream_data(mrb_state *mrb,
   http2_stream_data *stream_data;
 
   TRACER;
-  stream_data = (http2_stream_data *)mrb_malloc(mrb, sizeof(http2_stream_data));
+  stream_data = (http2_stream_data *)mrb_malloc(mrb, 
+      sizeof(http2_stream_data));
   memset(stream_data, 0, sizeof(http2_stream_data));
   stream_data->stream_id = stream_id;
   stream_data->fd = -1;
@@ -343,9 +344,12 @@ static int send_response(app_context *app_ctx, nghttp2_session *session,
 
   if (config->debug) {
     for (i = 0; i < nvlen; i++) {
-      char *name = mrb_http2_strcopy(mrb, (char *)nva[i].name, nva[i].namelen);
-      char *value = mrb_http2_strcopy(mrb, (char *)nva[i].value, nva[i].valuelen);
-      fprintf(stderr, "%s: nva[%d]={name=%s, value=%s}\n", __func__, i, name, value);
+      char *name = mrb_http2_strcopy(mrb, (char *)nva[i].name, 
+          nva[i].namelen);
+      char *value = mrb_http2_strcopy(mrb, (char *)nva[i].value, 
+          nva[i].valuelen);
+      fprintf(stderr, "%s: nva[%d]={name=%s, value=%s}\n", __func__, 
+          i, name, value);
       mrb_free(mrb, name);
       mrb_free(mrb, value);
     }
@@ -447,7 +451,8 @@ static int server_on_header_callback(nghttp2_session *session,
 
     // create nv and add stream_data->nva
     mrb_http2_create_nv(mrb, &nv, name, namelen, value, valuelen);
-    stream_data->nvlen = mrb_http2_add_nv(stream_data->nva, stream_data->nvlen, &nv);
+    stream_data->nvlen = mrb_http2_add_nv(stream_data->nva, 
+        stream_data->nvlen, &nv);
 
     //if(stream_data->request_path) {
     //  break;
@@ -497,8 +502,8 @@ static int check_path(const char *path)
     !ends_with(path, "/..") && !ends_with(path, "/.");
 }
 
-static int mrb_http2_send_response(app_context *app_ctx, nghttp2_session *session, 
-    int32_t stream_id, int fd) {
+static int mrb_http2_send_response(app_context *app_ctx, 
+    nghttp2_session *session, int32_t stream_id, int fd) {
   
   mrb_http2_config_t *config = app_ctx->server->config;
   mrb_http2_request_rec *r = app_ctx->r;
@@ -538,9 +543,12 @@ static int server_on_request_recv(nghttp2_session *session,
 
   if (config->debug) {
     for (i = 0; i < stream_data->nvlen; i++) {
-      char *name = mrb_http2_strcopy(mrb, (char *)stream_data->nva[i].name, stream_data->nva[i].namelen);
-      char *value = mrb_http2_strcopy(mrb, (char *)stream_data->nva[i].value, stream_data->nva[i].valuelen);
-      fprintf(stderr, "%s: nva[%d]={name=%s, value=%s}\n", __func__, i, name, value);
+      char *name = mrb_http2_strcopy(mrb, (char *)stream_data->nva[i].name, 
+          stream_data->nva[i].namelen);
+      char *value = mrb_http2_strcopy(mrb, (char *)stream_data->nva[i].value, 
+          stream_data->nva[i].valuelen);
+      fprintf(stderr, "%s: nva[%d]={name=%s, value=%s}\n", __func__, i, 
+          name, value);
       mrb_free(mrb, name);
       mrb_free(mrb, value);
     }
