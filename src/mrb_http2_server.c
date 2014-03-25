@@ -1,5 +1,4 @@
 /*
-  snprintf
 // mrb_http2_server.c - to provide http2 methods
 //
 // See Copyright Notice in mrb_http2.c
@@ -437,7 +436,6 @@ static int server_on_header_callback(nghttp2_session *session,
     }
     break;
   }
-  TRACER;
   return 0;
 }
 
