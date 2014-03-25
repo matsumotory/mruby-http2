@@ -20,6 +20,7 @@ typedef struct {
   struct event_base *evbase;
   mrb_http2_server_t *server;
   mrb_http2_request_rec *r;
+  mrb_value self;
 } app_context;
 
 typedef struct http2_stream_data {
@@ -61,13 +62,15 @@ static const struct mrb_data_type mrb_http2_server_type = {
 static unsigned char next_proto_list[256];
 static size_t next_proto_list_len;
 
-static void callback_ruby_block(mrb_state *mrb, unsigned int flag, mrb_value *b)
+static void callback_ruby_block(mrb_state *mrb, mrb_value self, 
+    unsigned int flag, const char *cbid)
 {
   if (!flag) {
     return;
   }
-  if (b) {
-    mrb_yield_argv(mrb, *b, 0, NULL);
+  if (cbid) {
+    mrb_yield_argv(mrb, mrb_iv_get(mrb, self, mrb_intern_cstr(mrb, cbid)), 
+        0, NULL);
   }
 }
 
@@ -331,7 +334,8 @@ static int send_response(app_context *app_ctx, nghttp2_session *session,
   //
   // "set_logging_cb" callback ruby block
   // 
-  callback_ruby_block(mrb, config->callback, config->cb_list->logging_cb);
+  callback_ruby_block(mrb, app_ctx->self, config->callback, 
+      config->cb_list->logging_cb);
 
   mrb_http2_request_rec_free(mrb, r);
   TRACER;
@@ -535,7 +539,8 @@ static int server_on_request_recv(nghttp2_session *session,
   //
   // "set_map_to_storage" callback ruby block
   // 
-  callback_ruby_block(mrb, config->callback, config->cb_list->map_to_strage_cb);
+  callback_ruby_block(mrb, session_data->app_ctx->self, config->callback, 
+      config->cb_list->map_to_strage_cb);
 
   if (config->debug) {
     fprintf(stderr, "%s %s is mapped to %s\n", session_data->client_addr, 
@@ -956,6 +961,7 @@ static mrb_value mrb_http2_server_run(mrb_state *mrb, mrb_value self)
   init_app_context(&app_ctx, ssl_ctx, evbase);
   app_ctx.server = server;
   app_ctx.r = r;
+  app_ctx.self = self;
 
   TRACER;
   mrb_start_listen(evbase, server->config->service, &app_ctx);
@@ -1003,12 +1009,14 @@ static mrb_value mrb_http2_server_set_map_to_strage_cb(mrb_state *mrb,
   mrb_http2_data_t *data = DATA_PTR(self);
   mruby_cb_list *list = data->s->config->cb_list;
   mrb_value b;
+  const char *cbid = "map_to_storage_cb";
 
   mrb_get_args(mrb, "&", &b);
   mrb_gc_protect(mrb, b);
-  list->map_to_strage_cb = &b;
+  mrb_iv_set(mrb, self, mrb_intern_cstr(mrb, cbid), b);
+  list->map_to_strage_cb = cbid;
 
-  return self;
+  return b;
 }
 
 static mrb_value mrb_http2_server_set_logging_cb(mrb_state *mrb, 
@@ -1017,12 +1025,14 @@ static mrb_value mrb_http2_server_set_logging_cb(mrb_state *mrb,
   mrb_http2_data_t *data = DATA_PTR(self);
   mruby_cb_list *list = data->s->config->cb_list;
   mrb_value b;
+  const char *cbid = "logging_cb";
 
   mrb_get_args(mrb, "&", &b);
   mrb_gc_protect(mrb, b);
-  list->logging_cb = &b;
+  mrb_iv_set(mrb, self, mrb_intern_cstr(mrb, cbid), b);
+  list->logging_cb = cbid;
 
-  return self;
+  return b;
 }
 
 static mruby_cb_list *mruby_cb_list_init(mrb_state *mrb)
