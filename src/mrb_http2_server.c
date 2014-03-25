@@ -103,6 +103,10 @@ static void mrb_http2_request_rec_free(mrb_state *mrb,
     mrb_free(mrb, r->uri);
     r->uri = NULL;
   }
+  // for conn_rec_free when disconnected
+  if (r->conn != NULL) {
+    r->conn = NULL;
+  }
 }
 
 static void add_stream(http2_session_data *session_data, 
@@ -504,6 +508,10 @@ static int server_on_request_recv(nghttp2_session *session,
   mrb_http2_config_t *config = session_data->app_ctx->server->config;
   mrb_http2_request_rec *r = session_data->app_ctx->r;
 
+  //
+  // Request process phase
+  //
+  r->conn = session_data->conn;
 
   // cached time string created strftime()
   // First, create r->date for error_reply
@@ -1183,6 +1191,12 @@ static mrb_value mrb_http2_req_obj(mrb_state *mrb, mrb_value self)
   return self;
 }
 
+static mrb_value mrb_http2_conn_obj(mrb_state *mrb, mrb_value self)
+{ 
+  //return mrb_http2_class_obj(mrb, self, "request_class_obj", "Request");
+  return self;
+}
+
 static mrb_value mrb_http2_server_filename(mrb_state *mrb, mrb_value self)
 {
   mrb_http2_data_t *data = DATA_PTR(self);
@@ -1222,6 +1236,17 @@ static mrb_value mrb_http2_server_document_root(mrb_state *mrb, mrb_value self)
   return mrb_str_new_cstr(mrb, config->document_root);
 }
 
+static mrb_value mrb_http2_server_client_ip(mrb_state *mrb, mrb_value self)
+{
+  mrb_http2_data_t *data = DATA_PTR(self);
+  mrb_http2_request_rec *r = data->r;
+
+  if (!r->conn) {
+    return mrb_nil_value();
+  }
+  return mrb_str_new_cstr(mrb, r->conn->client_ip);
+}
+
 void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
 {
   struct RClass *server;
@@ -1232,11 +1257,14 @@ void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
   mrb_define_method(mrb, server, "initialize", mrb_http2_server_init, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, server, "run", mrb_http2_server_run, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "request", mrb_http2_req_obj, MRB_ARGS_NONE());
+  mrb_define_method(mrb, server, "r", mrb_http2_req_obj, MRB_ARGS_NONE());
+  mrb_define_method(mrb, server, "conn", mrb_http2_conn_obj, MRB_ARGS_NONE());
+  mrb_define_method(mrb, server, "set_map_to_strage_cb", mrb_http2_server_set_map_to_strage_cb, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, server, "set_logging_cb", mrb_http2_server_set_logging_cb, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, server, "filename", mrb_http2_server_filename, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "filename=", mrb_http2_server_set_filename, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, server, "uri", mrb_http2_server_uri, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "document_root", mrb_http2_server_document_root, MRB_ARGS_NONE());
-  mrb_define_method(mrb, server, "set_map_to_strage_cb", mrb_http2_server_set_map_to_strage_cb, MRB_ARGS_REQ(1));
-  mrb_define_method(mrb, server, "set_logging_cb", mrb_http2_server_set_logging_cb, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, server, "client_ip", mrb_http2_server_client_ip, MRB_ARGS_NONE());
   DONE;
 }

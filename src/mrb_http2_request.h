@@ -104,6 +104,9 @@ typedef struct {
   // content_length header
   char content_length[64];
 
+  // connection record
+  mrb_http2_conn_rec *conn;
+
 } mrb_http2_request_rec;
 
 #endif
