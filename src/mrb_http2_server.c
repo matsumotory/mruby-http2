@@ -20,6 +20,7 @@ typedef struct {
   struct event_base *evbase;
   mrb_http2_server_t *server;
   mrb_http2_request_rec *r;
+  mrb_http2_conn_rec *conn;
   mrb_value self;
 } app_context;
 
@@ -45,6 +46,7 @@ static void mrb_http2_server_free(mrb_state *mrb, void *p)
   mrb_free(mrb, data->s->config);
   mrb_free(mrb, data->s);
   mrb_free(mrb, data->r);
+  mrb_free(mrb, data->conn);
   mrb_free(mrb, data);
   TRACER;
 }
@@ -80,6 +82,30 @@ static void set_http_date_str(time_t *now, char *date)
 
   t = gmtime(now);
   strftime(date, 127, "%a, %d %b %Y %H:%M:%S %Z", t);
+}
+
+static void mrb_http2_conn_rec_free(mrb_state *mrb,
+    mrb_http2_conn_rec *conn)
+{
+  TRACER;
+  if (conn->client_ip != NULL) {
+    mrb_free(mrb, conn->client_ip);
+    conn->client_ip = NULL;
+  }
+}
+
+static void mrb_http2_request_rec_free(mrb_state *mrb,
+    mrb_http2_request_rec *r)
+{
+  TRACER;
+  if (r->filename != NULL) {
+    mrb_free(mrb, r->filename);
+    r->filename = NULL;
+  }
+  if (r->uri != NULL) {
+    mrb_free(mrb, r->uri);
+    r->uri = NULL;
+  }
 }
 
 static void add_stream(http2_session_data *session_data, 
@@ -136,6 +162,7 @@ static void delete_http2_session_data(http2_session_data *session_data)
   http2_stream_data *stream_data;
   mrb_state *mrb = session_data->app_ctx->server->mrb;
   mrb_http2_config_t *config = session_data->app_ctx->server->config;
+  mrb_http2_conn_rec *conn = session_data->app_ctx->conn;
 
   TRACER;
   if (config->debug) {
@@ -154,9 +181,9 @@ static void delete_http2_session_data(http2_session_data *session_data)
     delete_http2_stream_data(mrb, stream_data);
     stream_data = next;
   }
-  TRACER;
   mrb_free(mrb, session_data->client_addr);
   mrb_free(mrb, session_data);
+  mrb_http2_conn_rec_free(mrb, conn);
 }
 
 /* Serialize the frame and send (or buffer) the data to
@@ -297,19 +324,6 @@ static ssize_t file_read_callback(nghttp2_session *session,
   }
   TRACER;
   return r;
-}
-
-static void mrb_http2_request_rec_free(mrb_state *mrb,
-    mrb_http2_request_rec *r)
-{
-  if (r->filename != NULL) {
-    mrb_free(mrb, r->filename);
-    r->filename = NULL;
-  }
-  if (r->uri != NULL) {
-    mrb_free(mrb, r->uri);
-    r->uri = NULL;
-  }
 }
 
 static int send_response(app_context *app_ctx, nghttp2_session *session, 
@@ -493,7 +507,7 @@ static int server_on_request_recv(nghttp2_session *session,
   mrb_state *mrb = session_data->app_ctx->server->mrb;
   mrb_http2_config_t *config = session_data->app_ctx->server->config;
   mrb_http2_request_rec *r = session_data->app_ctx->r;
-  //mrb_http2_server_t *server = session_data->app_ctx->server;
+
 
   // cached time string created strftime()
   // First, create r->date for error_reply
@@ -692,7 +706,9 @@ static http2_session_data* create_http2_session_data(mrb_state *mrb,
   SSL *ssl;
   char host[NI_MAXHOST];
   int val = 1;
+  mrb_http2_conn_rec *conn = app_ctx->conn;
 
+  TRACER;
   ssl = mrb_http2_create_ssl(mrb, app_ctx->ssl_ctx);
   session_data = (http2_session_data *)mrb_malloc(mrb, sizeof(http2_session_data));
   memset(session_data, 0, sizeof(http2_session_data));
@@ -714,11 +730,15 @@ static http2_session_data* create_http2_session_data(mrb_state *mrb,
   session_data->handshake_leftlen = NGHTTP2_CLIENT_CONNECTION_HEADER_LEN;
   rv = getnameinfo(addr, addrlen, host, sizeof(host), NULL, 0, NI_NUMERICHOST);
   if(rv != 0) {
-    session_data->client_addr = strdup("(unknown)");
+    session_data->client_addr = mrb_http2_strcopy(mrb, "(unknown)", strlen("(unknown)"));
   } else {
-    session_data->client_addr = strdup(host);
+    session_data->client_addr = mrb_http2_strcopy(mrb, host, strlen(host));
   }
-  TRACER;
+  if (conn->client_ip != NULL) {
+    mrb_free(mrb, conn->client_ip);
+  }
+  conn->client_ip = mrb_http2_strcopy(mrb, session_data->client_addr, 
+      strlen(session_data->client_addr));
 
   return session_data;
 }
@@ -948,6 +968,7 @@ static mrb_value mrb_http2_server_run(mrb_state *mrb, mrb_value self)
   mrb_http2_data_t *data = DATA_PTR(self);  
   mrb_http2_server_t *server = data->s;
   mrb_http2_request_rec *r = data->r;
+  mrb_http2_conn_rec *conn = data->conn;
   SSL_CTX *ssl_ctx = NULL;
   app_context app_ctx;
   struct event_base *evbase;
@@ -961,6 +982,7 @@ static mrb_value mrb_http2_server_run(mrb_state *mrb, mrb_value self)
   init_app_context(&app_ctx, ssl_ctx, evbase);
   app_ctx.server = server;
   app_ctx.r = r;
+  app_ctx.conn = conn;
   app_ctx.self = self;
 
   TRACER;
@@ -973,6 +995,17 @@ static mrb_value mrb_http2_server_run(mrb_state *mrb, mrb_value self)
   TRACER;
 
   return self;
+}
+
+static mrb_http2_conn_rec *mrb_http2_conn_rec_init(mrb_state *mrb)
+{
+  mrb_http2_conn_rec *conn = (mrb_http2_conn_rec *)mrb_malloc(mrb, 
+      sizeof(mrb_http2_conn_rec));
+  memset(conn, 0, sizeof(mrb_http2_conn_rec));
+  
+  conn->client_ip = NULL;
+
+  return conn;
 }
 
 static mrb_http2_request_rec *mrb_http2_request_rec_init(mrb_state *mrb)
@@ -1113,6 +1146,7 @@ static mrb_value mrb_http2_server_init(mrb_state *mrb, mrb_value self)
   mrb_value args;
   mrb_http2_data_t *data = (mrb_http2_data_t *)mrb_malloc(mrb, 
       sizeof(mrb_http2_data_t));
+  memset(data, 0, sizeof(mrb_http2_data_t));
 
   memset(&act, 0, sizeof(struct sigaction));
   act.sa_handler = SIG_IGN;
@@ -1131,6 +1165,7 @@ static mrb_value mrb_http2_server_init(mrb_state *mrb, mrb_value self)
 
   data->s = server;
   data->r = mrb_http2_request_rec_init(mrb);
+  data->conn = mrb_http2_conn_rec_init(mrb);
 
   if (server->config->tls) {
     SSL_load_error_strings();

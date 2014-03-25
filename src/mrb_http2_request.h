@@ -70,6 +70,12 @@
 #define HTTP_NETWORK_AUTHENTICATION_REQUIRED 511
 
 typedef struct {
+  // client ipaddress
+  char *client_ip;
+
+} mrb_http2_conn_rec;
+
+typedef struct {
   // http status code
   unsigned int status;
 

@@ -9,14 +9,18 @@
 
 #include "mrb_http2_request.h"
 
+// callback block symbol literal list
 typedef struct {
-  // set callbacked block at map_to_storage
+
+  // callback block at a phase of mapping uri to filename
   const char *map_to_strage_cb;
 
+  // callback block after send response
   const char *logging_cb;
 
 } mruby_cb_list;
 
+// mruby-http2 config parameter getting from HTTP2::Server#init
 typedef struct {
   unsigned int daemon;
   unsigned int debug;
@@ -43,6 +47,7 @@ typedef struct {
 typedef struct {
   mrb_http2_server_t *s;
   mrb_http2_request_rec *r;
+  mrb_http2_conn_rec *conn;
 } mrb_http2_data_t;
 
 void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2);
