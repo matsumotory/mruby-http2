@@ -88,6 +88,9 @@ static void mrb_http2_conn_rec_free(mrb_state *mrb,
     mrb_http2_conn_rec *conn)
 {
   TRACER;
+  if (conn == NULL) {
+    return;
+  }
   mrb_free(mrb, conn->client_ip);
   mrb_free(mrb, conn);
 }
@@ -758,9 +761,14 @@ static SSL* mrb_http2_create_ssl(mrb_state *mrb, SSL_CTX *ssl_ctx)
   return ssl;
 }
 
-static mrb_http2_conn_rec *mrb_http2_conn_rec_init(mrb_state *mrb)
+static mrb_http2_conn_rec *mrb_http2_conn_rec_init(mrb_state *mrb, mrb_http2_config_t *config)
 {
-  mrb_http2_conn_rec *conn = (mrb_http2_conn_rec *)mrb_malloc(mrb, 
+  mrb_http2_conn_rec *conn;
+
+  if (!config->connection_record) {
+    return NULL;
+  }
+  conn = (mrb_http2_conn_rec *)mrb_malloc(mrb, 
       sizeof(mrb_http2_conn_rec));
   memset(conn, 0, sizeof(mrb_http2_conn_rec));
   
@@ -777,6 +785,7 @@ static http2_session_data* create_http2_session_data(mrb_state *mrb,
   SSL *ssl;
   char host[NI_MAXHOST];
   int val = 1;
+  mrb_http2_config_t *config = app_ctx->server->config;
 
   TRACER;
   ssl = mrb_http2_create_ssl(mrb, app_ctx->ssl_ctx);
@@ -785,7 +794,8 @@ static http2_session_data* create_http2_session_data(mrb_state *mrb,
   memset(session_data, 0, sizeof(http2_session_data));
 
   session_data->app_ctx = app_ctx;
-  session_data->conn = mrb_http2_conn_rec_init(mrb);
+  // return NULL when connection_record option diabled
+  session_data->conn = mrb_http2_conn_rec_init(mrb, config);
 
   setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char *)&val, sizeof(val));
 
@@ -807,8 +817,10 @@ static http2_session_data* create_http2_session_data(mrb_state *mrb,
   } else {
     session_data->client_addr = mrb_http2_strcopy(mrb, host, strlen(host));
   }
-  session_data->conn->client_ip = mrb_http2_strcopy(mrb, 
-      session_data->client_addr, strlen(session_data->client_addr));
+  if (session_data->conn) {
+    session_data->conn->client_ip = mrb_http2_strcopy(mrb, 
+        session_data->client_addr, strlen(session_data->client_addr));
+  }
 
   return session_data;
 }
@@ -1180,6 +1192,13 @@ static mrb_http2_config_t *mrb_http2_s_config_init(mrb_state *mrb, mrb_value arg
   if (!mrb_nil_p(flag = mrb_http2_config_get_obj(mrb, args, "tls")) 
       && mrb_obj_equal(mrb, flag, mrb_false_value())) {
     config->tls = MRB_HTTP2_CONFIG_DISABLED;
+  }
+
+  // CONNECTION_RECORD options: defulat ENABLED
+  config->connection_record = MRB_HTTP2_CONFIG_ENABLED;
+  if (!mrb_nil_p(flag = mrb_http2_config_get_obj(mrb, args, "connection_record")) 
+      && mrb_obj_equal(mrb, flag, mrb_false_value())) {
+    config->connection_record = MRB_HTTP2_CONFIG_DISABLED;
   }
 
   if (config->tls) {

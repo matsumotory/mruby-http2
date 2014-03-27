@@ -26,6 +26,11 @@ typedef struct {
   unsigned int debug;
   unsigned int tls;
   unsigned int callback;
+
+  // connection record option
+  // default enabled and can use connection methods
+  unsigned int connection_record;
+
   const char *key;
   const char *cert;
   const char *service;

@@ -174,6 +174,9 @@ s = HTTP2::Server.new({
 
   # callback default: false
   # :callback => true,
+
+  # connection_record defualt: true
+  # :connection_record => false,
 })
 
 #
