@@ -107,8 +107,13 @@ typedef struct {
   // connection record
   mrb_http2_conn_rec *conn;
 
-  // user-agent
-  char *user_agent;
+  // request header table
+  nghttp2_nv *reqhdr;
+
+  // the number of request header
+  size_t reqhdrlen;
+
+  
 
 } mrb_http2_request_rec;
 

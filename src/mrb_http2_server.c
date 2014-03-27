@@ -107,13 +107,15 @@ static void mrb_http2_request_rec_free(mrb_state *mrb,
     mrb_free(mrb, r->uri);
     r->uri = NULL;
   }
-  if (r->user_agent != NULL) {
-    mrb_free(mrb, r->user_agent);
-    r->user_agent = NULL;
-  }
   // for conn_rec_free when disconnected
   if (r->conn != NULL) {
     r->conn = NULL;
+  }
+  if (r->reqhdr != NULL) {
+    r->reqhdr = NULL;
+  }
+  if (r->reqhdrlen != 0) {
+    r->reqhdrlen = 0;
   }
 }
 
@@ -554,7 +556,12 @@ static int server_on_request_recv(nghttp2_session *session,
     set_http_date_str(&now, r->date);
   }
 
+  // get connection record
   r->conn = session_data->conn;
+
+  // get requset header table and table length
+  r->reqhdr = stream_data->nva;
+  r->reqhdrlen = stream_data->nvlen;
 
   if (config->debug) {
     for (i = 0; i < stream_data->nvlen; i++) {
@@ -567,15 +574,6 @@ static int server_on_request_recv(nghttp2_session *session,
       mrb_free(mrb, name);
       mrb_free(mrb, value);
     }
-  }
-
-  // get request header by key
-  //
-  // for user-agent
-  i = mrb_http2_get_nv_id(stream_data->nva, stream_data->nvlen, "user-agent");
-  if (i != MRB_HTTP2_HEADER_NOT_FOUND) {
-    r->user_agent = mrb_http2_strcopy(mrb, (char *)stream_data->nva[i].value, 
-        stream_data->nva[i].valuelen);
   }
 
   TRACER;
@@ -1086,9 +1084,10 @@ static mrb_http2_request_rec *mrb_http2_request_rec_init(mrb_state *mrb)
   // NULL check when request_rec freed
   r->filename = NULL;
   r->uri = NULL;
-  r->user_agent = NULL;
   r->prev_req_time = 0;
   r->prev_last_modified = 0;
+  r->reqhdr = NULL;
+  r->reqhdrlen = 0;
 
   return r;
 }
@@ -1326,11 +1325,19 @@ static mrb_value mrb_http2_server_client_ip(mrb_state *mrb, mrb_value self)
 static mrb_value mrb_http2_server_user_agent(mrb_state *mrb, mrb_value self)
 {
   mrb_http2_data_t *data = DATA_PTR(self);
+  mrb_http2_request_rec *r = data->r;
+  int i;
 
-  if (!data->r->user_agent) {
+  if (!data->r->reqhdr) {
     return mrb_nil_value();
   }
-  return mrb_str_new_cstr(mrb, data->r->user_agent);
+
+  i = mrb_http2_get_nv_id(r->reqhdr, r->reqhdrlen, "user-agent");
+  if (i == MRB_HTTP2_HEADER_NOT_FOUND) {
+    return mrb_nil_value();
+  }
+
+  return mrb_str_new(mrb, (char *)r->reqhdr[i].value, r->reqhdr[i].valuelen);
 }
 
 void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
