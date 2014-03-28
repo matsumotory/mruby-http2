@@ -1,7 +1,6 @@
 root_dir = "/usr/local/trusterd"
 
 s = HTTP2::Server.new({
-s = HTTP2::Server.new({
 
   #
   # required config
