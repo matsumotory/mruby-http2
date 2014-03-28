@@ -22,6 +22,7 @@ typedef struct {
 
 // mruby-http2 config parameter getting from HTTP2::Server#init
 typedef struct {
+
   unsigned int daemon;
   unsigned int debug;
   unsigned int tls;
@@ -35,8 +36,15 @@ typedef struct {
   const char *cert;
   const char *service;
   const char *document_root;
+
+  // server response header 
   const char *server_name;
+
+  // server listen hostname
+  const char *server_host;
+
   mruby_cb_list *cb_list;
+
 } mrb_http2_config_t;
 
 typedef struct {

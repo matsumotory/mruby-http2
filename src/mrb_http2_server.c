@@ -1008,7 +1008,7 @@ static void init_app_context(app_context *actx, SSL_CTX *ssl_ctx,
   actx->evbase = evbase;
 }
 
-static void mrb_start_listen(struct event_base *evbase, const char *service, 
+static void mrb_start_listen(struct event_base *evbase, mrb_http2_config_t *config,
     app_context *app_ctx)
 {
   int rv;
@@ -1025,7 +1025,7 @@ static void mrb_start_listen(struct event_base *evbase, const char *service,
   hints.ai_flags |= AI_ADDRCONFIG;
 #endif
 
-  rv = getaddrinfo(NULL, service, &hints, &res);
+  rv = getaddrinfo(config->server_host, config->service, &hints, &res);
   if(rv != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "getaddrinfo failed");
   }
@@ -1064,7 +1064,7 @@ static mrb_value mrb_http2_server_run(mrb_state *mrb, mrb_value self)
   app_ctx.self = self;
 
   TRACER;
-  mrb_start_listen(evbase, server->config->service, &app_ctx);
+  mrb_start_listen(evbase, server->config, &app_ctx);
   event_base_loop(app_ctx.evbase, 0);
   event_base_free(app_ctx.evbase);
   if (server->config->tls) {
@@ -1090,6 +1090,19 @@ static mrb_http2_request_rec *mrb_http2_request_rec_init(mrb_state *mrb)
   r->reqhdrlen = 0;
 
   return r;
+}
+
+static char *may_get_config_str_to_cstr(mrb_state *mrb, mrb_value args, 
+    const char *name)
+{
+  mrb_value val;
+  if (mrb_nil_p(val = mrb_hash_get(mrb, args,
+                  mrb_symbol_value(mrb_intern_cstr(mrb, name))))) {
+    return NULL;
+  }
+
+  //return mrb_str_to_cstr(mrb, val);
+  return mrb_http2_strcopy(mrb, RSTRING_PTR(val), RSTRING_LEN(val));
 }
 
 static char *must_get_config_str_to_cstr(mrb_state *mrb, mrb_value args, 
@@ -1207,6 +1220,8 @@ static mrb_http2_config_t *mrb_http2_s_config_init(mrb_state *mrb, mrb_value arg
     config->key = NULL;
     config->cert = NULL;
   }
+
+  config->server_host = may_get_config_str_to_cstr(mrb, args, "server_host");
 
   config->document_root = must_get_config_str_to_cstr(mrb, args, "document_root");
   config->server_name = must_get_config_str_to_cstr(mrb, args, "server_name");
