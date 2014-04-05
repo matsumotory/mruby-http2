@@ -63,10 +63,12 @@
 #define ARRLEN(x) (sizeof(x)/sizeof(x[0]))
 #define MAKE_NV(NAME, VALUE)                                           \
   {(uint8_t*)NAME, (uint8_t*)VALUE,                                    \
-    (uint16_t)(sizeof(NAME) - 1), (uint16_t)(sizeof(VALUE) - 1) }
+    (uint16_t)(sizeof(NAME) - 1), (uint16_t)(sizeof(VALUE) - 1),       \
+    NGHTTP2_NV_FLAG_NONE}
 #define MAKE_NV_CS(NAME, VALUE)                                        \
   {(uint8_t*)NAME, (uint8_t*)VALUE,                                    \
-    (uint16_t)(sizeof(NAME) - 1), (uint16_t)(strlen(VALUE)) }
+    (uint16_t)(sizeof(NAME) - 1), (uint16_t)(strlen(VALUE)),           \
+    NGHTTP2_NV_FLAG_NONE}
 
 int mrb_http2_get_nv_id(nghttp2_nv *nva, size_t nvlen, const char *key);
 void mrb_http2_create_nv(mrb_state *mrb, nghttp2_nv *nv, const uint8_t *name,

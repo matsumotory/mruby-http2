@@ -320,7 +320,7 @@ static char* percent_decode(mrb_state *mrb, const uint8_t *value, size_t valuele
 }
 
 static ssize_t file_read_callback(nghttp2_session *session, 
-    int32_t stream_id, uint8_t *buf, size_t length, int *eof, 
+    int32_t stream_id, uint8_t *buf, size_t length, uint32_t *data_flags, 
     nghttp2_data_source *source, void *user_data)
 {
   int fd = source->fd;
@@ -332,7 +332,7 @@ static ssize_t file_read_callback(nghttp2_session *session,
     return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
   }
   if(r == 0) {
-    *eof = 1;
+    *data_flags |= NGHTTP2_DATA_FLAG_EOF;
   }
   TRACER;
   return r;
@@ -437,7 +437,7 @@ static int error_reply(app_context *app_ctx, nghttp2_session *session,
 
 static int server_on_header_callback(nghttp2_session *session, 
     const nghttp2_frame *frame, const uint8_t *name, size_t namelen, 
-    const uint8_t *value, size_t valuelen, void *user_data)
+    const uint8_t *value, size_t valuelen, uint8_t flags, void *user_data)
 {
   http2_session_data *session_data = (http2_session_data *)user_data;
   mrb_state *mrb = session_data->app_ctx->server->mrb;
@@ -808,7 +808,7 @@ static http2_session_data* create_http2_session_data(mrb_state *mrb,
         BUFFEREVENT_SSL_ACCEPTING, BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS);
   }
 
-  session_data->handshake_leftlen = NGHTTP2_CLIENT_CONNECTION_HEADER_LEN;
+  session_data->handshake_leftlen = NGHTTP2_CLIENT_CONNECTION_PREFACE_LEN;
   rv = getnameinfo(addr, addrlen, host, sizeof(host), NULL, 0, NI_NUMERICHOST);
   if(rv != 0) {
     session_data->client_addr = mrb_http2_strcopy(mrb, "(unknown)", strlen("(unknown)"));
@@ -898,10 +898,10 @@ static void mrb_http2_server_handshake_readcb(struct bufferevent *bev, void *ptr
   uint8_t data[24];
   struct evbuffer *input = bufferevent_get_input(session_data->bev);
   int readlen = evbuffer_remove(input, data, session_data->handshake_leftlen);
-  const char *conhead = NGHTTP2_CLIENT_CONNECTION_HEADER;
+  const char *conhead = NGHTTP2_CLIENT_CONNECTION_PREFACE;
 
   TRACER;
-  if(memcmp(conhead + NGHTTP2_CLIENT_CONNECTION_HEADER_LEN 
+  if(memcmp(conhead + NGHTTP2_CLIENT_CONNECTION_PREFACE_LEN 
         - session_data->handshake_leftlen, data, readlen) != 0) {
     delete_http2_session_data(session_data);
     return;

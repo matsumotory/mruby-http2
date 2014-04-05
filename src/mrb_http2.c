@@ -53,6 +53,7 @@ void mrb_http2_create_nv(mrb_state *mrb, nghttp2_nv *nv, const uint8_t *name,
   nv->namelen = namelen;
   nv->value = (uint8_t *)value;
   nv->valuelen = valuelen;
+  nv->flags = NGHTTP2_NV_FLAG_NONE;
 }
 
 // add nghttp2_nv into existing nghttp2_nv array

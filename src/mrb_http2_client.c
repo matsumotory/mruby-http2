@@ -345,7 +345,7 @@ static int on_frame_recv_callback(nghttp2_session *session,
 //static int on_header_callback(nghttp2_session *session, const nghttp2_frame *frame, void *user_data)
 static int on_header_callback(nghttp2_session *session, 
     const nghttp2_frame *frame, const uint8_t *name, size_t namelen, 
-    const uint8_t *value, size_t valuelen, void *user_data)
+    const uint8_t *value, size_t valuelen, uint8_t flags, void *user_data)
 
 {
   struct mrb_http2_conn_t *conn = (struct mrb_http2_conn_t*)user_data;
@@ -614,7 +614,6 @@ static void mrb_http2_ctl_poll(mrb_state *mrb, struct pollfd *pollfd,
 static void mrb_http2_submit_request(mrb_state *mrb, 
     struct mrb_http2_conn_t *conn, struct mrb_http2_request_t *req)
 {
-  int pri = 0;
   int rv;
   const nghttp2_nv nva[] = {
     MAKE_NV(":method", "GET"),
@@ -625,7 +624,7 @@ static void mrb_http2_submit_request(mrb_state *mrb,
     MAKE_NV("accept-encoding", GZIP),
     MAKE_NV("user-agent", MRUBY_HTTP2_NAME"/"MRUBY_HTTP2_VERSION)
   };
-  rv = nghttp2_submit_request(conn->session, pri, nva, 
+  rv = nghttp2_submit_request(conn->session, NULL, nva, 
       sizeof(nva)/sizeof(nva[0]), NULL, req);
   if(rv != 0) {
     mrb_raisef(mrb, E_RUNTIME_ERROR, "http2_submit_request: %S", 
@@ -709,8 +708,8 @@ static mrb_value mrb_http2_fetch_uri(mrb_state *mrb,
   conn.ssl = ssl;
   conn.want_io = IO_NONE;
 
-  SSL_write(ssl, NGHTTP2_CLIENT_CONNECTION_HEADER, 
-      NGHTTP2_CLIENT_CONNECTION_HEADER_LEN);
+  SSL_write(ssl, NGHTTP2_CLIENT_CONNECTION_PREFACE, 
+      NGHTTP2_CLIENT_CONNECTION_PREFACE_LEN);
 
   mrb_http2_make_non_block(mrb, fd);
   mrb_http2_set_tcp_nodelay(mrb, fd);
@@ -789,8 +788,8 @@ static mrb_value mrb_http2_get_uri(mrb_state *mrb, mrb_http2_context_t *ctx)
   ctx->conn->ssl = ssl;
   ctx->conn->want_io = IO_NONE;
 
-  SSL_write(ssl, NGHTTP2_CLIENT_CONNECTION_HEADER, 
-      NGHTTP2_CLIENT_CONNECTION_HEADER_LEN);
+  SSL_write(ssl, NGHTTP2_CLIENT_CONNECTION_PREFACE, 
+      NGHTTP2_CLIENT_CONNECTION_PREFACE_LEN);
 
   mrb_http2_make_non_block(mrb, fd);
   mrb_http2_set_tcp_nodelay(mrb, fd);
