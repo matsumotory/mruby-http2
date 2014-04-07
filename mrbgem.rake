@@ -10,7 +10,9 @@ MRuby::Gem::Specification.new('mruby-http2') do |spec|
   nghttp2_dir = "#{build_dir}/nghttp2"
   nghttp2_lib = "#{build_dir}/nghttp2/lib/.libs"
   libnghttp2a = "#{nghttp2_lib}/libnghttp2.a"
-  nghttp2_ver = "5b55874d4d583d51d957fbadda6aa75a5c621b02"
+  if ! ENV['NGHTTP2_CURRENT'] 
+    nghttp2_ver = "5b55874d4d583d51d957fbadda6aa75a5c621b02"
+  end
 
   def run_command env, command
     STDOUT.sync = true
@@ -33,7 +35,9 @@ MRuby::Gem::Specification.new('mruby-http2') do |spec|
   if ! File.exists? libnghttp2a
     Dir.chdir nghttp2_dir do
       e = {}
+    if ! ENV['NGHTTP2_CURRENT'] 
       run_command e, "git checkout #{nghttp2_ver} ."
+    end
       run_command e, 'git submodule init'
       run_command e, 'git submodule update'
       run_command e, 'autoreconf -i'
