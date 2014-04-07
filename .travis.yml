@@ -13,3 +13,7 @@ before_script:
   - cp -fp ../mruby-http2/.travis_build_config.rb build_config.rb
 script: 
   - rake all test
+notifications:
+  webhooks:
+    - https://idobata.io/hook/f48e8f58-29d9-414e-8336-1fadb62bfa2d
+
