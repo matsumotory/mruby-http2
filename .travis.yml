@@ -12,6 +12,8 @@ before_script:
   - cd mruby
   - cp -fp ../mruby-http2/.travis_build_config.rb build_config.rb
 script: 
+  - rake NGHTTP2_CURRENT="true" all test
+  - rake clean
   - rake all test
 notifications:
   webhooks:
