@@ -17,5 +17,5 @@ script:
   - rake all test
 notifications:
   webhooks:
-    - https://idobata.io/hook/f48e8f58-29d9-414e-8336-1fadb62bfa2d
+    - secure: "fAUM6YafzwYRwGDOXkdLuQo351nj5dPkGyPFV00D9mrYkiJG2iogrEsNHZvWlE0EvtqcxmTNHUfpS21a4sW4CguviP+zeupNB9tkQz7ckgFGYjLI1fMchEgRMziAOFUjNNn9BOrrrY/6jRVdPMw3noLEeMwzIURT/s544aFvdjQ="
 
