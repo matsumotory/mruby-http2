@@ -8,6 +8,9 @@ HTTP2 module for mruby using [nghttp2](https://github.com/tatsuhiro-t/nghttp2). 
 
 HTTP/2 is a replacement for how HTTP is expressed "on the wire". It is not a ground-up rewrite of the protocol; HTTP methods, status codes and semantics will be the same, and it should be possible to use the same APIs as HTTP/1.x (possibly with some small additions) to represent the protocol.
 
+## [Trusterd HTTP/2 Web Server](https://github.com/matsumoto-r/trusterd)
+[Trusterd](https://github.com/matsumoto-r/trusterd) is a HTTP/2 Web Server implementation using mruby-http2.
+
 ## Benchmark
 Please see [link](https://gist.github.com/matsumoto-r/9702123).
 
