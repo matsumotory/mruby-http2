@@ -15,6 +15,7 @@ before_script:
   - cd mruby
   - cp -fp ../mruby-http2/.travis_build_config.rb build_config.rb
 script: 
+  - rake
   - rake all test
 notifications:
   webhooks:
