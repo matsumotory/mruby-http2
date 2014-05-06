@@ -15,7 +15,7 @@ before_script:
   - cd mruby
   - export MRUBY_CONFIG=../mruby-http2/.travis_build_config.rb
 script: 
-  - rake test
+  - rake all test
 notifications:
   webhooks:
     - secure: "fAUM6YafzwYRwGDOXkdLuQo351nj5dPkGyPFV00D9mrYkiJG2iogrEsNHZvWlE0EvtqcxmTNHUfpS21a4sW4CguviP+zeupNB9tkQz7ckgFGYjLI1fMchEgRMziAOFUjNNn9BOrrrY/6jRVdPMw3noLEeMwzIURT/s544aFvdjQ="
