@@ -5,6 +5,7 @@
 */
 
 #include "mrb_http2.h"
+#include "mrb_http2_gzip.h"
 
 enum {
   IO_NONE,
