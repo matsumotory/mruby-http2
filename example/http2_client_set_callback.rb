@@ -1,4 +1,5 @@
-r = HTTP2::Client.get 'https://127.0.0.1:8080/index.html'
+base_url = "https://http2.matsumoto-r.jp:58080/index.html"
+r = HTTP2::Client.get base_url
 
 p r.response
 p r.body
@@ -12,7 +13,7 @@ p r.stream_id
 p "---- set callback version ----"
 
 s = HTTP2::Client.new
-s.uri = 'https://127.0.0.1:8080/index.html'
+s.uri = base_url
 s.on_header_callback {
     p "header callback"
 }
