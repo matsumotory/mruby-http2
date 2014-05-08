@@ -237,21 +237,8 @@ static ssize_t recv_callback(nghttp2_session *session, uint8_t *buf,
 static int before_frame_send_callback(nghttp2_session *session, 
     const nghttp2_frame *frame, void *user_data)
 {
-  struct mrb_http2_conn_t *conn;
-  conn = (struct mrb_http2_conn_t*)user_data;
+  struct mrb_http2_conn_t *conn = (struct mrb_http2_conn_t*)user_data;
 
-  if(frame->hd.type == NGHTTP2_HEADERS &&
-     frame->headers.cat == NGHTTP2_HCAT_REQUEST) {
-    struct mrb_http2_request_t *req;
-    int32_t stream_id = frame->hd.stream_id;
-    req = nghttp2_session_get_stream_user_data(session, stream_id);
-    if(req && req->stream_id == -1) {
-      req->stream_id = stream_id;
-      mrb_hash_set(conn->mrb, conn->response, 
-          mrb_symbol_value(mrb_intern_cstr(conn->mrb, "stream_id")), 
-          mrb_fixnum_value(stream_id));
-    }
-  }
   if (!mrb_nil_p(conn->cb_block_hash)) {
     mrb_value cb_block = mrb_hash_get(conn->mrb, conn->cb_block_hash, 
         mrb_str_new_cstr(conn->mrb, "before_frame_send_callback"));
@@ -615,7 +602,7 @@ static void mrb_http2_ctl_poll(mrb_state *mrb, struct pollfd *pollfd,
 static void mrb_http2_submit_request(mrb_state *mrb, 
     struct mrb_http2_conn_t *conn, struct mrb_http2_request_t *req)
 {
-  int rv;
+  int32_t stream_id;
   const nghttp2_nv nva[] = {
     MAKE_NV(":method", "GET"),
     MAKE_NV_CS(":path", req->path),
@@ -625,12 +612,17 @@ static void mrb_http2_submit_request(mrb_state *mrb,
     MAKE_NV("accept-encoding", GZIP),
     MAKE_NV("user-agent", MRUBY_HTTP2_NAME"/"MRUBY_HTTP2_VERSION)
   };
-  rv = nghttp2_submit_request(conn->session, NULL, nva, 
+  stream_id = nghttp2_submit_request(conn->session, NULL, nva, 
       sizeof(nva)/sizeof(nva[0]), NULL, req);
-  if(rv != 0) {
-    mrb_raisef(mrb, E_RUNTIME_ERROR, "http2_submit_request: %S", 
-        mrb_fixnum_value(rv));
+  if(stream_id < 0) {
+    mrb_raisef(mrb, E_RUNTIME_ERROR, "http2_submit_request: stream_id=(%S)", 
+        mrb_fixnum_value(stream_id));
   }
+
+  req->stream_id = stream_id;                                                
+  mrb_hash_set(conn->mrb, conn->response,                                    
+      mrb_symbol_value(mrb_intern_cstr(conn->mrb, "stream_id")),             
+      mrb_fixnum_value(stream_id));                                          
 }
 
 static void mrb_http2_exec_io(mrb_state *mrb, struct mrb_http2_conn_t *conn)
