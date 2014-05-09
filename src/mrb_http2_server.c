@@ -103,10 +103,15 @@ static void mrb_http2_request_rec_free(mrb_state *mrb,
     mrb_free(mrb, r->filename);
     r->filename = NULL;
   }
+  if (r->upstream != NULL) {
+    mrb_free(mrb, r->upstream);
+    r->upstream = NULL;
+  }
   if (r->uri != NULL) {
     mrb_free(mrb, r->uri);
     r->uri = NULL;
   }
+
   // for conn_rec_free when disconnected
   if (r->conn != NULL) {
     r->conn = NULL;
@@ -1088,6 +1093,7 @@ static mrb_http2_request_rec *mrb_http2_request_rec_init(mrb_state *mrb)
   r->prev_last_modified = 0;
   r->reqhdr = NULL;
   r->reqhdrlen = 0;
+  r->upstream = NULL;
 
   return r;
 }
@@ -1355,6 +1361,72 @@ static mrb_value mrb_http2_server_user_agent(mrb_state *mrb, mrb_value self)
   return mrb_str_new(mrb, (char *)r->reqhdr[i].value, r->reqhdr[i].valuelen);
 }
 
+static void mrb_http2_upstream_init(mrb_state *mrb, mrb_value self)
+{
+  mrb_http2_data_t *data = DATA_PTR(self);
+  mrb_http2_request_rec *r = data->r;
+
+  r->upstream = (mrb_http2_upstream *)mrb_malloc(mrb, 
+      sizeof(mrb_http2_upstream));
+  memset(r->upstream, 0, sizeof(mrb_http2_upstream));
+
+  r->upstream->uri = r->uri;
+  r->upstream->server = NULL;
+}
+
+static mrb_value mrb_http2_server_upstream(mrb_state *mrb, mrb_value self)
+{
+  mrb_http2_data_t *data = DATA_PTR(self);
+  mrb_http2_request_rec *r = data->r;
+
+  if (!r->upstream) {
+    return mrb_nil_value();
+  }
+  return mrb_str_new_cstr(mrb, r->upstream->server);
+}
+
+static mrb_value mrb_http2_server_set_upstream(mrb_state *mrb, mrb_value self)
+{
+  mrb_http2_data_t *data = DATA_PTR(self);
+  mrb_http2_request_rec *r = data->r;
+  char *server;
+
+  mrb_get_args(mrb, "z", &server);
+  if (!r->upstream) {
+    mrb_http2_upstream_init(mrb, self);
+  }
+  r->upstream->server = server;
+
+  return self;
+}
+
+static mrb_value mrb_http2_server_upstream_uri(mrb_state *mrb, mrb_value self)
+{
+  mrb_http2_data_t *data = DATA_PTR(self);
+  mrb_http2_request_rec *r = data->r;
+
+  if (!r->upstream) {
+    return mrb_nil_value();
+  }
+  return mrb_str_new_cstr(mrb, r->upstream->uri);
+}
+
+static mrb_value mrb_http2_server_set_upstream_uri(mrb_state *mrb, 
+    mrb_value self)
+{
+  mrb_http2_data_t *data = DATA_PTR(self);
+  mrb_http2_request_rec *r = data->r;
+  char *uri;
+
+  mrb_get_args(mrb, "z", &uri);
+  if (!r->upstream) {
+    mrb_http2_upstream_init(mrb, self);
+  }
+  r->upstream->uri = uri;
+
+  return self;
+}
+
 void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
 {
   struct RClass *server;
@@ -1376,5 +1448,13 @@ void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
   mrb_define_method(mrb, server, "document_root", mrb_http2_server_document_root, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "client_ip", mrb_http2_server_client_ip, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "user_agent", mrb_http2_server_user_agent, MRB_ARGS_NONE());
+
+  // upstream methods
+  mrb_define_method(mrb, server, "upstream", mrb_http2_server_upstream, MRB_ARGS_NONE());
+  mrb_define_method(mrb, server, "upstream=", mrb_http2_server_set_upstream, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, server, "upstream_uri", mrb_http2_server_upstream_uri, MRB_ARGS_NONE());
+  mrb_define_method(mrb, server, "upstream_url", mrb_http2_server_upstream_uri, MRB_ARGS_NONE());
+  mrb_define_method(mrb, server, "upstream_uri=", mrb_http2_server_set_upstream_uri, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, server, "upstream_url=", mrb_http2_server_set_upstream_uri, MRB_ARGS_REQ(1));
   DONE;
 }

@@ -16,11 +16,11 @@ typedef struct {
   // upstrema type
   upstream_type type;
 
-  // upstream server
-  char *upstream;
+  // upstream server like "http://127.0.0.1:8080/"
+  char *server;
 
-  // upstream url
-  char *url;
+  // upstream uri like "/css/base.css"
+  char *uri;
 
 } mrb_http2_upstream;
 

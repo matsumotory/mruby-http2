@@ -211,6 +211,12 @@ s = HTTP2::Server.new({
 #   end
 #   p s.request.filename
 #
+#   # upstream settings, but not implement proxy func
+#   # s.upstream = "http://127.0.0.1:8001"
+#   # s.upstream_uri = "/data/hoge.css"
+#   # p s.upstream
+#   # p s.upstream_uri
+#
 # }
 
 # s.set_logging_cb {
