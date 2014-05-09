@@ -113,6 +113,8 @@ typedef struct {
   // the number of request header
   size_t reqhdrlen;
 
+  // upstream information when using proxy
+  mrb_http2_upstream *upstream;
   
 
 } mrb_http2_request_rec;
