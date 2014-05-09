@@ -10,6 +10,7 @@
 #include <sys/types.h> 
 #include <sys/stat.h> 
 #include <unistd.h>
+#include "mrb_http2_upstream.h"
 
 #define HTTP_CONTINUE                        100
 #define HTTP_SWITCHING_PROTOCOLS             101
