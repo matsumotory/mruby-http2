@@ -3,7 +3,7 @@ MRuby::Gem::Specification.new('mruby-http2') do |spec|
   spec.authors = 'MATSUMOTO Ryosuke'
   spec.version = '0.0.1'
   spec.summary = 'HTTP/2 Client and Server Module'
-  spec.linker.libraries << ['ssl', 'crypto', 'z', 'event', 'event_openssl']
+  spec.linker.libraries << ['ssl', 'crypto', 'z', 'event', 'event_openssl', 'curl']
 
   require 'open3'
 

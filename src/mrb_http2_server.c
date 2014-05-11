@@ -12,6 +12,9 @@
 #include <event2/bufferevent_ssl.h>
 #include <event2/listener.h>
 
+// support upstream
+#include <curl/curl.h>
+
 #include "mruby/string.h"
 
 typedef struct {
@@ -103,13 +106,17 @@ static void mrb_http2_request_rec_free(mrb_state *mrb,
     mrb_free(mrb, r->filename);
     r->filename = NULL;
   }
-  if (r->upstream != NULL) {
-    mrb_free(mrb, r->upstream);
-    r->upstream = NULL;
-  }
   if (r->uri != NULL) {
     mrb_free(mrb, r->uri);
     r->uri = NULL;
+  }
+  if (r->upstream != NULL) {
+    if (r->upstream->res->data != NULL) {
+      mrb_free(mrb, r->upstream->res->data);
+    }
+    mrb_free(mrb, r->upstream->res);
+    mrb_free(mrb, r->upstream);
+    r->upstream = NULL;
   }
 
   // for conn_rec_free when disconnected
@@ -440,6 +447,104 @@ static int error_reply(app_context *app_ctx, nghttp2_session *session,
   return 0;
 }
 
+static size_t write_upstream_data(void *ptr, size_t size, size_t nmemb, 
+    void *data)
+{
+  size_t len = size * nmemb;
+  app_context *app_ctx = (app_context *)data;
+  mrb_http2_request_rec *r = app_ctx->r;
+  mrb_state *mrb = app_ctx->server->mrb;
+  //mrb_http2_config_t *config = app_ctx->server->config;
+  
+  r->upstream->res->data = (char *)mrb_realloc(mrb, r->upstream->res->data, 
+      r->upstream->res->len + len + 1);
+
+  if (r->upstream->res->data) {
+    memcpy(&(r->upstream->res->data[r->upstream->res->len]), ptr, len);
+    r->upstream->res->len += len;
+    r->upstream->res->data[r->upstream->res->len] = 0;
+  }
+
+  return len;
+}
+
+static int read_upstream_response(app_context *app_ctx, char *server, char *uri)
+{
+  CURLcode code;
+  CURL* curl = curl_easy_init();
+  char error[CURL_ERROR_SIZE] = {0};
+  mrb_state *mrb = app_ctx->server->mrb;
+  char *proxy_url = mrb_http2_strcat(mrb, server, uri);
+
+  if (!curl) {
+    return 1;
+  }
+
+  // TODO: tranparent request/response headers from/to a client and support 
+  // HTTP/2. For now, create new HTTP/1 connection to upstream server
+  curl_easy_setopt(curl, CURLOPT_URL, proxy_url);
+  curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
+  curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0);
+  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_upstream_data);
+  curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)app_ctx);
+  curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, error);
+
+  code = curl_easy_perform(curl);
+  if (code) {
+    fprintf(stderr, "Fatal error of libcurl: %s", error);
+    mrb_free(mrb, proxy_url);
+    return -1;
+  }
+
+  curl_easy_cleanup(curl);
+  mrb_free(mrb, proxy_url);
+  
+  return 0;
+}
+
+static int upstream_reply(app_context *app_ctx, nghttp2_session *session, 
+    http2_stream_data *stream_data)
+{
+  mrb_http2_request_rec *r = app_ctx->r;
+  int rv;
+  int pipefd[2];
+  nghttp2_nv hdrs[] = {
+    MAKE_NV_CS(":status", r->status_line),
+    MAKE_NV_CS("date", r->date)
+  };
+
+  TRACER;
+  rv = pipe(pipefd);
+  if(rv != 0) {
+    rv = nghttp2_submit_rst_stream(session, NGHTTP2_FLAG_NONE, 
+        stream_data->stream_id, NGHTTP2_INTERNAL_ERROR);
+    if(rv != 0) {
+      fprintf(stderr, "Fatal error: %s", nghttp2_strerror(rv));
+      return -1;
+    }
+    return 0;
+  }
+
+  if (r->status == HTTP_SERVICE_UNAVAILABLE) {
+    write(pipefd[1], ERROR_503_HTML, sizeof(ERROR_503_HTML) - 1);
+  } else if (r->status == HTTP_NOT_FOUND) {
+    write(pipefd[1], ERROR_404_HTML, sizeof(ERROR_404_HTML) - 1);
+  } else {
+    write(pipefd[1], r->upstream->res->data, r->upstream->res->len);
+  }
+
+  close(pipefd[1]);
+  stream_data->fd = pipefd[0];
+  TRACER;
+  if(send_response(app_ctx, session, stream_data->stream_id, hdrs, 
+        ARRLEN(hdrs), pipefd[0]) != 0) {
+    close(pipefd[0]);
+    return -1;
+  }
+  TRACER;
+  return 0;
+}
+
 static int server_on_header_callback(nghttp2_session *session, 
     const nghttp2_frame *frame, const uint8_t *name, size_t namelen, 
     const uint8_t *value, size_t valuelen, uint8_t flags, void *user_data)
@@ -624,6 +729,23 @@ static int server_on_request_recv(nghttp2_session *session,
   if (config->debug) {
     fprintf(stderr, "%s %s is mapped to %s\n", session_data->client_addr, 
         r->uri, r->filename);
+  }
+
+  // check proxy config
+  if (r->upstream && r->upstream->server) {
+    if (config->debug) {
+      fprintf(stderr, "found upstream: server:%s uri:%s\n", r->upstream->server, 
+          r->upstream->uri);
+    }
+    // TODO: Set response headers transparently to client. 
+    // For now, set 200 code.
+    set_status_record(r, HTTP_OK);
+    read_upstream_response(session_data->app_ctx, r->upstream->server, 
+        r->upstream->uri);
+    if(upstream_reply(session_data->app_ctx, session, stream_data) != 0) {
+      return NGHTTP2_ERR_CALLBACK_FAILURE;
+    }
+    return 0;
   }
 
   TRACER;
@@ -1370,8 +1492,14 @@ static void mrb_http2_upstream_init(mrb_state *mrb, mrb_value self)
       sizeof(mrb_http2_upstream));
   memset(r->upstream, 0, sizeof(mrb_http2_upstream));
 
+  r->upstream->res = (upstream_response *)mrb_malloc(mrb, 
+      sizeof(upstream_response));
+  memset(r->upstream->res, 0, sizeof(upstream_response));
+
   r->upstream->uri = r->uri;
   r->upstream->server = NULL;
+  r->upstream->res->data = NULL;
+  r->upstream->res->len = 0;
 }
 
 static mrb_value mrb_http2_server_upstream(mrb_state *mrb, mrb_value self)

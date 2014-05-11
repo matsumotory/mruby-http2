@@ -12,6 +12,11 @@ typedef enum {
   MRB_HTTP_PROXY_NONE
 } upstream_type;
 
+typedef struct {                                                                     
+  char *data;                                                                        
+  size_t len;                                                                        
+} upstream_response;                                                                 
+
 typedef struct {
   // upstrema type
   upstream_type type;
@@ -21,6 +26,9 @@ typedef struct {
 
   // upstream uri like "/css/base.css"
   char *uri;
+
+  // response data from upstream server
+  upstream_response *res;
 
 } mrb_http2_upstream;
 
