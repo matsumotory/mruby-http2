@@ -476,32 +476,44 @@ static void parse_upstream_response(app_context *app_ctx)
   struct RClass *http_class, *http_parser_class;
   mrb_value args[1], parser;
   mrb_http2_upstream *upstream = app_ctx->r->upstream;
+  mrb_http2_config_t *config = app_ctx->server->config;
   
   // paser response from upstream using mruby-http
   http_class = mrb_module_get(mrb, "HTTP");
   http_parser_class = mrb_class_get_under(mrb, http_class, "Parser");
   args[0] = mrb_str_new(mrb, upstream->res->data, upstream->res->len);
-  mrb_p(mrb, args[0]);
+  if (config->debug) {
+    mrb_p(mrb, args[0]);
+  }
   parser = mrb_obj_new(mrb, http_parser_class, 0, NULL);
   parser = mrb_funcall_argv(mrb, parser, mrb_intern_lit(mrb, "parse_response"), 
       1, args);
-  mrb_p(mrb, parser);
 
   // get reponse headers object
   upstream->res->headers = mrb_iv_get(mrb, parser, 
       mrb_intern_lit(mrb, "headers"));
-  mrb_p(mrb, upstream->res->headers);
 
   // get reponse body object
   upstream->res->body = mrb_iv_get(mrb, parser, mrb_intern_lit(mrb, "body"));
-  mrb_p(mrb, upstream->res->body);
-
+  
   // set header fileds in advance that are used a lot 
   upstream->res->status_code = mrb_fixnum(
       mrb_iv_get(mrb, parser, mrb_intern_lit(mrb, "status_code")));
 
   upstream->res->content_length = mrb_fixnum(mrb_hash_get(mrb, 
         upstream->res->headers, mrb_str_new_lit(mrb, "Content-Length")));
+  
+  if (config->debug) {
+    mrb_p(mrb, parser);
+    mrb_p(mrb, upstream->res->headers);
+    mrb_p(mrb, upstream->res->body);
+    fprintf(stderr, "%s:%d: status_code=%d\n", __func__, __LINE__, 
+        upstream->res->status_code);
+    fprintf(stderr, "%s:%d: content_length=%d\n", __func__, __LINE__, 
+        upstream->res->content_length);
+
+  }
+
 }
 
 static int read_upstream_response(app_context *app_ctx, char *server, char *uri)
@@ -519,6 +531,7 @@ static int read_upstream_response(app_context *app_ctx, char *server, char *uri)
   // TODO: tranparent request/response headers from/to a client and support 
   // HTTP/2. For now, create new HTTP/1 connection to upstream server
   curl_easy_setopt(curl, CURLOPT_URL, proxy_url);
+  curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 0);
   curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
   curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0);
   curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_upstream_data);
