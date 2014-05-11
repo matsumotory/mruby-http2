@@ -70,6 +70,10 @@
     (uint16_t)(sizeof(NAME) - 1), (uint16_t)(strlen(VALUE)),           \
     NGHTTP2_NV_FLAG_NONE}
 
+#define MRB_HTTP2_CREATE_NV_CS(MRB, NV, NAME, VALUE)                          \
+  mrb_http2_create_nv(MRB, NV, (uint8_t*)NAME, (uint16_t)(sizeof(NAME) - 1), \
+    (uint8_t*)VALUE,  (uint16_t)(strlen(VALUE)))
+
 int mrb_http2_get_nv_id(nghttp2_nv *nva, size_t nvlen, const char *key);
 void mrb_http2_create_nv(mrb_state *mrb, nghttp2_nv *nv, const uint8_t *name,
     size_t namelen, const uint8_t *value, size_t valuelen);

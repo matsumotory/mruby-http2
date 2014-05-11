@@ -13,8 +13,25 @@ typedef enum {
 } upstream_type;
 
 typedef struct {                                                                     
+
+  // response data
   char *data;                                                                        
+
+  // response length
   size_t len;                                                                        
+
+  // response header object
+  mrb_value headers;
+
+  // response body object
+  mrb_value body;
+
+  // response status code
+  int status_code;
+
+  // response status code
+  uint64_t content_length;
+
 } upstream_response;                                                                 
 
 typedef struct {

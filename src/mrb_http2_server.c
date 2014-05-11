@@ -460,12 +460,47 @@ static size_t write_upstream_data(void *ptr, size_t size, size_t nmemb,
       r->upstream->res->len + len + 1);
 
   if (r->upstream->res->data) {
-    memcpy(&(r->upstream->res->data[r->upstream->res->len]), ptr, len);
+    memcpy(r->upstream->res->data + r->upstream->res->len, ptr, len);
     r->upstream->res->len += len;
-    r->upstream->res->data[r->upstream->res->len] = 0;
+    //r->upstream->res->data[r->upstream->res->len] = 0;
   }
 
   return len;
+}
+
+static void parse_upstream_response(app_context *app_ctx)
+{
+  mrb_http2_request_rec *r = app_ctx->r;
+  mrb_state *mrb = app_ctx->server->mrb;
+  struct RClass *http_class, *http_parser_class;
+  mrb_value args[1], parser;
+  mrb_http2_upstream *upstream = app_ctx->r->upstream;
+  
+  // paser response from upstream using mruby-http
+  http_class = mrb_module_get(mrb, "HTTP");
+  http_parser_class = mrb_class_get_under(mrb, http_class, "Parser");
+  args[0] = mrb_str_new(mrb, upstream->res->data, upstream->res->len);
+  mrb_p(mrb, args[0]);
+  parser = mrb_obj_new(mrb, http_parser_class, 0, NULL);
+  parser = mrb_funcall_argv(mrb, parser, mrb_intern_lit(mrb, "parse_response"), 
+      1, args);
+  mrb_p(mrb, parser);
+
+  // get reponse headers object
+  upstream->res->headers = mrb_iv_get(mrb, parser, 
+      mrb_intern_lit(mrb, "headers"));
+  mrb_p(mrb, upstream->res->headers);
+
+  // get reponse body object
+  upstream->res->body = mrb_iv_get(mrb, parser, mrb_intern_lit(mrb, "body"));
+  mrb_p(mrb, upstream->res->body);
+
+  // set header fileds in advance that are used a lot 
+  upstream->res->status_code = mrb_fixnum(
+      mrb_iv_get(mrb, parser, mrb_intern_lit(mrb, "status_code")));
+
+  upstream->res->content_length = mrb_fixnum(mrb_hash_get(mrb, 
+        upstream->res->headers, mrb_str_new_lit(mrb, "Content-Length")));
 }
 
 static int read_upstream_response(app_context *app_ctx, char *server, char *uri)
@@ -487,6 +522,7 @@ static int read_upstream_response(app_context *app_ctx, char *server, char *uri)
   curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0);
   curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_upstream_data);
   curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)app_ctx);
+  curl_easy_setopt(curl, CURLOPT_HEADERDATA, (void *)app_ctx);
   curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, error);
 
   code = curl_easy_perform(curl);
@@ -498,7 +534,8 @@ static int read_upstream_response(app_context *app_ctx, char *server, char *uri)
 
   curl_easy_cleanup(curl);
   mrb_free(mrb, proxy_url);
-  
+  parse_upstream_response(app_ctx);
+
   return 0;
 }
 
@@ -506,12 +543,18 @@ static int upstream_reply(app_context *app_ctx, nghttp2_session *session,
     http2_stream_data *stream_data)
 {
   mrb_http2_request_rec *r = app_ctx->r;
+  mrb_state *mrb = app_ctx->server->mrb;
   int rv;
   int pipefd[2];
-  nghttp2_nv hdrs[] = {
-    MAKE_NV_CS(":status", r->status_line),
-    MAKE_NV_CS("date", r->date)
-  };
+  nghttp2_nv nv[5];
+  nghttp2_nv nva[MRB_HTTP2_HEADER_MAX];
+  size_t nvlen = 0;
+
+  // create headers for HTTP/2
+  MRB_HTTP2_CREATE_NV_CS(mrb, &nv[0], ":status", r->status_line);
+  MRB_HTTP2_CREATE_NV_CS(mrb, &nv[1], ":date", r->date);
+  nvlen = mrb_http2_add_nv(nva, nvlen, &nv[0]);
+  nvlen = mrb_http2_add_nv(nva, nvlen, &nv[1]);
 
   TRACER;
   rv = pipe(pipefd);
@@ -530,14 +573,15 @@ static int upstream_reply(app_context *app_ctx, nghttp2_session *session,
   } else if (r->status == HTTP_NOT_FOUND) {
     write(pipefd[1], ERROR_404_HTML, sizeof(ERROR_404_HTML) - 1);
   } else {
-    write(pipefd[1], r->upstream->res->data, r->upstream->res->len);
+    write(pipefd[1], RSTRING_PTR(r->upstream->res->body), 
+        RSTRING_LEN(r->upstream->res->body));
   }
 
   close(pipefd[1]);
   stream_data->fd = pipefd[0];
   TRACER;
-  if(send_response(app_ctx, session, stream_data->stream_id, hdrs, 
-        ARRLEN(hdrs), pipefd[0]) != 0) {
+  if(send_response(app_ctx, session, stream_data->stream_id, nva, nvlen, 
+        pipefd[0]) != 0) {
     close(pipefd[0]);
     return -1;
   }
@@ -739,9 +783,10 @@ static int server_on_request_recv(nghttp2_session *session,
     }
     // TODO: Set response headers transparently to client. 
     // For now, set 200 code.
-    set_status_record(r, HTTP_OK);
     read_upstream_response(session_data->app_ctx, r->upstream->server, 
         r->upstream->uri);
+    set_status_record(r, r->upstream->res->status_code);
+    //set_status_record(r, 200);
     if(upstream_reply(session_data->app_ctx, session, stream_data) != 0) {
       return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
