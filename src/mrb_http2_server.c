@@ -304,7 +304,8 @@ static uint8_t hex_to_uint(uint8_t c)
    and returns the decoded byte string in allocated buffer. The return
    value is NULL terminated. The caller must free the returned
    string. */
-static char* percent_decode(mrb_state *mrb, const uint8_t *value, size_t valuelen)
+static char* percent_decode(mrb_state *mrb, const uint8_t *value, 
+    size_t valuelen)
 {
   char *res;
 
@@ -644,7 +645,8 @@ static int server_on_begin_headers_callback(nghttp2_session *session,
      frame->headers.cat != NGHTTP2_HCAT_REQUEST) {
     return 0;
   }
-  stream_data = create_http2_stream_data(mrb, session_data, frame->hd.stream_id);
+  stream_data = create_http2_stream_data(mrb, session_data, 
+      frame->hd.stream_id);
   nghttp2_session_set_stream_user_data(session, frame->hd.stream_id, 
       stream_data);
 
@@ -745,8 +747,8 @@ static int server_on_request_recv(nghttp2_session *session,
   TRACER;
   if(!check_path(stream_data->request_path)) {
     if (config->debug) {
-      fprintf(stderr, "%s invalid request_path: %s\n", session_data->client_addr, 
-          stream_data->request_path);
+      fprintf(stderr, "%s invalid request_path: %s\n", 
+          session_data->client_addr, stream_data->request_path);
     }
     set_status_record(r, HTTP_SERVICE_UNAVAILABLE);
     if(error_reply(session_data->app_ctx, session, stream_data) != 0) {
@@ -756,12 +758,14 @@ static int server_on_request_recv(nghttp2_session *session,
   }
   
   // r-> will free at request_rec_free
-  r->filename = mrb_http2_strcat(mrb, config->document_root, stream_data->request_path);
+  r->filename = mrb_http2_strcat(mrb, config->document_root, 
+      stream_data->request_path);
   uri_len = strlen(stream_data->request_path);
   r->uri = mrb_http2_strcopy(mrb, stream_data->request_path, uri_len);
 
   if (config->debug) {
-    fprintf(stderr, "%s %s is mapped to %s document_root=%s before map_to_strage_cb\n", 
+    fprintf(stderr, 
+        "%s %s is mapped to %s document_root=%s before map_to_strage_cb\n", 
         session_data->client_addr, r->uri, r->filename, config->document_root);
   }
   //
@@ -924,14 +928,16 @@ static SSL* mrb_http2_create_ssl(mrb_state *mrb, SSL_CTX *ssl_ctx)
 
   TRACER;
   if(!ssl) {
-    mrb_raisef(mrb, E_RUNTIME_ERROR, "Could not create SSL/TLS session object: %S", 
+    mrb_raisef(mrb, E_RUNTIME_ERROR, 
+        "Could not create SSL/TLS session object: %S", 
         mrb_str_new_cstr(mrb, ERR_error_string(ERR_get_error(), NULL)));
   }
   TRACER;
   return ssl;
 }
 
-static mrb_http2_conn_rec *mrb_http2_conn_rec_init(mrb_state *mrb, mrb_http2_config_t *config)
+static mrb_http2_conn_rec *mrb_http2_conn_rec_init(mrb_state *mrb, 
+    mrb_http2_config_t *config)
 {
   mrb_http2_conn_rec *conn;
 
@@ -960,7 +966,8 @@ static http2_session_data* create_http2_session_data(mrb_state *mrb,
   TRACER;
   ssl = mrb_http2_create_ssl(mrb, app_ctx->ssl_ctx);
 
-  session_data = (http2_session_data *)mrb_malloc(mrb, sizeof(http2_session_data));
+  session_data = (http2_session_data *)mrb_malloc(mrb, 
+      sizeof(http2_session_data));
   memset(session_data, 0, sizeof(http2_session_data));
 
   session_data->app_ctx = app_ctx;
@@ -976,14 +983,16 @@ static http2_session_data* create_http2_session_data(mrb_state *mrb,
         BEV_OPT_DEFER_CALLBACKS | BEV_OPT_CLOSE_ON_FREE);
   } else {
     TRACER;
-    session_data->bev = bufferevent_openssl_socket_new (app_ctx->evbase, fd, ssl, 
-        BUFFEREVENT_SSL_ACCEPTING, BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS);
+    session_data->bev = bufferevent_openssl_socket_new(app_ctx->evbase, fd, ssl, 
+        BUFFEREVENT_SSL_ACCEPTING, 
+        BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS);
   }
 
   session_data->handshake_leftlen = NGHTTP2_CLIENT_CONNECTION_PREFACE_LEN;
   rv = getnameinfo(addr, addrlen, host, sizeof(host), NULL, 0, NI_NUMERICHOST);
   if(rv != 0) {
-    session_data->client_addr = mrb_http2_strcopy(mrb, "(unknown)", strlen("(unknown)"));
+    session_data->client_addr = mrb_http2_strcopy(mrb, "(unknown)", 
+        strlen("(unknown)"));
   } else {
     session_data->client_addr = mrb_http2_strcopy(mrb, host, strlen(host));
   }
@@ -1061,7 +1070,8 @@ static void mrb_http2_server_eventcb(struct bufferevent *bev, short events,
 
 /* readcb for bufferevent to check first 24 bytes client connection
    header. */
-static void mrb_http2_server_handshake_readcb(struct bufferevent *bev, void *ptr)
+static void mrb_http2_server_handshake_readcb(struct bufferevent *bev, 
+    void *ptr)
 {
   http2_session_data *session_data = (http2_session_data *)ptr;
   mrb_http2_config_t *config = session_data->app_ctx->server->config;
@@ -1180,8 +1190,8 @@ static void init_app_context(app_context *actx, SSL_CTX *ssl_ctx,
   actx->evbase = evbase;
 }
 
-static void mrb_start_listen(struct event_base *evbase, mrb_http2_config_t *config,
-    app_context *app_ctx)
+static void mrb_start_listen(struct event_base *evbase, 
+    mrb_http2_config_t *config, app_context *app_ctx)
 {
   int rv;
   struct addrinfo hints;
@@ -1225,7 +1235,8 @@ static mrb_value mrb_http2_server_run(mrb_state *mrb, mrb_value self)
   struct event_base *evbase;
 
   if (server->config->tls) {
-    ssl_ctx = mrb_http2_create_ssl_ctx(mrb, server->config->key, server->config->cert);
+    ssl_ctx = mrb_http2_create_ssl_ctx(mrb, server->config->key, 
+        server->config->cert);
   }
 
   evbase = event_base_new();
@@ -1284,7 +1295,8 @@ static char *must_get_config_str_to_cstr(mrb_state *mrb, mrb_value args,
   mrb_value val;
   if (mrb_nil_p(val = mrb_hash_get(mrb, args,
                   mrb_symbol_value(mrb_intern_cstr(mrb, name))))) {
-    mrb_raisef(mrb, E_ARGUMENT_ERROR, "%S not found", mrb_str_new_cstr(mrb, name));
+    mrb_raisef(mrb, E_ARGUMENT_ERROR, "%S not found", 
+        mrb_str_new_cstr(mrb, name));
   }
 
   //return mrb_str_to_cstr(mrb, val);
@@ -1337,7 +1349,8 @@ static mruby_cb_list *mruby_cb_list_init(mrb_state *mrb)
 #define mrb_http2_config_get_obj(mrb, args, lit) mrb_hash_get(mrb, args, \
     mrb_symbol_value(mrb_intern_lit(mrb, lit)))
 
-static mrb_http2_config_t *mrb_http2_s_config_init(mrb_state *mrb, mrb_value args)
+static mrb_http2_config_t *mrb_http2_s_config_init(mrb_state *mrb, 
+    mrb_value args)
 {
   mrb_value port, flag;
   char *service;
@@ -1381,7 +1394,8 @@ static mrb_http2_config_t *mrb_http2_s_config_init(mrb_state *mrb, mrb_value arg
 
   // CONNECTION_RECORD options: defulat ENABLED
   config->connection_record = MRB_HTTP2_CONFIG_ENABLED;
-  if (!mrb_nil_p(flag = mrb_http2_config_get_obj(mrb, args, "connection_record")) 
+  if (!mrb_nil_p(flag = mrb_http2_config_get_obj(mrb, args, 
+          "connection_record")) 
       && mrb_obj_equal(mrb, flag, mrb_false_value())) {
     config->connection_record = MRB_HTTP2_CONFIG_DISABLED;
   }
@@ -1396,7 +1410,8 @@ static mrb_http2_config_t *mrb_http2_s_config_init(mrb_state *mrb, mrb_value arg
 
   config->server_host = may_get_config_str_to_cstr(mrb, args, "server_host");
 
-  config->document_root = must_get_config_str_to_cstr(mrb, args, "document_root");
+  config->document_root = must_get_config_str_to_cstr(mrb, args, 
+      "document_root");
   config->server_name = must_get_config_str_to_cstr(mrb, args, "server_name");
   config->cb_list = mruby_cb_list_init(mrb);
   
