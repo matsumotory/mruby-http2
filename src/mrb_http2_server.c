@@ -587,8 +587,10 @@ static int upstream_reply(app_context *app_ctx, nghttp2_session *session,
   } else if (r->status == HTTP_NOT_FOUND) {
     write(pipefd[1], ERROR_404_HTML, sizeof(ERROR_404_HTML) - 1);
   } else {
-    write(pipefd[1], RSTRING_PTR(r->upstream->res->body), 
-        RSTRING_LEN(r->upstream->res->body));
+    if (!mrb_nil_p(r->upstream->res->body)) {
+      write(pipefd[1], RSTRING_PTR(r->upstream->res->body), 
+          RSTRING_LEN(r->upstream->res->body));
+    }
   }
 
   close(pipefd[1]);
