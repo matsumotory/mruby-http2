@@ -15,6 +15,7 @@
 // support upstream
 #include <curl/curl.h>
 
+#include "mruby/value.h"
 #include "mruby/string.h"
 
 typedef struct {
@@ -499,8 +500,8 @@ static void parse_upstream_response(app_context *app_ctx)
   // set header fileds in advance that are used a lot 
   upstream->res->status_code = mrb_fixnum(mrb_funcall(mrb, parser, "code", 0, 
         NULL));
-  upstream->res->content_length = (uint64_t)mrb_fixnum(mrb_funcall(mrb, parser, 
-        "content_length", 0, NULL));
+  upstream->res->content_length = (uint64_t)mrb_str_to_dbl(mrb, mrb_funcall(mrb, parser, 
+        "content_length", 0, NULL), FALSE);
   
   if (config->debug) {
     mrb_p(mrb, parser);
