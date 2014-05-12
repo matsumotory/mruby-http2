@@ -490,7 +490,8 @@ static void parse_upstream_response(app_context *app_ctx)
   
   // paser response from upstream using mruby-simplehttp
   http_class = mrb_class_get(mrb, "SimpleHttp");
-  http_parser_class = mrb_class_get_under(mrb, http_class, "SimpleHttpResponse");
+  http_parser_class = mrb_class_get_under(mrb, http_class, 
+      "SimpleHttpResponse");
   args[0] = mrb_str_new(mrb, upstream->res->data, upstream->res->len);
   if (config->debug) {
     mrb_p(mrb, args[0]);
@@ -506,8 +507,8 @@ static void parse_upstream_response(app_context *app_ctx)
   // set header fileds in advance that are used a lot 
   upstream->res->status_code = mrb_fixnum(mrb_funcall(mrb, parser, "code", 0, 
         NULL));
-  upstream->res->content_length = (uint64_t)mrb_str_to_dbl(mrb, mrb_funcall(mrb, parser, 
-        "content_length", 0, NULL), FALSE);
+  upstream->res->content_length = (uint64_t)mrb_str_to_dbl(mrb, 
+      mrb_funcall(mrb, parser, "content_length", 0, NULL), FALSE);
   
   if (config->debug) {
     mrb_p(mrb, parser);
@@ -517,7 +518,6 @@ static void parse_upstream_response(app_context *app_ctx)
         upstream->res->status_code);
     fprintf(stderr, "%s:%d: content_length=%"PRIu64"\n", __func__, __LINE__, 
         upstream->res->content_length);
-
   }
 
 }
