@@ -566,15 +566,24 @@ static int upstream_reply(app_context *app_ctx, nghttp2_session *session,
   mrb_state *mrb = app_ctx->server->mrb;
   int rv;
   int pipefd[2];
-  nghttp2_nv nv[5];
   nghttp2_nv nva[MRB_HTTP2_HEADER_MAX];
   size_t nvlen = 0;
 
   // create headers for HTTP/2
-  MRB_HTTP2_CREATE_NV_CS(mrb, &nv[0], ":status", r->status_line);
-  MRB_HTTP2_CREATE_NV_CS(mrb, &nv[1], "date", r->date);
-  nvlen = mrb_http2_add_nv(nva, nvlen, &nv[0]);
-  nvlen = mrb_http2_add_nv(nva, nvlen, &nv[1]);
+  MRB_HTTP2_CREATE_NV_CS(mrb, &nva[nvlen], ":status", r->status_line);
+  nvlen += 1;
+
+  if (!mrb_nil_p(r->upstream->res->headers)) {
+    int i;
+    mrb_value keys = mrb_hash_keys(mrb, r->upstream->res->headers);
+    int hash_size = RARRAY_LEN(keys);
+    for (i = 0; i < hash_size; i++) {
+      mrb_value key = mrb_ary_entry(keys, i);
+      mrb_value val = mrb_hash_get(mrb, r->upstream->res->headers, key);
+      MRB_HTTP2_CREATE_NV_OBJ(mrb, &nva[nvlen], key, val);
+      nvlen += 1;
+    }
+  }
 
   TRACER;
   rv = pipe(pipefd);
