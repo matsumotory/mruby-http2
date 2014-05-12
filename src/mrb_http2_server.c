@@ -499,7 +499,7 @@ static void parse_upstream_response(app_context *app_ctx)
   parser = mrb_obj_new(mrb, http_parser_class, 1, args);
 
   // get reponse headers object
-  upstream->res->headers = mrb_funcall(mrb, parser, "header", 0, NULL);
+  upstream->res->headers = mrb_funcall(mrb, parser, "headers", 0, NULL);
 
   // get reponse body object
   upstream->res->body = mrb_funcall(mrb, parser, "body", 0, NULL);
