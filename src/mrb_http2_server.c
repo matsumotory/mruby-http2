@@ -434,9 +434,9 @@ static int error_reply(app_context *app_ctx, nghttp2_session *session,
   }
 
   if (r->status == HTTP_SERVICE_UNAVAILABLE) {
-    write(pipefd[1], ERROR_503_HTML, sizeof(ERROR_503_HTML) - 1);
+    rv = write(pipefd[1], ERROR_503_HTML, sizeof(ERROR_503_HTML) - 1);
   } else {
-    write(pipefd[1], ERROR_404_HTML, sizeof(ERROR_404_HTML) - 1);
+    rv = write(pipefd[1], ERROR_404_HTML, sizeof(ERROR_404_HTML) - 1);
   }
 
   close(pipefd[1]);
@@ -474,7 +474,7 @@ static size_t write_upstream_data(void *ptr, size_t size, size_t nmemb,
 
 static void parse_upstream_response(app_context *app_ctx)
 {
-  mrb_http2_request_rec *r = app_ctx->r;
+  //mrb_http2_request_rec *r = app_ctx->r;
   mrb_state *mrb = app_ctx->server->mrb;
   struct RClass *http_class, *http_parser_class;
   mrb_value args[1], parser;
@@ -508,7 +508,7 @@ static void parse_upstream_response(app_context *app_ctx)
     mrb_p(mrb, upstream->res->headers);
     fprintf(stderr, "%s:%d: status_code=%d\n", __func__, __LINE__, 
         upstream->res->status_code);
-    fprintf(stderr, "%s:%d: content_length=%llu\n", __func__, __LINE__, 
+    fprintf(stderr, "%s:%d: content_length=%"PRIu64"\n", __func__, __LINE__, 
         upstream->res->content_length);
 
   }
@@ -582,14 +582,14 @@ static int upstream_reply(app_context *app_ctx, nghttp2_session *session,
   }
 
   if (r->status == HTTP_SERVICE_UNAVAILABLE) {
-    write(pipefd[1], ERROR_503_HTML, sizeof(ERROR_503_HTML) - 1);
+    rv = write(pipefd[1], ERROR_503_HTML, sizeof(ERROR_503_HTML) - 1);
   } else if (r->status == HTTP_NOT_FOUND) {
-    write(pipefd[1], ERROR_404_HTML, sizeof(ERROR_404_HTML) - 1);
+    rv = write(pipefd[1], ERROR_404_HTML, sizeof(ERROR_404_HTML) - 1);
   } else if (r->status == HTTP_INTERNAL_SERVER_ERROR) {
-    write(pipefd[1], ERROR_500_HTML, sizeof(ERROR_500_HTML) - 1);
+    rv = write(pipefd[1], ERROR_500_HTML, sizeof(ERROR_500_HTML) - 1);
   } else {
     if (!mrb_nil_p(r->upstream->res->body)) {
-      write(pipefd[1], RSTRING_PTR(r->upstream->res->body), 
+      rv = write(pipefd[1], RSTRING_PTR(r->upstream->res->body), 
           RSTRING_LEN(r->upstream->res->body));
     }
   }
