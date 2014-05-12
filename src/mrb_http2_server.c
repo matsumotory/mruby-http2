@@ -481,38 +481,34 @@ static void parse_upstream_response(app_context *app_ctx)
   mrb_http2_upstream *upstream = app_ctx->r->upstream;
   mrb_http2_config_t *config = app_ctx->server->config;
   
-  // paser response from upstream using mruby-http
-  http_class = mrb_module_get(mrb, "HTTP");
-  http_parser_class = mrb_class_get_under(mrb, http_class, "Parser");
+  // paser response from upstream using mruby-simplehttp
+  http_class = mrb_class_get(mrb, "SimpleHttp");
+  http_parser_class = mrb_class_get_under(mrb, http_class, "SimpleHttpResponse");
   args[0] = mrb_str_new(mrb, upstream->res->data, upstream->res->len);
   if (config->debug) {
     mrb_p(mrb, args[0]);
   }
-  parser = mrb_obj_new(mrb, http_parser_class, 0, NULL);
-  parser = mrb_funcall_argv(mrb, parser, mrb_intern_lit(mrb, "parse_response"), 
-      1, args);
+  parser = mrb_obj_new(mrb, http_parser_class, 1, args);
 
   // get reponse headers object
-  upstream->res->headers = mrb_iv_get(mrb, parser, 
-      mrb_intern_lit(mrb, "headers"));
+  upstream->res->headers = mrb_funcall(mrb, parser, "header", 0, NULL);
 
   // get reponse body object
-  upstream->res->body = mrb_iv_get(mrb, parser, mrb_intern_lit(mrb, "body"));
+  upstream->res->body = mrb_funcall(mrb, parser, "body", 0, NULL);
   
   // set header fileds in advance that are used a lot 
-  upstream->res->status_code = mrb_fixnum(
-      mrb_iv_get(mrb, parser, mrb_intern_lit(mrb, "status_code")));
-
-  upstream->res->content_length = mrb_fixnum(mrb_hash_get(mrb, 
-        upstream->res->headers, mrb_str_new_lit(mrb, "Content-Length")));
+  upstream->res->status_code = mrb_fixnum(mrb_funcall(mrb, parser, "code", 0, 
+        NULL));
+  upstream->res->content_length = (uint64_t)mrb_fixnum(mrb_funcall(mrb, parser, 
+        "content_length", 0, NULL));
   
   if (config->debug) {
     mrb_p(mrb, parser);
-    mrb_p(mrb, upstream->res->headers);
     mrb_p(mrb, upstream->res->body);
+    mrb_p(mrb, upstream->res->headers);
     fprintf(stderr, "%s:%d: status_code=%d\n", __func__, __LINE__, 
         upstream->res->status_code);
-    fprintf(stderr, "%s:%d: content_length=%d\n", __func__, __LINE__, 
+    fprintf(stderr, "%s:%d: content_length=%llu\n", __func__, __LINE__, 
         upstream->res->content_length);
 
   }

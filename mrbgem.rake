@@ -4,7 +4,7 @@ MRuby::Gem::Specification.new('mruby-http2') do |spec|
   spec.version = '0.0.1'
   spec.summary = 'HTTP/2 Client and Server Module'
   spec.linker.libraries << ['ssl', 'crypto', 'z', 'event', 'event_openssl', 'curl']
-  spec.add_dependency('mruby-http')
+  spec.add_dependency('mruby-simplehttp')
 
   require 'open3'
 
