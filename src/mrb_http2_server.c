@@ -396,6 +396,12 @@ static int send_response(app_context *app_ctx, nghttp2_session *session,
   return 0;
 }
 
+const char ERROR_100_HTML[] = "<html><head><title>100</title></head>"
+  "<body><h1>100 Continue</h1></body></html>";
+
+const char ERROR_300_HTML[] = "<html><head><title>300</title></head>"
+  "<body><h1>300 Moved Permanently</h1></body></html>";
+
 const char ERROR_404_HTML[] = "<html><head><title>404</title></head>"
   "<body><h1>404 Not Found</h1></body></html>";
 
@@ -582,18 +588,25 @@ static int upstream_reply(app_context *app_ctx, nghttp2_session *session,
     return 0;
   }
 
-  if (r->status == HTTP_SERVICE_UNAVAILABLE) {
-    rv = write(pipefd[1], ERROR_503_HTML, sizeof(ERROR_503_HTML) - 1);
-  } else if (r->status == HTTP_NOT_FOUND) {
-    rv = write(pipefd[1], ERROR_404_HTML, sizeof(ERROR_404_HTML) - 1);
-  } else if (r->status == HTTP_INTERNAL_SERVER_ERROR) {
-    rv = write(pipefd[1], ERROR_500_HTML, sizeof(ERROR_500_HTML) - 1);
-  } else {
+  if (r->status >= 100 && r->status < 200) {
+    rv = write(pipefd[1], ERROR_100_HTML, sizeof(ERROR_100_HTML) - 1);
+  } else if (r->status >= 200 && r->status < 300) {
     if (!mrb_nil_p(r->upstream->res->body)) {
       rv = write(pipefd[1], RSTRING_PTR(r->upstream->res->body), 
           RSTRING_LEN(r->upstream->res->body));
     }
+  } else if (r->status >= 300 && r->status < 400) {
+    rv = write(pipefd[1], ERROR_300_HTML, sizeof(ERROR_300_HTML) - 1);
+  } else if (r->status >= 400 && r->status < 500) {
+    rv = write(pipefd[1], ERROR_404_HTML, sizeof(ERROR_404_HTML) - 1);
+  } else if (r->status == HTTP_INTERNAL_SERVER_ERROR) {
+    rv = write(pipefd[1], ERROR_500_HTML, sizeof(ERROR_500_HTML) - 1);
+  } else if (r->status > HTTP_INTERNAL_SERVER_ERROR) {
+    rv = write(pipefd[1], ERROR_503_HTML, sizeof(ERROR_503_HTML) - 1);
+  } else {
+    rv = write(pipefd[1], ERROR_500_HTML, sizeof(ERROR_500_HTML) - 1);
   }
+
 
   close(pipefd[1]);
   stream_data->fd = pipefd[0];
