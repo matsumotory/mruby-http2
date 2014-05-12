@@ -810,6 +810,8 @@ static int server_on_request_recv(nghttp2_session *session,
     read_upstream_response(session_data->app_ctx, r->upstream->server, 
         r->upstream->uri);
     if (r->upstream->res->status_code < 100) {
+      fprintf(stderr, "mruby-http parse fail, parsed status_code:%d\n", 
+          r->upstream->res->status_code);
       set_status_record(r, HTTP_INTERNAL_SERVER_ERROR);
     } else {
       set_status_record(r, r->upstream->res->status_code);
