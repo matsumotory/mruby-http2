@@ -572,7 +572,7 @@ static int upstream_reply(app_context *app_ctx, nghttp2_session *session,
 
   // create headers for HTTP/2
   MRB_HTTP2_CREATE_NV_CS(mrb, &nv[0], ":status", r->status_line);
-  MRB_HTTP2_CREATE_NV_CS(mrb, &nv[1], ":date", r->date);
+  MRB_HTTP2_CREATE_NV_CS(mrb, &nv[1], "date", r->date);
   nvlen = mrb_http2_add_nv(nva, nvlen, &nv[0]);
   nvlen = mrb_http2_add_nv(nva, nvlen, &nv[1]);
 
