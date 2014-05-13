@@ -152,79 +152,20 @@ p r.response
 ```
 ### HTTP2::Server
 ##### run HTTP/2 server
+###### If you want to get more information, Please see [Trusterd HTTP/2 Web Server](https://github.com/matsumoto-r/trusterd) using mruby-http2.
 ```ruby
 root_dir = "/usr/local/trusterd"
 
 s = HTTP2::Server.new({
 
-  #
-  # required config
-  #
-
   :port           => 8080,
   :document_root  => "#{root_dir}/htdocs",
   :server_name    => "mruby-http2 server",
 
-  # required when tls option is true.
-  # tls option is true by default.
-
   :key            => "#{root_dir}/ssl/server.key",
   :crt            => "#{root_dir}/ssl/server.crt",
 
-  # listen ip address
-  # default value is 0.0.0.0
-  # :server_host  => "127.0.0.1",
-
-  #
-  # optional config
-  #
-
-  # debug default: false
-  # :debug  =>  true,
-
-  # tls default: true
-  # :tls => false,
-
-  # damone default: false
-  # :daemon => true,
-
-  # callback default: false
-  # :callback => true,
-
-  # connection_record defualt: true
-  # :connection_record => false,
-
 })
-
-#
-# when :callback option is true,
-#
-# s.set_map_to_strage_cb {
-#
-#   p "callback bloack at set_map_to_strage_cb"
-#   p s.request.uri
-#   p s.request.filename
-#
-#   # location setting
-#   if s.request.uri == "/index.html"
-#     s.request.filename = "#{root_dir}/htdocs/hoge"
-#   end
-#   p s.request.filename
-#
-#   # upstream settings, but not implement proxy func
-#   # s.upstream = "http://127.0.0.1:8001"
-#   # s.upstream_uri = "/data/hoge.css"
-#   # p s.upstream
-#   # p s.upstream_uri
-#
-# }
-
-# s.set_logging_cb {
-#
-#   p "callback block after send response"
-#   p "response file: #{s.request.filename}"
-#
-# }
 
 s.run
 ```
