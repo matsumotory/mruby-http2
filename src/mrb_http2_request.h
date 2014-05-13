@@ -116,7 +116,12 @@ typedef struct {
 
   // upstream information when using proxy
   mrb_http2_upstream *upstream;
+
+  // write fd when using pipe
+  int write_fd;
   
+  // enable mruby script
+  unsigned int mruby;
 
 } mrb_http2_request_rec;
 

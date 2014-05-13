@@ -17,6 +17,7 @@
 
 #include "mruby/value.h"
 #include "mruby/string.h"
+#include "mruby/compile.h"
 
 typedef struct {
   SSL_CTX *ssl_ctx;
@@ -119,6 +120,12 @@ static void mrb_http2_request_rec_free(mrb_state *mrb,
     mrb_free(mrb, r->upstream);
     r->upstream = NULL;
   }
+  
+  // disable mruby script for each request
+  r->mruby = 0;
+
+  // unset write fd record for each request
+  r->write_fd = -1;
 
   // for conn_rec_free when disconnected
   if (r->conn != NULL) {
@@ -629,6 +636,97 @@ static int upstream_reply(app_context *app_ctx, nghttp2_session *session,
   return 0;
 }
 
+static int mruby_reply(app_context *app_ctx, nghttp2_session *session, 
+    http2_stream_data *stream_data)
+{
+  mrb_http2_request_rec *r = app_ctx->r;
+  mrb_http2_config_t *config = app_ctx->server->config;
+  mrb_state *mrb = app_ctx->server->mrb;
+  int rv;
+  int pipefd[2];
+  nghttp2_nv nva[MRB_HTTP2_HEADER_MAX];
+  size_t nvlen = 0;
+
+  mrb_state *mrb_inner = mrb_open();
+  mrbc_context *c;
+  struct mrb_parser_state* p = NULL;
+  struct RProc *proc = NULL;
+  FILE *rfp;
+
+  rfp = fopen(r->filename, "r");                    
+  if (rfp == NULL) {                                                   
+    fprintf(stderr, "mruby file opened failed: %s", r->filename);
+    return -1;
+  }                                                                          
+
+  TRACER;
+  rv = pipe(pipefd);
+  if(rv != 0) {
+    rv = nghttp2_submit_rst_stream(session, NGHTTP2_FLAG_NONE, 
+        stream_data->stream_id, NGHTTP2_INTERNAL_ERROR);
+    if(rv != 0) {
+      fprintf(stderr, "Fatal error: %s", nghttp2_strerror(rv));
+      return -1;
+    }
+    return 0;
+  }
+
+  r->write_fd = pipefd[1];
+  c = mrbc_context_new(mrb_inner);
+  mrbc_filename(mrb_inner, c, r->filename);
+  p = mrb_parse_file(mrb_inner, rfp, c);
+  fclose(rfp);
+  proc = mrb_generate_code(mrb_inner, p);
+  mrb_pool_close(p->pool);
+  mrb_run(mrb_inner, proc, app_ctx->self);
+  //mrb_load_file_cxt(mrb_inner, rfp, c);
+  if (mrb_inner->exc) {
+    mrb_print_error(mrb_inner);
+    set_status_record(r, HTTP_SERVICE_UNAVAILABLE);
+  } else {
+    set_status_record(r, HTTP_OK);
+  }
+  mrbc_context_free(mrb_inner, c);
+  mrb_close(mrb_inner);
+
+  // create headers for HTTP/2
+  MRB_HTTP2_CREATE_NV_CS(mrb, &nva[nvlen], ":status", r->status_line);
+  nvlen += 1;
+  MRB_HTTP2_CREATE_NV_CS(mrb, &nva[nvlen], "server", config->server_name);
+  nvlen += 1;
+  MRB_HTTP2_CREATE_NV_CS(mrb, &nva[nvlen], "date", r->date);
+  nvlen += 1;
+  MRB_HTTP2_CREATE_NV_CS(mrb, &nva[nvlen], "last-modified", r->last_modified);
+  nvlen += 1;
+
+  if (r->status >= 100 && r->status < 200) {
+    rv = write(pipefd[1], ERROR_100_HTML, sizeof(ERROR_100_HTML) - 1);
+  } else if (r->status >= 200 && r->status < 300) {
+    // do nothing, because write data in mruby script
+  } else if (r->status >= 300 && r->status < 400) {
+    rv = write(pipefd[1], ERROR_300_HTML, sizeof(ERROR_300_HTML) - 1);
+  } else if (r->status >= 400 && r->status < 500) {
+    rv = write(pipefd[1], ERROR_404_HTML, sizeof(ERROR_404_HTML) - 1);
+  } else if (r->status == HTTP_INTERNAL_SERVER_ERROR) {
+    rv = write(pipefd[1], ERROR_500_HTML, sizeof(ERROR_500_HTML) - 1);
+  } else if (r->status > HTTP_INTERNAL_SERVER_ERROR) {
+    rv = write(pipefd[1], ERROR_503_HTML, sizeof(ERROR_503_HTML) - 1);
+  } else {
+    rv = write(pipefd[1], ERROR_500_HTML, sizeof(ERROR_500_HTML) - 1);
+  }
+
+  close(pipefd[1]);
+  stream_data->fd = pipefd[0];
+  TRACER;
+  if(send_response(app_ctx, session, stream_data->stream_id, nva, nvlen, 
+        pipefd[0]) != 0) {
+    close(pipefd[0]);
+    return -1;
+  }
+  TRACER;
+  return 0;
+}
+
 static int server_on_header_callback(nghttp2_session *session, 
     const nghttp2_frame *frame, const uint8_t *name, size_t namelen, 
     const uint8_t *value, size_t valuelen, uint8_t flags, void *user_data)
@@ -851,18 +949,7 @@ static int server_on_request_recv(nghttp2_session *session,
     return 0;
   }
   r->finfo = &finfo;
-
-  fd = open(r->filename, O_RDONLY);
   
-  TRACER;
-  if(fd == -1) {
-    set_status_record(r, HTTP_NOT_FOUND);
-    if(error_reply(session_data->app_ctx, session, stream_data) != 0) {
-      return NGHTTP2_ERR_CALLBACK_FAILURE;
-    }
-    return 0;
-  }
-
   // cached time string created strftime()
   if (r->finfo->st_mtime != r->prev_last_modified) {
     r->prev_last_modified = r->finfo->st_mtime;
@@ -872,6 +959,27 @@ static int server_on_request_recv(nghttp2_session *session,
   // set content-length: max 10^64
   snprintf(r->content_length, 64, "%ld", r->finfo->st_size);
 
+  // run mruby script
+  if (r->mruby) {
+    set_status_record(r, HTTP_OK);
+    if(mruby_reply(session_data->app_ctx, session, stream_data) != 0) {
+      return NGHTTP2_ERR_CALLBACK_FAILURE;
+    }
+    return 0;
+  }
+
+  // static contents response
+  fd = open(r->filename, O_RDONLY);
+
+  TRACER;
+  if(fd == -1) {
+    set_status_record(r, HTTP_NOT_FOUND);
+    if(error_reply(session_data->app_ctx, session, stream_data) != 0) {
+      return NGHTTP2_ERR_CALLBACK_FAILURE;
+    }
+    return 0;
+  }
+  
   stream_data->fd = fd;
   set_status_record(r, HTTP_OK);
 
@@ -1317,6 +1425,8 @@ static mrb_http2_request_rec *mrb_http2_request_rec_init(mrb_state *mrb)
   r->reqhdr = NULL;
   r->reqhdrlen = 0;
   r->upstream = NULL;
+  r->mruby = 0;
+  r->write_fd = -1;
 
   return r;
 }
@@ -1660,6 +1770,31 @@ static mrb_value mrb_http2_server_set_upstream_uri(mrb_state *mrb,
   return self;
 }
 
+static mrb_value mrb_http2_server_enable_mruby(mrb_state *mrb, mrb_value self)
+{
+  mrb_http2_data_t *data = DATA_PTR(self);
+  mrb_http2_request_rec *r = data->r;
+
+  r->mruby = 1;
+
+  return mrb_nil_value();
+}
+
+static mrb_value mrb_http2_server_rputs(mrb_state *mrb, mrb_value self)
+{
+  mrb_http2_data_t *data = DATA_PTR(self);
+  mrb_http2_request_rec *r = data->r;
+  int write_fd = r->write_fd;
+  char *msg;
+  mrb_int len;
+  int rv;
+
+  mrb_get_args(mrb, "s", &msg, &len);
+  rv = write(write_fd, msg, len);
+
+  return mrb_fixnum_value(rv);
+}
+
 void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
 {
   struct RClass *server;
@@ -1689,5 +1824,9 @@ void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
   mrb_define_method(mrb, server, "upstream_url", mrb_http2_server_upstream_uri, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "upstream_uri=", mrb_http2_server_set_upstream_uri, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, server, "upstream_url=", mrb_http2_server_set_upstream_uri, MRB_ARGS_REQ(1));
+
+  // methods for mruby script
+  mrb_define_method(mrb, server, "enable_mruby", mrb_http2_server_enable_mruby, MRB_ARGS_NONE());
+  mrb_define_method(mrb, server, "rputs", mrb_http2_server_rputs, MRB_ARGS_REQ(1));
   DONE;
 }
