@@ -14,14 +14,6 @@ HTTP/2 is a replacement for how HTTP is expressed "on the wire". It is not a gro
 ## Benchmark
 Please see [link](https://gist.github.com/matsumoto-r/9702123).
 
-## TODO
-This is a very early version, please test and report errors. Wellcome pull-request.
-- Support http scheme for HTTP::Client
-- replace some function to mrbgem
-- more customizable Web server config
-- implement some class (Proxy...)
-- implement some method (post...)
-
 ## Install by mrbgems
 #### Download mruby
 ```

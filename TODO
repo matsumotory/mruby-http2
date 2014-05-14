@@ -1,2 +1,3 @@
 - PUSH implementation using mruby
 - Implement multi workers
+- send/recv request/response header transparently
