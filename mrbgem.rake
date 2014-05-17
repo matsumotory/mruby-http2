@@ -12,7 +12,7 @@ MRuby::Gem::Specification.new('mruby-http2') do |spec|
   nghttp2_lib = "#{build_dir}/nghttp2/lib/.libs"
   libnghttp2a = "#{nghttp2_lib}/libnghttp2.a"
   if ENV['NGHTTP2_CURRENT'] != "true"
-    nghttp2_ver = "d11cac48f12ad2e72152fa21b1173b85bd28f7a5"
+    nghttp2_ver = "e54e86375b7c1638bf3ea2eaa9905a1aa7c55fd4"
   end
 
   def run_command env, command
