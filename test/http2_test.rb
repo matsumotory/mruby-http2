@@ -13,16 +13,16 @@ assert("HTTP2::Client#status") do
 end
 assert("HTTP2::Client#body") do
   r = HTTP2::Client.get test_site
-  assert_equal("hello trusterd world.\n", r.body)
+  assert_equal("<html><body><h1>Your connection with HTTP/2 is success.</h1></body></html>\n", r.body)
 end
 assert("HTTP2::Client#body_length") do
   r = HTTP2::Client.get test_site
-  assert_equal(22, r.body_length)
+  assert_equal(75, r.body_length)
 end
 assert("HTTP2::Client#uri,get") do
   s = HTTP2::Client.new
   s.uri = test_site
   r = s.get
-  assert_equal("hello trusterd world.\n", r.body)
-  assert_equal(22, r.body_length)
+  assert_equal("<html><body><h1>Your connection with HTTP/2 is success.</h1></body></html>\n", r.body)
+  assert_equal(75, r.body_length)
 end
