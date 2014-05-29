@@ -1,11 +1,12 @@
-language: c
+language: c++
 compiler:
-  - gcc
+  - gcc-4.8
   - clang
 before_install:
+  - sudo add-apt-repository --yes ppa:ubuntu-toolchain-r/test
   - sudo apt-get -qq update
 install:
-  - sudo apt-get -qq install rake bison git gperf
+  - sudo apt-get -qq install rake bison git gperf g++-4.8
 env:
   - NGHTTP2_CURRENT=true
   - NGHTTP2_CURRENT=false
@@ -14,7 +15,7 @@ before_script:
   - git clone https://github.com/mruby/mruby.git
   - cd mruby
   - export MRUBY_CONFIG=../mruby-http2/.travis_build_config.rb
-script: 
+script:
   - rake all test
 notifications:
   webhooks:
