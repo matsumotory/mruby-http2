@@ -1,12 +1,13 @@
 language: cpp
 compiler:
-  - gcc-4.8
+  - gcc
   - clang
 before_install:
   - sudo add-apt-repository --yes ppa:ubuntu-toolchain-r/test
   - sudo apt-get -qq update
 install:
   - sudo apt-get -qq install rake bison git gperf g++-4.8
+  - if [ "$CXX" = "g++" ]; then export CXX="g++-4.8"; fi
 env:
   - NGHTTP2_CURRENT=true
   - NGHTTP2_CURRENT=false
