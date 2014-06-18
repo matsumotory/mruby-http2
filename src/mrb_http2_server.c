@@ -544,7 +544,7 @@ static int read_upstream_response(app_context *app_ctx, char *server, char *uri)
   // TODO: tranparent request/response headers from/to a client and support
   // HTTP/2. For now, create new HTTP/1 connection to upstream server
   curl_easy_setopt(curl, CURLOPT_URL, proxy_url);
-  curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 0);
+  curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1);
   curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
   curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0);
   curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_upstream_data);
