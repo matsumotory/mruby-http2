@@ -392,9 +392,10 @@ static int on_stream_close_callback(nghttp2_session *session,
   req = nghttp2_session_get_stream_user_data(session, stream_id);
   if(req) {
     int rv;
-    rv = nghttp2_submit_goaway(session, NGHTTP2_FLAG_NONE, NGHTTP2_NO_ERROR, NULL, 0);
+    rv = nghttp2_session_terminate_session(session, NGHTTP2_NO_ERROR);
     if(rv != 0) {
-      mrb_raisef(mrb, E_RUNTIME_ERROR, "nghttp2_submit_goaway: %S", mrb_fixnum_value(rv));
+      mrb_raisef(mrb, E_RUNTIME_ERROR, "nghttp2_session_terminate_session: %S",
+          mrb_fixnum_value(rv));
     }
   }
   if (!mrb_nil_p(conn->cb_block_hash)) {
