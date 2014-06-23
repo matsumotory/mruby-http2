@@ -1,4 +1,5 @@
 test_site = 'https://nghttp2.org/'
+
 assert("HTTP2::Client#request_headers") do
   r = HTTP2::Client.get test_site
   assert_equal("GET", r.request_headers[":method"])
@@ -7,6 +8,7 @@ assert("HTTP2::Client#request_headers") do
   assert_equal("nghttp2.org", r.request_headers[":authority"])
   assert_equal("*/*", r.request_headers["accept"])
 end
+
 assert("HTTP2::Client#status") do
   r = HTTP2::Client.get test_site
   assert_equal(200, r.status)
