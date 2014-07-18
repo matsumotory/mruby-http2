@@ -8,6 +8,7 @@ before_install:
 install:
   - sudo apt-get -qq install rake bison git gperf g++-4.8
   - if [ "$CXX" = "g++" ]; then export CXX="g++-4.8"; fi
+  - $CXX -v
 env:
   - NGHTTP2_CURRENT=true
   - NGHTTP2_CURRENT=false
