@@ -1043,10 +1043,14 @@ static void mrb_http2_server_session_init(http2_session_data *session_data)
 
   TRACER;
   nghttp2_session_callbacks_new(&callbacks);
-  nghttp2_session_callbacks_set_on_frame_recv_callback(callbacks, server_on_frame_recv_callback);
-  nghttp2_session_callbacks_set_on_stream_close_callback(callbacks, server_on_stream_close_callback);
-  nghttp2_session_callbacks_set_on_header_callback(callbacks, server_on_header_callback);
-  nghttp2_session_callbacks_set_on_begin_headers_callback(callbacks, server_on_begin_headers_callback);
+  nghttp2_session_callbacks_set_on_frame_recv_callback(callbacks,
+      server_on_frame_recv_callback);
+  nghttp2_session_callbacks_set_on_stream_close_callback(callbacks,
+      server_on_stream_close_callback);
+  nghttp2_session_callbacks_set_on_header_callback(callbacks,
+      server_on_header_callback);
+  nghttp2_session_callbacks_set_on_begin_headers_callback(callbacks,
+      server_on_begin_headers_callback);
 
   nghttp2_session_server_new(&session_data->session, callbacks, session_data);
   nghttp2_session_callbacks_del(callbacks);
