@@ -272,9 +272,8 @@ static int on_frame_send_callback(nghttp2_session *session,
     }
     break;
   case NGHTTP2_RST_STREAM:
-    mrb_hash_set(conn->mrb, conn->response,
-        mrb_symbol_value(mrb_intern_cstr(conn->mrb, "frame_send_header_rst_stream")),
-        mrb_true_value());
+    mrb_hash_set(conn->mrb, conn->response, mrb_symbol_value(mrb_intern_cstr
+          (conn->mrb, "frame_send_header_rst_stream")), mrb_true_value());
     break;
   case NGHTTP2_GOAWAY:
     mrb_hash_set(conn->mrb, conn->response,
@@ -309,8 +308,8 @@ static int on_frame_recv_callback(nghttp2_session *session,
   case NGHTTP2_RST_STREAM:
     TRACER;
     mrb_hash_set(conn->mrb, conn->response,
-        mrb_symbol_value(mrb_intern_cstr(conn->mrb, "frame_recv_header_rst_stream")),
-        mrb_true_value());
+        mrb_symbol_value(mrb_intern_cstr
+          (conn->mrb, "frame_recv_header_rst_stream")), mrb_true_value());
     break;
   case NGHTTP2_GOAWAY:
     TRACER;
@@ -322,7 +321,7 @@ static int on_frame_recv_callback(nghttp2_session *session,
   TRACER;
   if (!mrb_nil_p(conn->cb_block_hash)) {
     mrb_value cb_block = mrb_hash_get(conn->mrb, conn->cb_block_hash,
-                            mrb_str_new_lit(conn->mrb, "on_frame_recv_callback"));
+        mrb_str_new_lit(conn->mrb, "on_frame_recv_callback"));
     if (!mrb_nil_p(cb_block)) {
       mrb_yield_argv(conn->mrb, cb_block, 0, NULL);
     }
@@ -330,7 +329,6 @@ static int on_frame_recv_callback(nghttp2_session *session,
   return 0;
 }
 
-//static int on_header_callback(nghttp2_session *session, const nghttp2_frame *frame, void *user_data)
 static int on_header_callback(nghttp2_session *session,
     const nghttp2_frame *frame, const uint8_t *name, size_t namelen,
     const uint8_t *value, size_t valuelen, uint8_t flags, void *user_data)
@@ -357,8 +355,8 @@ static int on_header_callback(nghttp2_session *session,
         response_headers =  v;
       }
       //const nghttp2_nv *nva = frame->headers.nva;
-      mrb_hash_set(mrb, response_headers, mrb_str_new(mrb, (char *)name, namelen),
-          mrb_str_new(mrb, (char *)value, valuelen));
+      mrb_hash_set(mrb, response_headers, mrb_str_new(mrb, (char *)name,
+            namelen), mrb_str_new(mrb, (char *)value, valuelen));
       mrb_hash_set(mrb, conn->response,
           mrb_symbol_value(mrb_intern_cstr(conn->mrb, "response_headers")),
           response_headers);
@@ -480,24 +478,30 @@ static int on_data_chunk_recv_callback(nghttp2_session *session, uint8_t flags,
 static void mrb_http2_setup_nghttp2_callbacks(mrb_state *mrb,
     nghttp2_session_callbacks *callbacks)
 {
-  memset(callbacks, 0, sizeof(nghttp2_session_callbacks));
-  callbacks->send_callback = send_callback;
-  callbacks->recv_callback = recv_callback;
-  callbacks->before_frame_send_callback = before_frame_send_callback;
-  callbacks->on_frame_send_callback = on_frame_send_callback;
-  callbacks->on_frame_recv_callback = on_frame_recv_callback;
-  callbacks->on_stream_close_callback = on_stream_close_callback;
-  callbacks->on_data_chunk_recv_callback = on_data_chunk_recv_callback;
-  callbacks->on_header_callback = on_header_callback;
+  nghttp2_session_callbacks_set_send_callback(callbacks, send_callback);
+  nghttp2_session_callbacks_set_recv_callback(callbacks, recv_callback);
+  nghttp2_session_callbacks_set_before_frame_send_callback(callbacks,
+      before_frame_send_callback);
+  nghttp2_session_callbacks_set_on_frame_send_callback(callbacks,
+      on_frame_send_callback);
+  nghttp2_session_callbacks_set_on_frame_recv_callback(callbacks,
+      on_frame_recv_callback);
+  nghttp2_session_callbacks_set_on_stream_close_callback(callbacks,
+      on_stream_close_callback);
+  nghttp2_session_callbacks_set_on_data_chunk_recv_callback(callbacks,
+      on_data_chunk_recv_callback);
+  nghttp2_session_callbacks_set_on_header_callback(callbacks,
+      on_header_callback);
 }
 
 static int select_next_proto_cb(SSL* ssl, unsigned char **out,
-    unsigned char *outlen, const unsigned char *in, unsigned int inlen, void *arg)
+    unsigned char *outlen, const unsigned char *in, unsigned int inlen,
+    void *arg)
 {
   int rv;
   rv = nghttp2_select_next_protocol(out, outlen, in, inlen);
   if(rv <= 0) {
-    fprintf(stderr, "FATAL: %s\n", "Server did not advertise HTTP/2.0 protocol");
+    fprintf(stderr, "FATAL: %s\n", "Server did not advertise HTTP/2 protocol");
     exit(EXIT_FAILURE);
   }
   return SSL_TLSEXT_ERR_OK;
@@ -656,20 +660,27 @@ static void mrb_http2_request_init(mrb_state *mrb,
 static mrb_value mrb_http2_cb_block_hash_init(mrb_state *mrb)
 {
   mrb_value hash = mrb_hash_new(mrb);
-  mrb_hash_set(mrb, hash, mrb_str_new_cstr(mrb, "send_callback"), mrb_nil_value());
-  mrb_hash_set(mrb, hash, mrb_str_new_cstr(mrb, "recv_callback"), mrb_nil_value());
-  mrb_hash_set(mrb, hash, mrb_str_new_cstr(mrb, "before_frame_send_callback"), mrb_nil_value());
-  mrb_hash_set(mrb, hash, mrb_str_new_cstr(mrb, "on_frame_send_callback"), mrb_nil_value());
-  mrb_hash_set(mrb, hash, mrb_str_new_cstr(mrb, "on_frame_recv_callback"), mrb_nil_value());
-  mrb_hash_set(mrb, hash, mrb_str_new_cstr(mrb, "on_stream_close_callback"), mrb_nil_value());
-  mrb_hash_set(mrb, hash, mrb_str_new_cstr(mrb, "on_data_chunk_recv_callback"), mrb_nil_value());
+  mrb_hash_set(mrb, hash, mrb_str_new_cstr(mrb, "send_callback"),
+      mrb_nil_value());
+  mrb_hash_set(mrb, hash, mrb_str_new_cstr(mrb, "recv_callback"),
+      mrb_nil_value());
+  mrb_hash_set(mrb, hash, mrb_str_new_cstr(mrb, "before_frame_send_callback"),
+      mrb_nil_value());
+  mrb_hash_set(mrb, hash, mrb_str_new_cstr(mrb, "on_frame_send_callback"),
+      mrb_nil_value());
+  mrb_hash_set(mrb, hash, mrb_str_new_cstr(mrb, "on_frame_recv_callback"),
+      mrb_nil_value());
+  mrb_hash_set(mrb, hash, mrb_str_new_cstr(mrb, "on_stream_close_callback"),
+      mrb_nil_value());
+  mrb_hash_set(mrb, hash, mrb_str_new_cstr(mrb, "on_data_chunk_recv_callback"),
+      mrb_nil_value());
   return hash;
 }
 
 static mrb_value mrb_http2_fetch_uri(mrb_state *mrb,
     const struct mrb_http2_uri_t *uri)
 {
-  nghttp2_session_callbacks callbacks;
+  nghttp2_session_callbacks *callbacks;
   int fd;
   SSL_CTX *ssl_ctx;
   SSL *ssl;
@@ -680,7 +691,6 @@ static mrb_value mrb_http2_fetch_uri(mrb_state *mrb,
   struct pollfd pollfds[1];
   mrb_http2_request_init(mrb, &req, uri);
 
-  mrb_http2_setup_nghttp2_callbacks(mrb, &callbacks);
 
   fd = mrb_http2_connect_to(mrb, req.host, req.port);
   if(fd == -1) {
@@ -711,7 +721,15 @@ static mrb_value mrb_http2_fetch_uri(mrb_state *mrb,
   conn.response = mrb_hash_new(mrb);
   conn.cb_block_hash = mrb_nil_value();
 
-  rv = nghttp2_session_client_new(&conn.session, &callbacks, &conn);
+  rv = nghttp2_session_callbacks_new(&callbacks);
+  if(rv != 0) {
+      mrb_raisef(mrb, E_RUNTIME_ERROR, "nghttp2_session_client_new: %S",
+          mrb_fixnum_value(rv));
+  }
+
+  mrb_http2_setup_nghttp2_callbacks(mrb, callbacks);
+  rv = nghttp2_session_client_new(&conn.session, callbacks, &conn);
+  nghttp2_session_callbacks_del(callbacks);
   if(rv != 0) {
     mrb_raisef(mrb, E_RUNTIME_ERROR, "nghttp2_session_client_new: %S",
         mrb_fixnum_value(rv));
@@ -726,7 +744,8 @@ static mrb_value mrb_http2_fetch_uri(mrb_state *mrb,
       || nghttp2_session_want_write(conn.session)) {
     int nfds = poll(pollfds, npollfds, -1);
     if(nfds == -1) {
-      mrb_raisef(mrb, E_RUNTIME_ERROR, "poll: %S", mrb_str_new_cstr(mrb, strerror(errno)));
+      mrb_raisef(mrb, E_RUNTIME_ERROR, "poll: %S", mrb_str_new_cstr(mrb,
+            strerror(errno)));
     }
     if(pollfds[0].revents & (POLLIN | POLLOUT)) {
       mrb_http2_exec_io(mrb, &conn);
@@ -750,7 +769,7 @@ static mrb_value mrb_http2_fetch_uri(mrb_state *mrb,
 
 static mrb_value mrb_http2_get_uri(mrb_state *mrb, mrb_http2_context_t *ctx)
 {
-  nghttp2_session_callbacks callbacks;
+  nghttp2_session_callbacks *callbacks;
   SSL_CTX *ssl_ctx;
   SSL *ssl;
   int rv;
@@ -758,13 +777,12 @@ static mrb_value mrb_http2_get_uri(mrb_state *mrb, mrb_http2_context_t *ctx)
   struct pollfd pollfds[1];
   nfds_t npollfds = 1;
 
-  mrb_http2_setup_nghttp2_callbacks(mrb, &callbacks);
-
   fd = mrb_http2_connect_to(mrb, ctx->req->host, ctx->req->port);
   if(fd == -1) {
     mrb_raisef(mrb, E_RUNTIME_ERROR,
         "Could not open file descriptor: host \"%S\", port \"%S\"",
-        mrb_str_new_cstr(mrb, ctx->req->host), mrb_fixnum_value(ctx->req->port));
+        mrb_str_new_cstr(mrb, ctx->req->host),
+        mrb_fixnum_value(ctx->req->port));
   }
   ssl_ctx = SSL_CTX_new(SSLv23_client_method());
   if(ssl_ctx == NULL) {
@@ -788,7 +806,16 @@ static mrb_value mrb_http2_get_uri(mrb_state *mrb, mrb_http2_context_t *ctx)
   mrb_http2_make_non_block(mrb, fd);
   mrb_http2_set_tcp_nodelay(mrb, fd);
   ctx->conn->mrb = mrb;
-  rv = nghttp2_session_client_new(&ctx->conn->session, &callbacks, ctx->conn);
+
+  rv = nghttp2_session_callbacks_new(&callbacks);
+  if(rv != 0) {
+      mrb_raisef(mrb, E_RUNTIME_ERROR, "nghttp2_session_client_new: %S",
+          mrb_fixnum_value(rv));
+  }
+
+  mrb_http2_setup_nghttp2_callbacks(mrb, callbacks);
+  rv = nghttp2_session_client_new(&ctx->conn->session, callbacks, ctx->conn);
+  nghttp2_session_callbacks_del(callbacks);
   if(rv != 0) {
     mrb_raisef(mrb, E_RUNTIME_ERROR, "nghttp2_session_client_new: %S",
         mrb_fixnum_value(rv));
@@ -901,10 +928,12 @@ static mrb_value mrb_http2_set_on_stream_close_callback(mrb_state *mrb,
 static mrb_value mrb_http2_set_on_data_chunk_recv_callback(mrb_state *mrb,
     mrb_value self)
 {
-  return mrb_http2_set_block_callback(mrb, self, "on_data_chunk_recv_callback");
+  return mrb_http2_set_block_callback(mrb, self,
+      "on_data_chunk_recv_callback");
 }
 
-static mrb_value mrb_http2_set_on_header_callback(mrb_state *mrb, mrb_value self)
+static mrb_value mrb_http2_set_on_header_callback(mrb_state *mrb,
+    mrb_value self)
 {
   return mrb_http2_set_block_callback(mrb, self, "on_header_callback");
 }
