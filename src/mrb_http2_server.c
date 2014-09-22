@@ -1042,7 +1042,9 @@ static void mrb_http2_server_session_init(http2_session_data *session_data)
   nghttp2_session_callbacks *callbacks;
 
   TRACER;
+
   nghttp2_session_callbacks_new(&callbacks);
+  nghttp2_session_callbacks_set_send_callback(callbacks, server_send_callback);
   nghttp2_session_callbacks_set_on_frame_recv_callback(callbacks,
       server_on_frame_recv_callback);
   nghttp2_session_callbacks_set_on_stream_close_callback(callbacks,
