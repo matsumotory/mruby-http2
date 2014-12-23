@@ -720,6 +720,7 @@ static int mruby_reply(app_context *app_ctx, nghttp2_session *session,
   struct mrb_parser_state* p = NULL;
   struct RProc *proc = NULL;
   FILE *rfp;
+  mrbc_context *c;
 
   if (r->shared_mruby) {
     // share one mrb_state
@@ -729,7 +730,6 @@ static int mruby_reply(app_context *app_ctx, nghttp2_session *session,
     mrb_inner = mrb_open();
   }
 
-  mrbc_context *c;
   rfp = fopen(r->filename, "r");
   if (rfp == NULL) {
     fprintf(stderr, "mruby file opened failed: %s", r->filename);
