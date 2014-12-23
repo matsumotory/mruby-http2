@@ -1051,7 +1051,7 @@ static int server_on_request_recv(nghttp2_session *session,
   }
 
   // hook content_cb
-  if (config->cb_list->content_cb) {
+  if (config->callback && config->cb_list->content_cb) {
     set_status_record(r, HTTP_OK);
     if(content_cb_reply(session_data->app_ctx, session, stream_data) != 0) {
       return NGHTTP2_ERR_CALLBACK_FAILURE;
