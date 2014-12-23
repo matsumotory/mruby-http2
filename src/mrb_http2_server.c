@@ -637,6 +637,74 @@ static int upstream_reply(app_context *app_ctx, nghttp2_session *session,
   return 0;
 }
 
+static int content_cb_reply(app_context *app_ctx, nghttp2_session *session,
+    http2_stream_data *stream_data)
+{
+  mrb_http2_request_rec *r = app_ctx->r;
+  mrb_http2_config_t *config = app_ctx->server->config;
+  mrb_state *mrb = app_ctx->server->mrb;
+
+  int rv;
+  int pipefd[2];
+  nghttp2_nv nva[MRB_HTTP2_HEADER_MAX];
+  size_t nvlen = 0;
+
+  TRACER;
+  rv = pipe(pipefd);
+  if(rv != 0) {
+    rv = nghttp2_submit_rst_stream(session, NGHTTP2_FLAG_NONE,
+        stream_data->stream_id, NGHTTP2_INTERNAL_ERROR);
+    if(rv != 0) {
+      fprintf(stderr, "Fatal error: %s", nghttp2_strerror(rv));
+      return -1;
+    }
+    return 0;
+  }
+
+  r->write_fd = pipefd[1];
+
+  //
+  // "set_content" callback ruby block
+  //
+  callback_ruby_block(mrb, app_ctx->self, config->callback,
+      config->cb_list->content_cb);
+
+  // create headers for HTTP/2
+  MRB_HTTP2_CREATE_NV_CS(mrb, &nva[nvlen], ":status", r->status_line);
+  nvlen += 1;
+  MRB_HTTP2_CREATE_NV_CS(mrb, &nva[nvlen], "server", config->server_name);
+  nvlen += 1;
+  MRB_HTTP2_CREATE_NV_CS(mrb, &nva[nvlen], "date", r->date);
+  nvlen += 1;
+
+  if (r->status >= 100 && r->status < 200) {
+    rv = write(pipefd[1], ERROR_100_HTML, sizeof(ERROR_100_HTML) - 1);
+  } else if (r->status >= 200 && r->status < 300) {
+    // do nothing, because write data in mruby script
+  } else if (r->status >= 300 && r->status < 400) {
+    rv = write(pipefd[1], ERROR_300_HTML, sizeof(ERROR_300_HTML) - 1);
+  } else if (r->status >= 400 && r->status < 500) {
+    rv = write(pipefd[1], ERROR_404_HTML, sizeof(ERROR_404_HTML) - 1);
+  } else if (r->status == HTTP_INTERNAL_SERVER_ERROR) {
+    rv = write(pipefd[1], ERROR_500_HTML, sizeof(ERROR_500_HTML) - 1);
+  } else if (r->status > HTTP_INTERNAL_SERVER_ERROR) {
+    rv = write(pipefd[1], ERROR_503_HTML, sizeof(ERROR_503_HTML) - 1);
+  } else {
+    rv = write(pipefd[1], ERROR_500_HTML, sizeof(ERROR_500_HTML) - 1);
+  }
+
+  close(pipefd[1]);
+  stream_data->fd = pipefd[0];
+  TRACER;
+  if(send_response(app_ctx, session, stream_data->stream_id, nva, nvlen,
+        pipefd[0]) != 0) {
+    close(pipefd[0]);
+    return -1;
+  }
+  TRACER;
+  return 0;
+}
+
 static int mruby_reply(app_context *app_ctx, nghttp2_session *session,
     http2_stream_data *stream_data)
 {
@@ -977,6 +1045,15 @@ static int server_on_request_recv(nghttp2_session *session,
   if (r->mruby || r->shared_mruby) {
     set_status_record(r, HTTP_OK);
     if(mruby_reply(session_data->app_ctx, session, stream_data) != 0) {
+      return NGHTTP2_ERR_CALLBACK_FAILURE;
+    }
+    return 0;
+  }
+
+  // hook content_cb
+  if (config->cb_list->content_cb) {
+    set_status_record(r, HTTP_OK);
+    if(content_cb_reply(session_data->app_ctx, session, stream_data) != 0) {
       return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
     return 0;
@@ -1497,6 +1574,22 @@ static mrb_value mrb_http2_server_set_map_to_strage_cb(mrb_state *mrb,
   return b;
 }
 
+static mrb_value mrb_http2_server_set_content_cb(mrb_state *mrb,
+    mrb_value self)
+{
+  mrb_http2_data_t *data = DATA_PTR(self);
+  mruby_cb_list *list = data->s->config->cb_list;
+  mrb_value b;
+  const char *cbid = "content_cb";
+
+  mrb_get_args(mrb, "&", &b);
+  mrb_gc_protect(mrb, b);
+  mrb_iv_set(mrb, self, mrb_intern_cstr(mrb, cbid), b);
+  list->content_cb = cbid;
+
+  return b;
+}
+
 static mrb_value mrb_http2_server_set_logging_cb(mrb_state *mrb,
     mrb_value self)
 {
@@ -1519,6 +1612,7 @@ static mruby_cb_list *mruby_cb_list_init(mrb_state *mrb)
   memset(list, 0, sizeof(mruby_cb_list));
 
   list->map_to_strage_cb = NULL;
+  list->content_cb = NULL;
   list->logging_cb = NULL;
 
   return list;
@@ -1842,6 +1936,7 @@ void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
   mrb_define_method(mrb, server, "r", mrb_http2_req_obj, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "conn", mrb_http2_conn_obj, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "set_map_to_strage_cb", mrb_http2_server_set_map_to_strage_cb, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, server, "set_content_cb", mrb_http2_server_set_content_cb, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, server, "set_logging_cb", mrb_http2_server_set_logging_cb, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, server, "filename", mrb_http2_server_filename, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "filename=", mrb_http2_server_set_filename, MRB_ARGS_REQ(1));

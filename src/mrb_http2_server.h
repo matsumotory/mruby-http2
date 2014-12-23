@@ -15,6 +15,9 @@ typedef struct {
   // callback block at a phase of mapping uri to filename
   const char *map_to_strage_cb;
 
+  // callback block at a phase of creating content
+  const char *content_cb;
+
   // callback block after send response
   const char *logging_cb;
 
@@ -37,7 +40,7 @@ typedef struct {
   const char *service;
   const char *document_root;
 
-  // server response header 
+  // server response header
   const char *server_name;
 
   // server listen hostname
