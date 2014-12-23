@@ -643,11 +643,15 @@ static int mruby_reply(app_context *app_ctx, nghttp2_session *session,
   mrb_http2_request_rec *r = app_ctx->r;
   mrb_http2_config_t *config = app_ctx->server->config;
   mrb_state *mrb = app_ctx->server->mrb;
+
   int rv;
   int pipefd[2];
   nghttp2_nv nva[MRB_HTTP2_HEADER_MAX];
   size_t nvlen = 0;
   mrb_state *mrb_inner;
+  struct mrb_parser_state* p = NULL;
+  struct RProc *proc = NULL;
+  FILE *rfp;
 
   if (r->shared_mruby) {
     // share one mrb_state
@@ -656,11 +660,8 @@ static int mruby_reply(app_context *app_ctx, nghttp2_session *session,
     // when use new mrb_state
     mrb_inner = mrb_open();
   }
-  mrbc_context *c;
-  struct mrb_parser_state* p = NULL;
-  struct RProc *proc = NULL;
-  FILE *rfp;
 
+  mrbc_context *c;
   rfp = fopen(r->filename, "r");
   if (rfp == NULL) {
     fprintf(stderr, "mruby file opened failed: %s", r->filename);
@@ -687,7 +688,7 @@ static int mruby_reply(app_context *app_ctx, nghttp2_session *session,
   proc = mrb_generate_code(mrb_inner, p);
   mrb_pool_close(p->pool);
   mrb_run(mrb_inner, proc, app_ctx->self);
-  //mrb_load_file_cxt(mrb_inner, rfp, c);
+
   if (mrb_inner->exc) {
     mrb_print_error(mrb_inner);
     set_status_record(r, HTTP_SERVICE_UNAVAILABLE);
