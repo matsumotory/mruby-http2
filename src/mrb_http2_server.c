@@ -1923,6 +1923,26 @@ static mrb_value mrb_http2_server_rputs(mrb_state *mrb, mrb_value self)
   return mrb_fixnum_value(rv);
 }
 
+static mrb_value mrb_http2_server_echo(mrb_state *mrb, mrb_value self)
+{
+  mrb_http2_data_t *data = DATA_PTR(self);
+  mrb_http2_request_rec *r = data->r;
+  int write_fd = r->write_fd;
+  mrb_value msg;
+  char *str;
+  mrb_int len;
+  int rv;
+
+  mrb_get_args(mrb, "o", &msg);
+
+  str = RSTRING_PTR(mrb_str_plus(mrb, msg, mrb_str_new_lit(mrb, "\n")));
+  len = RSTRING_LEN(msg) + sizeof("\n") - 1;
+
+  rv = write(write_fd, str, len);
+
+  return mrb_fixnum_value(rv);
+}
+
 void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
 {
   struct RClass *server;
@@ -1958,5 +1978,6 @@ void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
   mrb_define_method(mrb, server, "enable_mruby", mrb_http2_server_enable_mruby, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "enable_shared_mruby", mrb_http2_server_enable_shared_mruby, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "rputs", mrb_http2_server_rputs, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, server, "echo", mrb_http2_server_echo, MRB_ARGS_REQ(1));
   DONE;
 }
