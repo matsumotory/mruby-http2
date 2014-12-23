@@ -1355,6 +1355,7 @@ static void mrb_http2_server_handshake_readcb(struct bufferevent *bev,
   if(session_data->handshake_leftlen == 0) {
     bufferevent_setcb(session_data->bev, mrb_http2_server_readcb,
         mrb_http2_server_writecb, mrb_http2_server_eventcb, session_data);
+    bufferevent_enable(session_data->bev, EV_READ | EV_WRITE);
     /* Process pending data in buffer since they are not notified
        further */
     TRACER;
@@ -1362,11 +1363,6 @@ static void mrb_http2_server_handshake_readcb(struct bufferevent *bev,
       mrb_http2_server_session_init(session_data);
     }
     if(send_server_connection_header(session_data) != 0) {
-      delete_http2_session_data(session_data);
-      return;
-    }
-    TRACER;
-    if(session_recv(session_data) != 0) {
       delete_http2_session_data(session_data);
       return;
     }

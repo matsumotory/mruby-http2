@@ -56,7 +56,7 @@
 #ifdef MRB_HTTP2_TRACER
 #define TRACER printf("    >>>> %s:%d\n", __func__, __LINE__)
 #else
-#define TRACER 
+#define TRACER
 #endif
 #define OUTPUT_WOULDBLOCK_THRESHOLD (1 << 16)
 #define MRB_HTTP2_CONFIG_ENABLED 1
