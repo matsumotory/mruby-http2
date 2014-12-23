@@ -126,9 +126,6 @@ typedef struct {
   // enable mruby script using shared mrb_state
   unsigned int shared_mruby;
 
-  // left length when readidng file
-  int64_t fileleft;
-
 } mrb_http2_request_rec;
 
 #endif

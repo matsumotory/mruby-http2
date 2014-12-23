@@ -32,6 +32,7 @@ typedef struct http2_stream_data {
   char *request_path;
   int32_t stream_id;
   int fd;
+  int64_t fileleft;
   nghttp2_nv nva[MRB_HTTP2_HEADER_MAX];
   size_t nvlen;
 } http2_stream_data;
@@ -173,6 +174,7 @@ static http2_stream_data* create_http2_stream_data(mrb_state *mrb,
   memset(stream_data, 0, sizeof(http2_stream_data));
   stream_data->stream_id = stream_id;
   stream_data->fd = -1;
+  stream_data->fileleft = 0;
   stream_data->nvlen = 0;
 
   add_stream(session_data, stream_data);
@@ -345,22 +347,19 @@ static ssize_t file_read_callback(nghttp2_session *session,
     int32_t stream_id, uint8_t *buf, size_t length, uint32_t *data_flags,
     nghttp2_data_source *source, void *user_data)
 {
-  http2_session_data *session_data = (http2_session_data *)user_data;
-  mrb_http2_request_rec *r = session_data->app_ctx->r;
-
-  int fd = source->fd;
   ssize_t nread;
+  http2_stream_data *stream_data = source->ptr;
 
-  while((nread = read(fd, buf, length)) == -1 && errno == EINTR);
+  while((nread = read(stream_data->fd, buf, length)) == -1 && errno == EINTR);
   TRACER;
 
   if(nread == -1) {
     return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
   }
 
-  r->fileleft -= nread;
-  if(nread == 0 || r->fileleft == 0) {
-    if (r->fileleft != 0) {
+  stream_data->fileleft -= nread;
+  if(nread == 0 || stream_data->fileleft == 0) {
+    if (stream_data->fileleft != 0) {
       return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
     }
     *data_flags |= NGHTTP2_DATA_FLAG_EOF;
@@ -370,7 +369,7 @@ static ssize_t file_read_callback(nghttp2_session *session,
 }
 
 static int send_response(app_context *app_ctx, nghttp2_session *session,
-    int32_t stream_id, nghttp2_nv *nva, size_t nvlen, int fd)
+    nghttp2_nv *nva, size_t nvlen, http2_stream_data *stream_data)
 {
   int rv;
   mrb_state *mrb = app_ctx->server->mrb;
@@ -379,7 +378,7 @@ static int send_response(app_context *app_ctx, nghttp2_session *session,
   int i;
 
   nghttp2_data_provider data_prd;
-  data_prd.source.fd = fd;
+  data_prd.source.ptr = stream_data;
   data_prd.read_callback = file_read_callback;
 
   if (config->debug) {
@@ -396,7 +395,8 @@ static int send_response(app_context *app_ctx, nghttp2_session *session,
   }
 
   TRACER;
-  rv = nghttp2_submit_response(session, stream_id, nva, nvlen, &data_prd);
+  rv = nghttp2_submit_response(session, stream_data->stream_id, nva, nvlen,
+      &data_prd);
   if(rv != 0) {
     fprintf(stderr, "Fatal error: %s", nghttp2_strerror(rv));
     mrb_http2_request_rec_free(mrb, r);
@@ -466,8 +466,7 @@ static int error_reply(app_context *app_ctx, nghttp2_session *session,
   close(pipefd[1]);
   stream_data->fd = pipefd[0];
   TRACER;
-  if(send_response(app_ctx, session, stream_data->stream_id, hdrs,
-        ARRLEN(hdrs), pipefd[0]) != 0) {
+  if(send_response(app_ctx, session, hdrs, ARRLEN(hdrs), stream_data) != 0) {
     close(pipefd[0]);
     return -1;
   }
@@ -637,8 +636,7 @@ static int upstream_reply(app_context *app_ctx, nghttp2_session *session,
   close(pipefd[1]);
   stream_data->fd = pipefd[0];
   TRACER;
-  if(send_response(app_ctx, session, stream_data->stream_id, nva, nvlen,
-        pipefd[0]) != 0) {
+  if(send_response(app_ctx, session, nva, nvlen, stream_data) != 0) {
     close(pipefd[0]);
     return -1;
   }
@@ -705,8 +703,7 @@ static int content_cb_reply(app_context *app_ctx, nghttp2_session *session,
   close(pipefd[1]);
   stream_data->fd = pipefd[0];
   TRACER;
-  if(send_response(app_ctx, session, stream_data->stream_id, nva, nvlen,
-        pipefd[0]) != 0) {
+  if(send_response(app_ctx, session, nva, nvlen, stream_data) != 0) {
     close(pipefd[0]);
     return -1;
   }
@@ -809,8 +806,7 @@ static int mruby_reply(app_context *app_ctx, nghttp2_session *session,
   close(pipefd[1]);
   stream_data->fd = pipefd[0];
   TRACER;
-  if(send_response(app_ctx, session, stream_data->stream_id, nva, nvlen,
-        pipefd[0]) != 0) {
+  if(send_response(app_ctx, session, nva, nvlen, stream_data) != 0) {
     close(pipefd[0]);
     return -1;
   }
@@ -896,7 +892,7 @@ static int check_path(const char *path)
 }
 
 static int mrb_http2_send_response(app_context *app_ctx,
-    nghttp2_session *session, int32_t stream_id, int fd) {
+    nghttp2_session *session, http2_stream_data *stream_data) {
 
   mrb_http2_config_t *config = app_ctx->server->config;
   mrb_http2_request_rec *r = app_ctx->r;
@@ -909,9 +905,8 @@ static int mrb_http2_send_response(app_context *app_ctx,
     MAKE_NV_CS("last-modified", r->last_modified)
   };
 
-  if(send_response(app_ctx, session, stream_id, hdrs, ARRLEN(hdrs),
-        fd) != 0) {
-    close(fd);
+  if(send_response(app_ctx, session, hdrs, ARRLEN(hdrs), stream_data) != 0) {
+    close(stream_data->fd);
     return NGHTTP2_ERR_CALLBACK_FAILURE;
   }
   return 0;
@@ -1049,7 +1044,7 @@ static int server_on_request_recv(nghttp2_session *session,
 
   // set content-length: max 10^64
   snprintf(r->content_length, 64, "%ld", r->finfo->st_size);
-  r->fileleft = r->finfo->st_size;
+  stream_data->fileleft = r->finfo->st_size;
 
   // run mruby script
   if (r->mruby || r->shared_mruby) {
@@ -1086,7 +1081,7 @@ static int server_on_request_recv(nghttp2_session *session,
 
   TRACER;
   return mrb_http2_send_response(session_data->app_ctx, session,
-      stream_data->stream_id, fd);
+      stream_data);
 }
 
 static int server_on_frame_recv_callback(nghttp2_session *session,
@@ -1533,7 +1528,6 @@ static mrb_http2_request_rec *mrb_http2_request_rec_init(mrb_state *mrb)
   r->mruby = 0;
   r->shared_mruby = 0;
   r->write_fd = -1;
-  r->fileleft = 0;
 
   return r;
 }
