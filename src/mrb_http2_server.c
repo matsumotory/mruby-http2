@@ -345,19 +345,28 @@ static ssize_t file_read_callback(nghttp2_session *session,
     int32_t stream_id, uint8_t *buf, size_t length, uint32_t *data_flags,
     nghttp2_data_source *source, void *user_data)
 {
-  int fd = source->fd;
-  ssize_t r;
+  http2_session_data *session_data = (http2_session_data *)user_data;
+  mrb_http2_request_rec *r = session_data->app_ctx->r;
 
-  while((r = read(fd, buf, length)) == -1 && errno == EINTR);
+  int fd = source->fd;
+  ssize_t nread;
+
+  while((nread = read(fd, buf, length)) == -1 && errno == EINTR);
   TRACER;
-  if(r == -1) {
+
+  if(nread == -1) {
     return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
   }
-  if(r == 0) {
+
+  r->fileleft -= nread;
+  if(nread == 0 || r->fileleft == 0) {
+    if (r->fileleft != 0) {
+      return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
+    }
     *data_flags |= NGHTTP2_DATA_FLAG_EOF;
   }
   TRACER;
-  return r;
+  return nread;
 }
 
 static int send_response(app_context *app_ctx, nghttp2_session *session,
@@ -1040,6 +1049,7 @@ static int server_on_request_recv(nghttp2_session *session,
 
   // set content-length: max 10^64
   snprintf(r->content_length, 64, "%ld", r->finfo->st_size);
+  r->fileleft = r->finfo->st_size;
 
   // run mruby script
   if (r->mruby || r->shared_mruby) {
@@ -1527,6 +1537,7 @@ static mrb_http2_request_rec *mrb_http2_request_rec_init(mrb_state *mrb)
   r->mruby = 0;
   r->shared_mruby = 0;
   r->write_fd = -1;
+  r->fileleft = 0;
 
   return r;
 }
