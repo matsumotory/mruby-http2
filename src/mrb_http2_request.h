@@ -7,8 +7,8 @@
 #ifndef MRB_HTTP2_REQUEST_H
 #define MRB_HTTP2_REQUEST_H
 
-#include <sys/types.h> 
-#include <sys/stat.h> 
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include "mrb_http2_upstream.h"
 
@@ -119,9 +119,12 @@ typedef struct {
 
   // write fd when using pipe
   int write_fd;
-  
-  // enable mruby script
+
+  // enable mruby script using new mrb_state each request
   unsigned int mruby;
+
+  // enable mruby script using shared mrb_state
+  unsigned int shared_mruby;
 
 } mrb_http2_request_rec;
 

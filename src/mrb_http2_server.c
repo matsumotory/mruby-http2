@@ -123,6 +123,7 @@ static void mrb_http2_request_rec_free(mrb_state *mrb,
 
   // disable mruby script for each request
   r->mruby = 0;
+  r->shared_mruby = 0;
 
   // unset write fd record for each request
   r->write_fd = -1;
@@ -646,8 +647,15 @@ static int mruby_reply(app_context *app_ctx, nghttp2_session *session,
   int pipefd[2];
   nghttp2_nv nva[MRB_HTTP2_HEADER_MAX];
   size_t nvlen = 0;
+  mrb_state *mrb_inner;
 
-  mrb_state *mrb_inner = mrb_open();
+  if (r->shared_mruby) {
+    // share one mrb_state
+    mrb_inner = mrb;
+  } else if (r->mruby) {
+    // when use new mrb_state
+    mrb_inner = mrb_open();
+  }
   mrbc_context *c;
   struct mrb_parser_state* p = NULL;
   struct RProc *proc = NULL;
@@ -683,11 +691,16 @@ static int mruby_reply(app_context *app_ctx, nghttp2_session *session,
   if (mrb_inner->exc) {
     mrb_print_error(mrb_inner);
     set_status_record(r, HTTP_SERVICE_UNAVAILABLE);
+    mrb_inner->exc = 0;
   } else {
     set_status_record(r, HTTP_OK);
   }
   mrbc_context_free(mrb_inner, c);
-  mrb_close(mrb_inner);
+
+  // when use new mrb_state
+  if (r->mruby) {
+    mrb_close(mrb_inner);
+  }
 
   // create headers for HTTP/2
   MRB_HTTP2_CREATE_NV_CS(mrb, &nva[nvlen], ":status", r->status_line);
@@ -960,7 +973,7 @@ static int server_on_request_recv(nghttp2_session *session,
   snprintf(r->content_length, 64, "%ld", r->finfo->st_size);
 
   // run mruby script
-  if (r->mruby) {
+  if (r->mruby || r->shared_mruby) {
     set_status_record(r, HTTP_OK);
     if(mruby_reply(session_data->app_ctx, session, stream_data) != 0) {
       return NGHTTP2_ERR_CALLBACK_FAILURE;
@@ -1434,6 +1447,7 @@ static mrb_http2_request_rec *mrb_http2_request_rec_init(mrb_state *mrb)
   r->reqhdrlen = 0;
   r->upstream = NULL;
   r->mruby = 0;
+  r->shared_mruby = 0;
   r->write_fd = -1;
 
   return r;
@@ -1788,6 +1802,17 @@ static mrb_value mrb_http2_server_enable_mruby(mrb_state *mrb, mrb_value self)
   return mrb_nil_value();
 }
 
+static mrb_value mrb_http2_server_enable_shared_mruby(mrb_state *mrb,
+    mrb_value self)
+{
+  mrb_http2_data_t *data = DATA_PTR(self);
+  mrb_http2_request_rec *r = data->r;
+
+  r->shared_mruby = 1;
+
+  return self;
+}
+
 static mrb_value mrb_http2_server_rputs(mrb_state *mrb, mrb_value self)
 {
   mrb_http2_data_t *data = DATA_PTR(self);
@@ -1835,6 +1860,7 @@ void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
 
   // methods for mruby script
   mrb_define_method(mrb, server, "enable_mruby", mrb_http2_server_enable_mruby, MRB_ARGS_NONE());
+  mrb_define_method(mrb, server, "enable_shared_mruby", mrb_http2_server_enable_shared_mruby, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "rputs", mrb_http2_server_rputs, MRB_ARGS_REQ(1));
   DONE;
 }
