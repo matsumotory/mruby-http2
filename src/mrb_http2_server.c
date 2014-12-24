@@ -1314,9 +1314,7 @@ static void mrb_http2_server_eventcb(struct bufferevent *bev, short events,
     if (config->debug) {
       fprintf(stderr, "%s connected\n", session_data->client_addr);
     }
-    //if (config->tls) {
-      mrb_http2_server_session_init(session_data);
-    //}
+    mrb_http2_server_session_init(session_data);
     if(send_server_connection_header(session_data) != 0) {
       delete_http2_session_data(session_data);
       return;
@@ -1347,11 +1345,9 @@ static void mrb_http2_acceptcb(struct evconnlistener *listener, int fd,
   session_data = create_http2_session_data(mrb, app_ctx, fd, addr, addrlen);
   bufferevent_setcb(session_data->bev, mrb_http2_server_readcb,
       mrb_http2_server_writecb, mrb_http2_server_eventcb, session_data);
-  if (!app_ctx->server->config->tls) {
-  //  mrb_http2_server_session_init(session_data);
-    bufferevent_enable(session_data->bev, EV_READ | EV_WRITE);
-    bufferevent_socket_connect(session_data->bev, NULL, 0);
-  }
+  bufferevent_enable(session_data->bev, EV_READ | EV_WRITE);
+  // don't call eventcb when createing bufferevent_socket_new, not tls
+  bufferevent_socket_connect(session_data->bev, NULL, 0);
 }
 
 static int next_proto_cb(SSL *s, const unsigned char **data,
