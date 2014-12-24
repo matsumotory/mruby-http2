@@ -43,7 +43,6 @@ typedef struct http2_session_data {
   app_context *app_ctx;
   nghttp2_session *session;
   char *client_addr;
-  size_t handshake_leftlen;
   mrb_http2_conn_rec *conn;
 } http2_session_data;
 
@@ -1135,9 +1134,12 @@ static int server_on_stream_close_callback(nghttp2_session *session,
 
 static void mrb_http2_server_session_init(http2_session_data *session_data)
 {
+  nghttp2_option *option;
   nghttp2_session_callbacks *callbacks;
 
   TRACER;
+  nghttp2_option_new(&option);
+  nghttp2_option_set_recv_client_preface(option, 1);
 
   nghttp2_session_callbacks_new(&callbacks);
   nghttp2_session_callbacks_set_send_callback(callbacks, server_send_callback);
@@ -1150,8 +1152,11 @@ static void mrb_http2_server_session_init(http2_session_data *session_data)
   nghttp2_session_callbacks_set_on_begin_headers_callback(callbacks,
       server_on_begin_headers_callback);
 
-  nghttp2_session_server_new(&session_data->session, callbacks, session_data);
+  nghttp2_session_server_new2(&session_data->session, callbacks, session_data,
+      option);
   nghttp2_session_callbacks_del(callbacks);
+
+  nghttp2_option_del(option);
 }
 
 /* Send HTTP/2.0 client connection header, which includes 24 bytes
@@ -1245,7 +1250,6 @@ static http2_session_data* create_http2_session_data(mrb_state *mrb,
         BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS);
   }
 
-  session_data->handshake_leftlen = NGHTTP2_CLIENT_CONNECTION_PREFACE_LEN;
   rv = getnameinfo(addr, addrlen, host, sizeof(host), NULL, 0, NI_NUMERICHOST);
   if(rv != 0) {
     session_data->client_addr = mrb_http2_strcopy(mrb, "(unknown)",
@@ -1310,6 +1314,13 @@ static void mrb_http2_server_eventcb(struct bufferevent *bev, short events,
     if (config->debug) {
       fprintf(stderr, "%s connected\n", session_data->client_addr);
     }
+    //if (config->tls) {
+      mrb_http2_server_session_init(session_data);
+    //}
+    if(send_server_connection_header(session_data) != 0) {
+      delete_http2_session_data(session_data);
+      return;
+    }
     return;
   }
   if (config->debug) {
@@ -1325,70 +1336,21 @@ static void mrb_http2_server_eventcb(struct bufferevent *bev, short events,
   delete_http2_session_data(session_data);
 }
 
-/* readcb for bufferevent to check first 24 bytes client connection
-   header. */
-static void mrb_http2_server_handshake_readcb(struct bufferevent *bev,
-    void *ptr)
-{
-  http2_session_data *session_data = (http2_session_data *)ptr;
-  mrb_http2_config_t *config = session_data->app_ctx->server->config;
-  //mrb_state *mrb = session_data->app_ctx->server->mrb;
-
-  uint8_t data[24];
-  struct evbuffer *input = bufferevent_get_input(session_data->bev);
-  int readlen = evbuffer_remove(input, data, session_data->handshake_leftlen);
-  const char *conhead = NGHTTP2_CLIENT_CONNECTION_PREFACE;
-
-  TRACER;
-  if(memcmp(conhead + NGHTTP2_CLIENT_CONNECTION_PREFACE_LEN
-        - session_data->handshake_leftlen, data, readlen) != 0) {
-    delete_http2_session_data(session_data);
-    return;
-  }
-  session_data->handshake_leftlen -= readlen;
-  TRACER;
-  if(session_data->handshake_leftlen == 0) {
-    bufferevent_setcb(session_data->bev, mrb_http2_server_readcb,
-        mrb_http2_server_writecb, mrb_http2_server_eventcb, session_data);
-    bufferevent_enable(session_data->bev, EV_READ | EV_WRITE);
-    /* Process pending data in buffer since they are not notified
-       further */
-    TRACER;
-    if (config->tls) {
-      mrb_http2_server_session_init(session_data);
-    }
-    if(send_server_connection_header(session_data) != 0) {
-      delete_http2_session_data(session_data);
-      return;
-    }
-    TRACER;
-  }
-}
-
 static void mrb_http2_acceptcb(struct evconnlistener *listener, int fd,
     struct sockaddr *addr, int addrlen, void *ptr)
 {
   app_context *app_ctx = (app_context *)ptr;
   http2_session_data *session_data;
   mrb_state *mrb = app_ctx->server->mrb;
-  mrb_http2_config_t *config = app_ctx->server->config;
 
   TRACER;
-  session_data = create_http2_session_data(mrb, app_ctx, fd,
-      addr, addrlen);
-  if (config->tls) {
-    // setcb for https, first ssl handshek readcb
-    bufferevent_setcb(session_data->bev, mrb_http2_server_handshake_readcb,
-        NULL, mrb_http2_server_eventcb, session_data);
-    TRACER;
-  } else {
-    // setcb for http
-    // NOTE: need bufferevent_enable when use bufferevent_socket_new
-    mrb_http2_server_session_init(session_data);
-    bufferevent_setcb(session_data->bev, mrb_http2_server_handshake_readcb,
-        mrb_http2_server_writecb, mrb_http2_server_eventcb, session_data);
+  session_data = create_http2_session_data(mrb, app_ctx, fd, addr, addrlen);
+  bufferevent_setcb(session_data->bev, mrb_http2_server_readcb,
+      mrb_http2_server_writecb, mrb_http2_server_eventcb, session_data);
+  if (!app_ctx->server->config->tls) {
+  //  mrb_http2_server_session_init(session_data);
     bufferevent_enable(session_data->bev, EV_READ | EV_WRITE);
-    TRACER;
+    bufferevent_socket_connect(session_data->bev, NULL, 0);
   }
 }
 
