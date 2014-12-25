@@ -1439,6 +1439,7 @@ static void mrb_start_listen(struct event_base *evbase,
         rp->ai_addrlen);
 
     if(listener) {
+      freeaddrinfo(res);
       return;
     }
   }
