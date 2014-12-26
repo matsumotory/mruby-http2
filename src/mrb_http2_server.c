@@ -304,17 +304,15 @@ static ssize_t server_send_callback(nghttp2_session *session,
     const uint8_t *data, size_t length, int flags, void *user_data)
 {
   http2_session_data *session_data = (http2_session_data *)user_data;
-  //mrb_state *mrb = session_data->app_ctx->server->mrb;
-  //http2_stream_data *stream_data;
 
-  struct bufferevent *bev = session_data->bev;
   TRACER;
+
   /* Avoid excessive buffering in server side. */
   if(evbuffer_get_length(bufferevent_get_output(session_data->bev)) >=
      OUTPUT_WOULDBLOCK_THRESHOLD) {
     return NGHTTP2_ERR_WOULDBLOCK;
   }
-  bufferevent_write(bev, data, length);
+  bufferevent_write(session_data->bev, data, length);
   TRACER;
   return length;
 }
@@ -389,6 +387,7 @@ static ssize_t file_read_callback(nghttp2_session *session,
 
   while((nread = read(stream_data->fd, buf, length)) == -1 && errno == EINTR);
   TRACER;
+  //nread = read(stream_data->fd, buf, length);
 
   if(nread == -1) {
     return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
@@ -411,25 +410,24 @@ static int send_response(app_context *app_ctx, nghttp2_session *session,
   int rv;
   mrb_state *mrb = app_ctx->server->mrb;
   mrb_http2_request_rec *r = app_ctx->r;
-  mrb_http2_config_t *config = app_ctx->server->config;
   int i;
 
   nghttp2_data_provider data_prd;
   data_prd.source.ptr = stream_data;
   data_prd.read_callback = file_read_callback;
 
-  if (config->debug) {
-    for (i = 0; i < nvlen; i++) {
-      char *name = mrb_http2_strcopy(mrb, (char *)nva[i].name,
-          nva[i].namelen);
-      char *value = mrb_http2_strcopy(mrb, (char *)nva[i].value,
-          nva[i].valuelen);
-      fprintf(stderr, "%s: nva[%d]={name=%s, value=%s}\n", __func__,
-          i, name, value);
-      mrb_free(mrb, name);
-      mrb_free(mrb, value);
-    }
-  }
+  //if (app_ctx->server->config->debug) {
+  //  for (i = 0; i < nvlen; i++) {
+  //    char *name = mrb_http2_strcopy(mrb, (char *)nva[i].name,
+  //        nva[i].namelen);
+  //    char *value = mrb_http2_strcopy(mrb, (char *)nva[i].value,
+  //        nva[i].valuelen);
+  //    fprintf(stderr, "%s: nva[%d]={name=%s, value=%s}\n", __func__,
+  //        i, name, value);
+  //    mrb_free(mrb, name);
+  //    mrb_free(mrb, value);
+  //  }
+  //}
 
   TRACER;
   rv = nghttp2_submit_response(session, stream_data->stream_id, nva, nvlen,
@@ -442,8 +440,8 @@ static int send_response(app_context *app_ctx, nghttp2_session *session,
   //
   // "set_logging_cb" callback ruby block
   //
-  callback_ruby_block(mrb, app_ctx->self, config->callback,
-      config->cb_list->logging_cb);
+  callback_ruby_block(mrb, app_ctx->self, app_ctx->server->config->callback,
+      app_ctx->server->config->cb_list->logging_cb);
 
   mrb_http2_request_rec_free(mrb, r);
   TRACER;
@@ -856,7 +854,6 @@ static int server_on_header_callback(nghttp2_session *session,
     const uint8_t *value, size_t valuelen, uint8_t flags, void *user_data)
 {
   http2_session_data *session_data = (http2_session_data *)user_data;
-  mrb_state *mrb = session_data->app_ctx->server->mrb;
 
   http2_stream_data *stream_data;
   nghttp2_nv nv;
@@ -875,9 +872,9 @@ static int server_on_header_callback(nghttp2_session *session,
     }
 
     // create nv and add stream_data->nva
-    mrb_http2_create_nv(mrb, &nv, name, namelen, value, valuelen);
-    stream_data->nvlen = mrb_http2_add_nv(stream_data->nva,
-        stream_data->nvlen, &nv);
+    //mrb_http2_create_nv(session_data->app_ctx->server->mrb, &nv, name, namelen, value, valuelen);
+    //stream_data->nvlen = mrb_http2_add_nv(stream_data->nva,
+    //    stream_data->nvlen, &nv);
 
     //if(stream_data->request_path) {
     //  break;
@@ -886,7 +883,7 @@ static int server_on_header_callback(nghttp2_session *session,
     if(namelen == sizeof(PATH) - 1 && memcmp(PATH, name, namelen) == 0) {
       size_t j;
       for(j = 0; j < valuelen && value[j] != '?'; ++j);
-      stream_data->request_path = percent_decode(mrb, value, j);
+      stream_data->request_path = percent_decode(session_data->app_ctx->server->mrb, value, j);
     }
     break;
   }
@@ -897,7 +894,6 @@ static int server_on_begin_headers_callback(nghttp2_session *session,
     const nghttp2_frame *frame, void *user_data)
 {
   http2_session_data *session_data = (http2_session_data *)user_data;
-  mrb_state *mrb = session_data->app_ctx->server->mrb;
 
   http2_stream_data *stream_data;
 
@@ -906,7 +902,7 @@ static int server_on_begin_headers_callback(nghttp2_session *session,
      frame->headers.cat != NGHTTP2_HCAT_REQUEST) {
     return 0;
   }
-  stream_data = create_http2_stream_data(mrb, session_data,
+  stream_data = create_http2_stream_data(session_data->app_ctx->server->mrb, session_data,
       frame->hd.stream_id);
   nghttp2_session_set_stream_user_data(session, frame->hd.stream_id,
       stream_data);
@@ -917,26 +913,54 @@ static int server_on_begin_headers_callback(nghttp2_session *session,
 
 /* Minimum check for directory traversal. Returns nonzero if it is
    safe. */
-static int check_path(const char *path)
-{
-  /* We don't like '\' in url. */
-  TRACER;
-  return path[0] && path[0] == '/' &&
-    strchr(path, '\\') == NULL &&
-    strstr(path, "/../") == NULL &&
-    strstr(path, "/./") == NULL &&
-    !ends_with(path, "/..") && !ends_with(path, "/.");
+//static int check_path(const char *path)
+//{
+//  /* We don't like '\' in url. */
+//  TRACER;
+//  return path[0] && path[0] == '/' &&
+//    strchr(path, '\\') == NULL &&
+//    strstr(path, "/../") == NULL &&
+//    strstr(path, "/./") == NULL &&
+//    !ends_with(path, "/..") && !ends_with(path, "/.");
+//}
+
+
+static int check_path(const char *path) {
+  size_t len = strlen(path);
+  return path[0] == '/' && strchr(path, '\\') == NULL &&
+         strstr(path, "/../") == NULL && strstr(path, "/./") == NULL &&
+         (len < 3 || memcmp(path + len - 3, "/..", 3) != 0) &&
+         (len < 2 || memcmp(path + len - 2, "/.", 2) != 0);
+}
+
+static int mrb_http2_200_send_response(app_context *app_ctx,
+    nghttp2_session *session, http2_stream_data *stream_data) {
+
+  mrb_http2_request_rec *r = app_ctx->r;
+
+  nghttp2_nv hdrs[] = {
+    MAKE_NV(":status", "200"),
+    MAKE_NV_CS("server", app_ctx->server->config->server_name),
+    MAKE_NV_CS("date", r->date),
+    MAKE_NV_CS("content-length", r->content_length),
+    MAKE_NV_CS("last-modified", r->last_modified)
+  };
+
+  if(send_response(app_ctx, session, hdrs, ARRLEN(hdrs), stream_data) != 0) {
+    close(stream_data->fd);
+    return NGHTTP2_ERR_CALLBACK_FAILURE;
+  }
+  return 0;
 }
 
 static int mrb_http2_send_response(app_context *app_ctx,
     nghttp2_session *session, http2_stream_data *stream_data) {
 
-  mrb_http2_config_t *config = app_ctx->server->config;
   mrb_http2_request_rec *r = app_ctx->r;
 
   nghttp2_nv hdrs[] = {
     MAKE_NV_CS(":status", r->status_line),
-    MAKE_NV_CS("server", config->server_name),
+    MAKE_NV_CS("server", app_ctx->server->config->server_name),
     MAKE_NV_CS("date", r->date),
     MAKE_NV_CS("content-length", r->content_length),
     MAKE_NV_CS("last-modified", r->last_modified)
@@ -957,9 +981,6 @@ static int server_on_request_recv(nghttp2_session *session,
   struct stat finfo;
   size_t uri_len;
   time_t now = time(NULL);
-  mrb_state *mrb = session_data->app_ctx->server->mrb;
-  mrb_http2_config_t *config = session_data->app_ctx->server->config;
-  mrb_http2_request_rec *r = session_data->app_ctx->r;
 
   //
   // Request process phase
@@ -967,50 +988,50 @@ static int server_on_request_recv(nghttp2_session *session,
 
   // cached time string created strftime()
   // First, create r->date for error_reply
-  if (now != r->prev_req_time) {
-    r->prev_req_time = now;
-    set_http_date_str(&now, r->date);
+  if (now != session_data->app_ctx->r->prev_req_time) {
+    session_data->app_ctx->r->prev_req_time = now;
+    set_http_date_str(&now, session_data->app_ctx->r->date);
   }
 
   // get connection record
-  r->conn = session_data->conn;
+  session_data->app_ctx->r->conn = session_data->conn;
 
   // get requset header table and table length
-  r->reqhdr = stream_data->nva;
-  r->reqhdrlen = stream_data->nvlen;
+  //session_data->app_ctx->r->reqhdr = stream_data->nva;
+  //session_data->app_ctx->r->reqhdrlen = stream_data->nvlen;
 
-  if (config->debug) {
-    for (i = 0; i < stream_data->nvlen; i++) {
-      char *name = mrb_http2_strcopy(mrb, (char *)stream_data->nva[i].name,
-          stream_data->nva[i].namelen);
-      char *value = mrb_http2_strcopy(mrb, (char *)stream_data->nva[i].value,
-          stream_data->nva[i].valuelen);
-      fprintf(stderr, "%s: nva[%d]={name=%s, value=%s}\n", __func__, i,
-          name, value);
-      mrb_free(mrb, name);
-      mrb_free(mrb, value);
-    }
-  }
+  //if (session_data->app_ctx->server->config->debug) {
+  //  for (i = 0; i < stream_data->nvlen; i++) {
+  //    char *name = mrb_http2_strcopy(session_data->app_ctx->server->mrb, (char *)stream_data->nva[i].name,
+  //        stream_data->nva[i].namelen);
+  //    char *value = mrb_http2_strcopy(session_data->app_ctx->server->mrb, (char *)stream_data->nva[i].value,
+  //        stream_data->nva[i].valuelen);
+  //    fprintf(stderr, "%s: nva[%d]={name=%s, value=%s}\n", __func__, i,
+  //        name, value);
+  //    mrb_free(session_data->app_ctx->server->mrb, name);
+  //    mrb_free(session_data->app_ctx->server->mrb, value);
+  //  }
+  //}
 
   TRACER;
   if(!stream_data->request_path) {
-    set_status_record(r, HTTP_SERVICE_UNAVAILABLE);
+    set_status_record(session_data->app_ctx->r, HTTP_SERVICE_UNAVAILABLE);
     if(error_reply(session_data->app_ctx, session, stream_data) != 0) {
       return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
     return 0;
   }
-  if (config->debug) {
+  if (session_data->app_ctx->server->config->debug) {
     fprintf(stderr, "%s GET %s\n", session_data->client_addr,
         stream_data->request_path);
   }
   TRACER;
   if(!check_path(stream_data->request_path)) {
-    if (config->debug) {
+    if (session_data->app_ctx->server->config->debug) {
       fprintf(stderr, "%s invalid request_path: %s\n",
           session_data->client_addr, stream_data->request_path);
     }
-    set_status_record(r, HTTP_SERVICE_UNAVAILABLE);
+    set_status_record(session_data->app_ctx->r, HTTP_SERVICE_UNAVAILABLE);
     if(error_reply(session_data->app_ctx, session, stream_data) != 0) {
       return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
@@ -1018,43 +1039,43 @@ static int server_on_request_recv(nghttp2_session *session,
   }
 
   // r-> will free at request_rec_free
-  r->filename = mrb_http2_strcat(mrb, config->document_root,
+  session_data->app_ctx->r->filename = mrb_http2_strcat(session_data->app_ctx->server->mrb, session_data->app_ctx->server->config->document_root,
       stream_data->request_path);
   uri_len = strlen(stream_data->request_path);
-  r->uri = mrb_http2_strcopy(mrb, stream_data->request_path, uri_len);
+  session_data->app_ctx->r->uri = mrb_http2_strcopy(session_data->app_ctx->server->mrb, stream_data->request_path, uri_len);
 
-  if (config->debug) {
+  if (session_data->app_ctx->server->config->debug) {
     fprintf(stderr,
         "%s %s is mapped to %s document_root=%s before map_to_strage_cb\n",
-        session_data->client_addr, r->uri, r->filename, config->document_root);
+        session_data->client_addr, session_data->app_ctx->r->uri, session_data->app_ctx->r->filename, session_data->app_ctx->server->config->document_root);
   }
   //
   // "set_map_to_storage" callback ruby block
   //
-  callback_ruby_block(mrb, session_data->app_ctx->self, config->callback,
-      config->cb_list->map_to_strage_cb);
+  callback_ruby_block(session_data->app_ctx->server->mrb, session_data->app_ctx->self, session_data->app_ctx->server->config->callback,
+      session_data->app_ctx->server->config->cb_list->map_to_strage_cb);
 
-  if (config->debug) {
+  if (session_data->app_ctx->server->config->debug) {
     fprintf(stderr, "%s %s is mapped to %s\n", session_data->client_addr,
-        r->uri, r->filename);
+        session_data->app_ctx->r->uri, session_data->app_ctx->r->filename);
   }
 
   // check proxy config
-  if (r->upstream && r->upstream->server) {
-    if (config->debug) {
-      fprintf(stderr, "found upstream: server:%s uri:%s\n", r->upstream->server,
-          r->upstream->uri);
+  if (session_data->app_ctx->r->upstream && session_data->app_ctx->r->upstream->server) {
+    if (session_data->app_ctx->server->config->debug) {
+      fprintf(stderr, "found upstream: server:%s uri:%s\n", session_data->app_ctx->r->upstream->server,
+          session_data->app_ctx->r->upstream->uri);
     }
     // TODO: Set response headers transparently to client.
     // For now, set 200 code.
-    read_upstream_response(session_data->app_ctx, r->upstream->server,
-        r->upstream->uri);
-    if (r->upstream->res->status_code < 100) {
+    read_upstream_response(session_data->app_ctx, session_data->app_ctx->r->upstream->server,
+        session_data->app_ctx->r->upstream->uri);
+    if (session_data->app_ctx->r->upstream->res->status_code < 100) {
       fprintf(stderr, "mruby-http parse fail, parsed status_code:%d\n",
-          r->upstream->res->status_code);
-      set_status_record(r, HTTP_INTERNAL_SERVER_ERROR);
+          session_data->app_ctx->r->upstream->res->status_code);
+      set_status_record(session_data->app_ctx->r, HTTP_INTERNAL_SERVER_ERROR);
     } else {
-      set_status_record(r, r->upstream->res->status_code);
+      set_status_record(session_data->app_ctx->r, session_data->app_ctx->r->upstream->res->status_code);
     }
     //set_status_record(r, 200);
     if(upstream_reply(session_data->app_ctx, session, stream_data) != 0) {
@@ -1064,28 +1085,28 @@ static int server_on_request_recv(nghttp2_session *session,
   }
 
   TRACER;
-  if (stat(r->filename, &finfo) != 0) {
-    set_status_record(r, HTTP_NOT_FOUND);
+  if (stat(session_data->app_ctx->r->filename, &finfo) != 0) {
+    set_status_record(session_data->app_ctx->r, HTTP_NOT_FOUND);
     if(error_reply(session_data->app_ctx, session, stream_data) != 0) {
       return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
     return 0;
   }
-  r->finfo = &finfo;
+  session_data->app_ctx->r->finfo = &finfo;
 
   // cached time string created strftime()
-  if (r->finfo->st_mtime != r->prev_last_modified) {
-    r->prev_last_modified = r->finfo->st_mtime;
-    set_http_date_str(&r->finfo->st_mtime, r->last_modified);
+  if (session_data->app_ctx->r->finfo->st_mtime != session_data->app_ctx->r->prev_last_modified) {
+    session_data->app_ctx->r->prev_last_modified = session_data->app_ctx->r->finfo->st_mtime;
+    set_http_date_str(&session_data->app_ctx->r->finfo->st_mtime, session_data->app_ctx->r->last_modified);
   }
 
   // set content-length: max 10^64
-  snprintf(r->content_length, 64, "%ld", r->finfo->st_size);
-  stream_data->fileleft = r->finfo->st_size;
+  snprintf(session_data->app_ctx->r->content_length, 64, "%ld", session_data->app_ctx->r->finfo->st_size);
+  stream_data->fileleft = session_data->app_ctx->r->finfo->st_size;
 
   // run mruby script
-  if (r->mruby || r->shared_mruby) {
-    set_status_record(r, HTTP_OK);
+  if (session_data->app_ctx->r->mruby || session_data->app_ctx->r->shared_mruby) {
+    set_status_record(session_data->app_ctx->r, HTTP_OK);
     if(mruby_reply(session_data->app_ctx, session, stream_data) != 0) {
       return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
@@ -1093,8 +1114,8 @@ static int server_on_request_recv(nghttp2_session *session,
   }
 
   // hook content_cb
-  if (config->callback && config->cb_list->content_cb) {
-    set_status_record(r, HTTP_OK);
+  if (session_data->app_ctx->server->config->callback && session_data->app_ctx->server->config->cb_list->content_cb) {
+    set_status_record(session_data->app_ctx->r, HTTP_OK);
     if(content_cb_reply(session_data->app_ctx, session, stream_data) != 0) {
       return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
@@ -1102,11 +1123,11 @@ static int server_on_request_recv(nghttp2_session *session,
   }
 
   // static contents response
-  fd = open(r->filename, O_RDONLY);
+  fd = open(session_data->app_ctx->r->filename, O_RDONLY);
 
   TRACER;
   if(fd == -1) {
-    set_status_record(r, HTTP_NOT_FOUND);
+    set_status_record(session_data->app_ctx->r, HTTP_NOT_FOUND);
     if(error_reply(session_data->app_ctx, session, stream_data) != 0) {
       return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
@@ -1114,10 +1135,10 @@ static int server_on_request_recv(nghttp2_session *session,
   }
 
   stream_data->fd = fd;
-  set_status_record(r, HTTP_OK);
+  //set_status_record(session_data->app_ctx->r, HTTP_OK);
 
   TRACER;
-  return mrb_http2_send_response(session_data->app_ctx, session,
+  return mrb_http2_200_send_response(session_data->app_ctx, session,
       stream_data);
 }
 
@@ -1180,15 +1201,12 @@ static void mrb_http2_server_session_init(http2_session_data *session_data)
   nghttp2_option_set_recv_client_preface(option, 1);
 
   nghttp2_session_callbacks_new(&callbacks);
+
   nghttp2_session_callbacks_set_send_callback(callbacks, server_send_callback);
-  nghttp2_session_callbacks_set_on_frame_recv_callback(callbacks,
-      server_on_frame_recv_callback);
-  nghttp2_session_callbacks_set_on_stream_close_callback(callbacks,
-      server_on_stream_close_callback);
-  nghttp2_session_callbacks_set_on_header_callback(callbacks,
-      server_on_header_callback);
-  nghttp2_session_callbacks_set_on_begin_headers_callback(callbacks,
-      server_on_begin_headers_callback);
+  nghttp2_session_callbacks_set_on_frame_recv_callback(callbacks, server_on_frame_recv_callback);
+  nghttp2_session_callbacks_set_on_stream_close_callback(callbacks, server_on_stream_close_callback);
+  nghttp2_session_callbacks_set_on_header_callback(callbacks, server_on_header_callback);
+  nghttp2_session_callbacks_set_on_begin_headers_callback(callbacks, server_on_begin_headers_callback);
 
   nghttp2_session_server_new2(&session_data->session, callbacks, session_data,
       option);
