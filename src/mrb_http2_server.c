@@ -104,7 +104,7 @@ static void set_http_date_str(time_t *time, char *date)
   char *p = date;
 
   if (gmtime_r(time, &t) == NULL) {
-    return 0;
+    return;
   }
 
   memcpy(p, DAY_OF_WEEK[t.tm_wday], 3);
@@ -409,7 +409,7 @@ static int send_response(app_context *app_ctx, nghttp2_session *session,
   int rv;
   mrb_state *mrb = app_ctx->server->mrb;
   mrb_http2_request_rec *r = app_ctx->r;
-  int i;
+  //int i;
 
   nghttp2_data_provider data_prd;
   data_prd.source.ptr = stream_data;
@@ -852,7 +852,7 @@ static int server_on_header_callback(nghttp2_session *session,
   http2_session_data *session_data = (http2_session_data *)user_data;
 
   http2_stream_data *stream_data;
-  nghttp2_nv nv;
+  //nghttp2_nv nv;
   const char PATH[] = ":path";
 
   TRACER;
@@ -957,7 +957,7 @@ static int server_on_request_recv(nghttp2_session *session,
     http2_session_data *session_data, http2_stream_data *stream_data)
 {
   int fd;
-  int i;
+  //int i;
   struct stat finfo;
   size_t uri_len;
   time_t now = time(NULL);
