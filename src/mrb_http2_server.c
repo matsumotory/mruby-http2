@@ -387,7 +387,6 @@ static ssize_t file_read_callback(nghttp2_session *session,
 
   while((nread = read(stream_data->fd, buf, length)) == -1 && errno == EINTR);
   TRACER;
-  //nread = read(stream_data->fd, buf, length);
 
   if(nread == -1) {
     return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
@@ -516,7 +515,6 @@ static size_t write_upstream_data(void *ptr, size_t size, size_t nmemb,
   app_context *app_ctx = (app_context *)data;
   mrb_http2_request_rec *r = app_ctx->r;
   mrb_state *mrb = app_ctx->server->mrb;
-  //mrb_http2_config_t *config = app_ctx->server->config;
 
   r->upstream->res->data = (char *)mrb_realloc(mrb, r->upstream->res->data,
       r->upstream->res->len + len + 1);
@@ -524,7 +522,6 @@ static size_t write_upstream_data(void *ptr, size_t size, size_t nmemb,
   if (r->upstream->res->data) {
     memcpy(r->upstream->res->data + r->upstream->res->len, ptr, len);
     r->upstream->res->len += len;
-    //r->upstream->res->data[r->upstream->res->len] = 0;
   }
 
   return len;
@@ -532,7 +529,6 @@ static size_t write_upstream_data(void *ptr, size_t size, size_t nmemb,
 
 static void parse_upstream_response(app_context *app_ctx)
 {
-  //mrb_http2_request_rec *r = app_ctx->r;
   mrb_state *mrb = app_ctx->server->mrb;
   struct RClass *http_class, *http_parser_class;
   mrb_value args[1], parser;
@@ -876,10 +872,6 @@ static int server_on_header_callback(nghttp2_session *session,
     //stream_data->nvlen = mrb_http2_add_nv(stream_data->nva,
     //    stream_data->nvlen, &nv);
 
-    //if(stream_data->request_path) {
-    //  break;
-    //}
-
     if(namelen == sizeof(PATH) - 1 && memcmp(PATH, name, namelen) == 0) {
       size_t j;
       for(j = 0; j < valuelen && value[j] != '?'; ++j);
@@ -913,18 +905,6 @@ static int server_on_begin_headers_callback(nghttp2_session *session,
 
 /* Minimum check for directory traversal. Returns nonzero if it is
    safe. */
-//static int check_path(const char *path)
-//{
-//  /* We don't like '\' in url. */
-//  TRACER;
-//  return path[0] && path[0] == '/' &&
-//    strchr(path, '\\') == NULL &&
-//    strstr(path, "/../") == NULL &&
-//    strstr(path, "/./") == NULL &&
-//    !ends_with(path, "/..") && !ends_with(path, "/.");
-//}
-
-
 static int check_path(const char *path) {
   size_t len = strlen(path);
   return path[0] == '/' && strchr(path, '\\') == NULL &&
@@ -1021,10 +1001,10 @@ static int server_on_request_recv(nghttp2_session *session,
     }
     return 0;
   }
-  if (session_data->app_ctx->server->config->debug) {
-    fprintf(stderr, "%s GET %s\n", session_data->client_addr,
-        stream_data->request_path);
-  }
+  //if (session_data->app_ctx->server->config->debug) {
+  //  fprintf(stderr, "%s GET %s\n", session_data->client_addr,
+  //      stream_data->request_path);
+  //}
   TRACER;
   if(!check_path(stream_data->request_path)) {
     if (session_data->app_ctx->server->config->debug) {
@@ -1044,45 +1024,45 @@ static int server_on_request_recv(nghttp2_session *session,
   uri_len = strlen(stream_data->request_path);
   session_data->app_ctx->r->uri = mrb_http2_strcopy(session_data->app_ctx->server->mrb, stream_data->request_path, uri_len);
 
-  if (session_data->app_ctx->server->config->debug) {
-    fprintf(stderr,
-        "%s %s is mapped to %s document_root=%s before map_to_strage_cb\n",
-        session_data->client_addr, session_data->app_ctx->r->uri, session_data->app_ctx->r->filename, session_data->app_ctx->server->config->document_root);
-  }
+  //if (session_data->app_ctx->server->config->debug) {
+  //  fprintf(stderr,
+  //      "%s %s is mapped to %s document_root=%s before map_to_strage_cb\n",
+  //      session_data->client_addr, session_data->app_ctx->r->uri, session_data->app_ctx->r->filename, session_data->app_ctx->server->config->document_root);
+  //}
   //
   // "set_map_to_storage" callback ruby block
   //
   callback_ruby_block(session_data->app_ctx->server->mrb, session_data->app_ctx->self, session_data->app_ctx->server->config->callback,
       session_data->app_ctx->server->config->cb_list->map_to_strage_cb);
 
-  if (session_data->app_ctx->server->config->debug) {
-    fprintf(stderr, "%s %s is mapped to %s\n", session_data->client_addr,
-        session_data->app_ctx->r->uri, session_data->app_ctx->r->filename);
-  }
+  //if (session_data->app_ctx->server->config->debug) {
+  //  fprintf(stderr, "%s %s is mapped to %s\n", session_data->client_addr,
+  //      session_data->app_ctx->r->uri, session_data->app_ctx->r->filename);
+  //}
 
   // check proxy config
-  if (session_data->app_ctx->r->upstream && session_data->app_ctx->r->upstream->server) {
-    if (session_data->app_ctx->server->config->debug) {
-      fprintf(stderr, "found upstream: server:%s uri:%s\n", session_data->app_ctx->r->upstream->server,
-          session_data->app_ctx->r->upstream->uri);
-    }
-    // TODO: Set response headers transparently to client.
-    // For now, set 200 code.
-    read_upstream_response(session_data->app_ctx, session_data->app_ctx->r->upstream->server,
-        session_data->app_ctx->r->upstream->uri);
-    if (session_data->app_ctx->r->upstream->res->status_code < 100) {
-      fprintf(stderr, "mruby-http parse fail, parsed status_code:%d\n",
-          session_data->app_ctx->r->upstream->res->status_code);
-      set_status_record(session_data->app_ctx->r, HTTP_INTERNAL_SERVER_ERROR);
-    } else {
-      set_status_record(session_data->app_ctx->r, session_data->app_ctx->r->upstream->res->status_code);
-    }
-    //set_status_record(r, 200);
-    if(upstream_reply(session_data->app_ctx, session, stream_data) != 0) {
-      return NGHTTP2_ERR_CALLBACK_FAILURE;
-    }
-    return 0;
-  }
+  //if (session_data->app_ctx->r->upstream && session_data->app_ctx->r->upstream->server) {
+  //  if (session_data->app_ctx->server->config->debug) {
+  //    fprintf(stderr, "found upstream: server:%s uri:%s\n", session_data->app_ctx->r->upstream->server,
+  //        session_data->app_ctx->r->upstream->uri);
+  //  }
+  //  // TODO: Set response headers transparently to client.
+  //  // For now, set 200 code.
+  //  read_upstream_response(session_data->app_ctx, session_data->app_ctx->r->upstream->server,
+  //      session_data->app_ctx->r->upstream->uri);
+  //  if (session_data->app_ctx->r->upstream->res->status_code < 100) {
+  //    fprintf(stderr, "mruby-http parse fail, parsed status_code:%d\n",
+  //        session_data->app_ctx->r->upstream->res->status_code);
+  //    set_status_record(session_data->app_ctx->r, HTTP_INTERNAL_SERVER_ERROR);
+  //  } else {
+  //    set_status_record(session_data->app_ctx->r, session_data->app_ctx->r->upstream->res->status_code);
+  //  }
+  //  //set_status_record(r, 200);
+  //  if(upstream_reply(session_data->app_ctx, session, stream_data) != 0) {
+  //    return NGHTTP2_ERR_CALLBACK_FAILURE;
+  //  }
+  //  return 0;
+  //}
 
   // run mruby script
   if (session_data->app_ctx->r->mruby || session_data->app_ctx->r->shared_mruby) {
@@ -1146,7 +1126,6 @@ static int server_on_frame_recv_callback(nghttp2_session *session,
     const nghttp2_frame *frame, void *user_data)
 {
   http2_session_data *session_data = (http2_session_data *)user_data;
-  //mrb_state *mrb = session_data->app_ctx->server->mrb;
   http2_stream_data *stream_data;
 
   TRACER;
@@ -1362,7 +1341,6 @@ static void mrb_http2_server_eventcb(struct bufferevent *bev, short events,
     void *ptr)
 {
   http2_session_data *session_data = (http2_session_data *)ptr;
-  //mrb_state *mrb = session_data->app_ctx->server->mrb;
   mrb_http2_config_t *config = session_data->app_ctx->server->config;
 
   TRACER;
@@ -1579,7 +1557,6 @@ static char *must_get_config_str_to_cstr(mrb_state *mrb, mrb_value args,
         mrb_str_new_cstr(mrb, name));
   }
 
-  //return mrb_str_to_cstr(mrb, val);
   return mrb_http2_strcopy(mrb, RSTRING_PTR(val), RSTRING_LEN(val));
 }
 
