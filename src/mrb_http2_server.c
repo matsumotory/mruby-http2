@@ -1084,26 +1084,6 @@ static int server_on_request_recv(nghttp2_session *session,
     return 0;
   }
 
-  TRACER;
-  if (stat(session_data->app_ctx->r->filename, &finfo) != 0) {
-    set_status_record(session_data->app_ctx->r, HTTP_NOT_FOUND);
-    if(error_reply(session_data->app_ctx, session, stream_data) != 0) {
-      return NGHTTP2_ERR_CALLBACK_FAILURE;
-    }
-    return 0;
-  }
-  session_data->app_ctx->r->finfo = &finfo;
-
-  // cached time string created strftime()
-  if (session_data->app_ctx->r->finfo->st_mtime != session_data->app_ctx->r->prev_last_modified) {
-    session_data->app_ctx->r->prev_last_modified = session_data->app_ctx->r->finfo->st_mtime;
-    set_http_date_str(&session_data->app_ctx->r->finfo->st_mtime, session_data->app_ctx->r->last_modified);
-  }
-
-  // set content-length: max 10^64
-  snprintf(session_data->app_ctx->r->content_length, 64, "%ld", session_data->app_ctx->r->finfo->st_size);
-  stream_data->fileleft = session_data->app_ctx->r->finfo->st_size;
-
   // run mruby script
   if (session_data->app_ctx->r->mruby || session_data->app_ctx->r->shared_mruby) {
     set_status_record(session_data->app_ctx->r, HTTP_OK);
@@ -1136,6 +1116,26 @@ static int server_on_request_recv(nghttp2_session *session,
 
   stream_data->fd = fd;
   //set_status_record(session_data->app_ctx->r, HTTP_OK);
+
+  TRACER;
+  if (fstat(fd, &finfo) != 0) {
+    set_status_record(session_data->app_ctx->r, HTTP_NOT_FOUND);
+    if(error_reply(session_data->app_ctx, session, stream_data) != 0) {
+      return NGHTTP2_ERR_CALLBACK_FAILURE;
+    }
+    return 0;
+  }
+  session_data->app_ctx->r->finfo = &finfo;
+
+  // cached time string created strftime()
+  if (session_data->app_ctx->r->finfo->st_mtime != session_data->app_ctx->r->prev_last_modified) {
+    session_data->app_ctx->r->prev_last_modified = session_data->app_ctx->r->finfo->st_mtime;
+    set_http_date_str(&session_data->app_ctx->r->finfo->st_mtime, session_data->app_ctx->r->last_modified);
+  }
+
+  // set content-length: max 10^64
+  snprintf(session_data->app_ctx->r->content_length, 64, "%ld", session_data->app_ctx->r->finfo->st_size);
+  stream_data->fileleft = session_data->app_ctx->r->finfo->st_size;
 
   TRACER;
   return mrb_http2_200_send_response(session_data->app_ctx, session,
