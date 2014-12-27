@@ -28,6 +28,8 @@
 #include <pthread.h>
 #include <err.h>
 
+#include <jemalloc/jemalloc.h>
+
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
