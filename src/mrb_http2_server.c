@@ -81,52 +81,6 @@ static void callback_ruby_block(mrb_state *mrb, mrb_value self,
   }
 }
 
-static char *cpydig(char *buf, int n, size_t len) {
-  char *p;
-
-  p = buf + len - 1;
-  do {
-    *p-- = (n % 10) + '0';
-    n /= 10;
-  } while (p >= buf);
-
-  return buf + len;
-}
-
-static const char *MONTH[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                              "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
-static const char *DAY_OF_WEEK[] = {"Sun", "Mon", "Tue", "Wed",
-                                    "Thu", "Fri", "Sat"};
-
-static void set_http_date_str(time_t *time, char *date)
-{
-  struct tm t;
-  char *p = date;
-
-  if (gmtime_r(time, &t) == NULL) {
-    return;
-  }
-
-  memcpy(p, DAY_OF_WEEK[t.tm_wday], 3);
-  p += 3;
-  *p++ = ',';
-  *p++ = ' ';
-  p = cpydig(p, t.tm_mday, 2);
-  *p++ = ' ';
-  memcpy(p, MONTH[t.tm_mon], 3);
-  p += 3;
-  *p++ = ' ';
-  p = cpydig(p, t.tm_year + 1900, 4);
-  *p++ = ' ';
-  p = cpydig(p, t.tm_hour, 2);
-  *p++ = ':';
-  p = cpydig(p, t.tm_min, 2);
-  *p++ = ':';
-  p = cpydig(p, t.tm_sec, 2);
-  memcpy(p, " GMT", 4);
-  p += 4;
-}
-
 static void mrb_http2_conn_rec_free(mrb_state *mrb,
     mrb_http2_conn_rec *conn)
 {
