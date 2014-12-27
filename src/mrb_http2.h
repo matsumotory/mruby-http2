@@ -80,12 +80,19 @@
       (uint16_t)(RSTRING_LEN(NAME)), (uint8_t*)RSTRING_PTR(VALUE),  \
       (uint16_t)(RSTRING_LEN(VALUE)))
 
+typedef struct {
+  char *str;
+  size_t len;
+} mrb_http2_str;
+
 int mrb_http2_get_nv_id(nghttp2_nv *nva, size_t nvlen, const char *key);
 void mrb_http2_create_nv(mrb_state *mrb, nghttp2_nv *nv, const uint8_t *name,
     size_t namelen, const uint8_t *value, size_t valuelen);
 size_t mrb_http2_add_nv(nghttp2_nv *nva, size_t nvlen, nghttp2_nv *nv);
 
 char *mrb_http2_strcat(mrb_state *mrb, const char *s1, const char *s2);
+char *mrb_http2_strcat2(mrb_state *mrb, mrb_http2_str *s1, mrb_http2_str *s2);
+mrb_http2_str *mrb_http2_str_new(mrb_state *mrb, char *s, size_t len);
 char *mrb_http2_strcopy(mrb_state *mrb, const char *s, size_t len);
 char *strcopy(const char *s, size_t len);
 mrb_value mrb_http2_class_obj(mrb_state *mrb, mrb_value self,

@@ -7,6 +7,7 @@
 #ifndef MRB_HTTP2_SERVER_H
 #define MRB_HTTP2_SERVER_H
 
+#include "mrb_http2.h"
 #include "mrb_http2_request.h"
 
 // callback block symbol literal list
@@ -38,7 +39,7 @@ typedef struct {
   const char *key;
   const char *cert;
   const char *service;
-  const char *document_root;
+  mrb_http2_str *document_root;
 
   // server response header
   const char *server_name;

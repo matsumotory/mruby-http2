@@ -81,6 +81,25 @@ char *mrb_http2_strcat(mrb_state *mrb, const char *s1, const char *s2)
   return s3;
 }
 
+char *mrb_http2_strcat2(mrb_state *mrb, mrb_http2_str *s1, mrb_http2_str *s2)
+{
+  char *s3 = (char *)mrb_malloc(mrb, s1->len + s2->len + 1);
+
+  memcpy(s3, s1->str, s1->len);
+  memcpy(s3 + s1->len, s2->str, s2->len + 1);
+
+  return s3;
+}
+
+mrb_http2_str *mrb_http2_str_new(mrb_state *mrb, char *s, size_t len)
+{
+  mrb_http2_str *dst;
+  dst = mrb_malloc(mrb, sizeof(mrb_http2_str));
+  dst->str = s;
+  dst->len = len;
+  return dst;
+}
+
 char *mrb_http2_strcopy(mrb_state *mrb, const char *s, size_t len)
 {
   char *dst;
@@ -102,14 +121,14 @@ char *strcopy(const char *s, size_t len)
 
 mrb_value mrb_http2_class_obj(mrb_state *mrb, mrb_value self,
     char *obj_id, char *class_name)
-{ 
+{
   mrb_value obj;
   struct RClass *target, *http2;
 
   obj = mrb_iv_get(mrb, self, mrb_intern_cstr(mrb, obj_id));
   if (mrb_nil_p(obj)) {
     http2 = mrb_module_get(mrb, "HTTP2");
-    target = (struct RClass *)mrb_class_ptr(mrb_const_get(mrb, 
+    target = (struct RClass *)mrb_class_ptr(mrb_const_get(mrb,
           mrb_obj_value(http2), mrb_intern_cstr(mrb, class_name)));
     obj = mrb_obj_new(mrb, target, 0, NULL);
     mrb_iv_set(mrb, self, mrb_intern_cstr(mrb, obj_id), obj);
