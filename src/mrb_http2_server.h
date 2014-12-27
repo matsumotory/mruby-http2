@@ -9,6 +9,8 @@
 
 #include "mrb_http2_request.h"
 
+#define MRB_HTTP2_READ_LENGTH_MAX ((1 << 16) - 1)
+
 // callback block symbol literal list
 typedef struct {
 

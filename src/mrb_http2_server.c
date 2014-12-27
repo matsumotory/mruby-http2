@@ -1124,6 +1124,14 @@ static int server_on_stream_close_callback(nghttp2_session *session,
   return 0;
 }
 
+static ssize_t fixed_data_source_length_callback(nghttp2_session *session,
+    uint8_t frame_type, int32_t stream_id, int32_t session_remote_window_size,
+    int32_t stream_remote_window_size, uint32_t remote_max_frame_size,
+    void *user_data)
+{
+  return MRB_HTTP2_READ_LENGTH_MAX;
+}
+
 static void mrb_http2_server_session_init(http2_session_data *session_data)
 {
   nghttp2_option *option;
@@ -1140,6 +1148,7 @@ static void mrb_http2_server_session_init(http2_session_data *session_data)
   nghttp2_session_callbacks_set_on_stream_close_callback(callbacks, server_on_stream_close_callback);
   nghttp2_session_callbacks_set_on_header_callback(callbacks, server_on_header_callback);
   nghttp2_session_callbacks_set_on_begin_headers_callback(callbacks, server_on_begin_headers_callback);
+  nghttp2_session_callbacks_set_data_source_read_length_callback(callbacks, fixed_data_source_length_callback);
 
   nghttp2_session_server_new2(&session_data->session, callbacks, session_data,
       option);
