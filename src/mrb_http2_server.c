@@ -29,7 +29,7 @@ typedef struct {
 
 typedef struct http2_stream_data {
   struct http2_stream_data *prev, *next;
-  mrb_http2_str *request_path;
+  char *request_path;
   int32_t stream_id;
   int fd;
   int64_t fileleft;
@@ -167,7 +167,6 @@ static http2_stream_data* create_http2_stream_data(mrb_state *mrb,
   stream_data->fd = -1;
   stream_data->fileleft = 0;
   stream_data->nvlen = 0;
-  stream_data->request_path = (mrb_http2_str *)mrb_malloc(mrb, sizeof(mrb_http2_str));
 
   add_stream(session_data, stream_data);
   return stream_data;
@@ -180,7 +179,6 @@ static void delete_http2_stream_data(mrb_state *mrb,
   if(stream_data->fd != -1) {
     close(stream_data->fd);
   }
-  mrb_free(mrb, stream_data->request_path->str);
   mrb_free(mrb, stream_data->request_path);
   mrb_free(mrb, stream_data);
 }
@@ -831,8 +829,7 @@ static int server_on_header_callback(nghttp2_session *session,
     if(namelen == sizeof(PATH) - 1 && memcmp(PATH, name, namelen) == 0) {
       size_t j;
       for(j = 0; j < valuelen && value[j] != '?'; ++j);
-      stream_data->request_path->str = percent_decode(session_data->app_ctx->server->mrb, value, j);
-      stream_data->request_path->len = valuelen;
+      stream_data->request_path = percent_decode(session_data->app_ctx->server->mrb, value, j);
     }
     break;
   }
@@ -862,7 +859,8 @@ static int server_on_begin_headers_callback(nghttp2_session *session,
 
 /* Minimum check for directory traversal. Returns nonzero if it is
    safe. */
-static int check_path(const char *path, size_t len) {
+static int check_path(const char *path) {
+  size_t len = strlen(path);
   return path[0] == '/' && strchr(path, '\\') == NULL &&
          strstr(path, "/../") == NULL && strstr(path, "/./") == NULL &&
          (len < 3 || memcmp(path + len - 3, "/..", 3) != 0) &&
@@ -950,7 +948,7 @@ static int server_on_request_recv(nghttp2_session *session,
   //}
 
   TRACER;
-  if(!stream_data->request_path->str) {
+  if(!stream_data->request_path) {
     set_status_record(session_data->app_ctx->r, HTTP_SERVICE_UNAVAILABLE);
     if(error_reply(session_data->app_ctx, session, stream_data) != 0) {
       return NGHTTP2_ERR_CALLBACK_FAILURE;
@@ -959,13 +957,13 @@ static int server_on_request_recv(nghttp2_session *session,
   }
   //if (session_data->app_ctx->server->config->debug) {
   //  fprintf(stderr, "%s GET %s\n", session_data->client_addr,
-  //      stream_data->request_path.str);
+  //      stream_data->request_path);
   //}
   TRACER;
-  if(!check_path(stream_data->request_path->str, stream_data->request_path->len)) {
+  if(!check_path(stream_data->request_path)) {
     if (session_data->app_ctx->server->config->debug) {
       fprintf(stderr, "%s invalid request_path: %s\n",
-          session_data->client_addr, stream_data->request_path->str);
+          session_data->client_addr, stream_data->request_path);
     }
     set_status_record(session_data->app_ctx->r, HTTP_SERVICE_UNAVAILABLE);
     if(error_reply(session_data->app_ctx, session, stream_data) != 0) {
@@ -975,9 +973,10 @@ static int server_on_request_recv(nghttp2_session *session,
   }
 
   // r-> will free at request_rec_free
-  session_data->app_ctx->r->filename = mrb_http2_strcat2(session_data->app_ctx->server->mrb, session_data->app_ctx->server->config->document_root,
+  session_data->app_ctx->r->filename = mrb_http2_strcat(session_data->app_ctx->server->mrb, session_data->app_ctx->server->config->document_root,
       stream_data->request_path);
-  session_data->app_ctx->r->uri = mrb_http2_strcopy(session_data->app_ctx->server->mrb, stream_data->request_path->str, stream_data->request_path->len);
+  uri_len = strlen(stream_data->request_path);
+  session_data->app_ctx->r->uri = mrb_http2_strcopy(session_data->app_ctx->server->mrb, stream_data->request_path, uri_len);
 
   //if (session_data->app_ctx->server->config->debug) {
   //  fprintf(stderr,
@@ -1502,19 +1501,6 @@ static char *may_get_config_str_to_cstr(mrb_state *mrb, mrb_value args,
   return mrb_http2_strcopy(mrb, RSTRING_PTR(val), RSTRING_LEN(val));
 }
 
-static mrb_http2_str *must_get_config_str_to_cstr2(mrb_state *mrb, mrb_value args,
-    const char *name)
-{
-  mrb_value val;
-  if (mrb_nil_p(val = mrb_hash_get(mrb, args,
-                  mrb_symbol_value(mrb_intern_cstr(mrb, name))))) {
-    mrb_raisef(mrb, E_ARGUMENT_ERROR, "%S not found",
-        mrb_str_new_cstr(mrb, name));
-  }
-
-  return mrb_http2_str_new(mrb, RSTRING_PTR(val), RSTRING_LEN(val));
-}
-
 static char *must_get_config_str_to_cstr(mrb_state *mrb, mrb_value args,
     const char *name)
 {
@@ -1652,7 +1638,7 @@ static mrb_http2_config_t *mrb_http2_s_config_init(mrb_state *mrb,
 
   config->server_host = may_get_config_str_to_cstr(mrb, args, "server_host");
 
-  config->document_root = must_get_config_str_to_cstr2(mrb, args,
+  config->document_root = must_get_config_str_to_cstr(mrb, args,
       "document_root");
   config->server_name = must_get_config_str_to_cstr(mrb, args, "server_name");
   config->cb_list = mruby_cb_list_init(mrb);
@@ -1753,7 +1739,7 @@ static mrb_value mrb_http2_server_document_root(mrb_state *mrb, mrb_value self)
   mrb_http2_data_t *data = DATA_PTR(self);
   mrb_http2_config_t *config = data->s->config;
 
-  return mrb_str_new(mrb, config->document_root->str, config->document_root->len);
+  return mrb_str_new_cstr(mrb, config->document_root);
 }
 
 static mrb_value mrb_http2_server_client_ip(mrb_state *mrb, mrb_value self)
