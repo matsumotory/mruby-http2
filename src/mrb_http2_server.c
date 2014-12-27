@@ -862,8 +862,7 @@ static int server_on_begin_headers_callback(nghttp2_session *session,
 
 /* Minimum check for directory traversal. Returns nonzero if it is
    safe. */
-static int check_path(const char *path) {
-  size_t len = strlen(path);
+static int check_path(const char *path, size_t len) {
   return path[0] == '/' && strchr(path, '\\') == NULL &&
          strstr(path, "/../") == NULL && strstr(path, "/./") == NULL &&
          (len < 3 || memcmp(path + len - 3, "/..", 3) != 0) &&
@@ -963,7 +962,7 @@ static int server_on_request_recv(nghttp2_session *session,
   //      stream_data->request_path.str);
   //}
   TRACER;
-  if(!check_path(stream_data->request_path->str)) {
+  if(!check_path(stream_data->request_path->str, stream_data->request_path->len)) {
     if (session_data->app_ctx->server->config->debug) {
       fprintf(stderr, "%s invalid request_path: %s\n",
           session_data->client_addr, stream_data->request_path->str);
