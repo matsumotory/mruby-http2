@@ -1654,8 +1654,11 @@ static mrb_http2_config_t *mrb_http2_s_config_init(mrb_state *mrb,
   service = mrb_str_to_cstr(mrb, mrb_fixnum_to_str(mrb, port, 10));
   config->service = service;
 
-  worker = mrb_http2_config_get_obj(mrb, args, "worker");
-  config->worker = mrb_fixnum(worker);
+  if (!mrb_nil_p(worker = mrb_http2_config_get_obj(mrb, args, "worker"))) {
+    config->worker = mrb_fixnum(worker);
+  } else {
+    config->worker = 0;
+  }
 
   // CALLBACK options: defulat DISABLED
   config->callback = MRB_HTTP2_CONFIG_DISABLED;
