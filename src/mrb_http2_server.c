@@ -1463,68 +1463,54 @@ static void mrb_start_listen(struct event_base *evbase,
   mrb_raise(mrb, E_RUNTIME_ERROR, "Could not start listener");
 }
 
+static void mrb_http2_worker_run(mrb_state *mrb, mrb_value self,
+    mrb_http2_server_t *server, mrb_http2_request_rec *r, app_context *app_ctx)
+{
+
+  SSL_CTX *ssl_ctx = NULL;
+  struct event_base *evbase;
+
+  if (server->config->tls) {
+    ssl_ctx = mrb_http2_create_ssl_ctx(mrb, server->config->key,
+        server->config->cert);
+  }
+
+  evbase = event_base_new();
+
+  init_app_context(app_ctx, ssl_ctx, evbase);
+  app_ctx->server = server;
+  app_ctx->r = r;
+  app_ctx->self = self;
+
+  TRACER;
+  mrb_start_listen(evbase, server->config, app_ctx);
+  event_base_loop(app_ctx->evbase, 0);
+  event_base_free(app_ctx->evbase);
+  if (server->config->tls) {
+    SSL_CTX_free(app_ctx->ssl_ctx);
+  }
+  TRACER;
+}
+
 static mrb_value mrb_http2_server_run(mrb_state *mrb, mrb_value self)
 {
   mrb_http2_data_t *data = DATA_PTR(self);
-  mrb_http2_server_t *server = data->s;
-  mrb_http2_request_rec *r = data->r;
-  SSL_CTX *ssl_ctx = NULL;
   app_context app_ctx;
-  struct event_base *evbase;
 
-  if (server->config->worker > 0) {
+  if (data->s->config->worker > 0) {
     int pid[MRB_HTTP2_WORKER_MAX];
     int i, status;
-    for (i=0; i< server->config->worker && (pid[i] = fork()) > 0; i++);
+    for (i=0; i< data->s->config->worker && (pid[i] = fork()) > 0; i++);
 
-    if (i == server->config->worker){
-       for(i = 0; i < server->config->worker; i++){
+    if (i == data->s->config->worker){
+       for(i = 0; i < data->s->config->worker; i++){
          wait(&status);
        }
     } else if (pid[i] == 0){
-
-      if (server->config->tls) {
-        ssl_ctx = mrb_http2_create_ssl_ctx(mrb, server->config->key,
-            server->config->cert);
-      }
-
-      evbase = event_base_new();
-
-      init_app_context(&app_ctx, ssl_ctx, evbase);
-      app_ctx.server = server;
-      app_ctx.r = r;
-      app_ctx.self = self;
-
-      TRACER;
-      mrb_start_listen(evbase, server->config, &app_ctx);
-      event_base_loop(app_ctx.evbase, 0);
-      event_base_free(app_ctx.evbase);
-      if (server->config->tls) {
-        SSL_CTX_free(app_ctx.ssl_ctx);
-      }
-      TRACER;
+      mrb_http2_worker_run(mrb, self, data->s, data->r, &app_ctx);
     }
   } else {
-    if (server->config->tls) {
-      ssl_ctx = mrb_http2_create_ssl_ctx(mrb, server->config->key,
-          server->config->cert);
-    }
-
-    evbase = event_base_new();
-
-    init_app_context(&app_ctx, ssl_ctx, evbase);
-    app_ctx.server = server;
-    app_ctx.r = r;
-    app_ctx.self = self;
-
-    TRACER;
-    mrb_start_listen(evbase, server->config, &app_ctx);
-    event_base_loop(app_ctx.evbase, 0);
-    event_base_free(app_ctx.evbase);
-    if (server->config->tls) {
-      SSL_CTX_free(app_ctx.ssl_ctx);
-    }
-    TRACER;
+    mrb_http2_worker_run(mrb, self, data->s, data->r, &app_ctx);
   }
 
   return self;
