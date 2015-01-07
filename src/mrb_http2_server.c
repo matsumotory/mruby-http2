@@ -1438,11 +1438,14 @@ static void mrb_start_listen(struct event_base *evbase,
       evutil_socket_t fd;
       fd = socket(rp->ai_family, SOCK_STREAM, IPPROTO_TCP);
       setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (void *)(int[]) {1}, sizeof(int));
+#if defined(__linux__) && defined(SO_REUSEPORT)
       setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, (void *)(int[]) {1}, sizeof(int));
+#endif
       evutil_make_socket_nonblocking(fd);
 
       if (bind(fd, (struct sockaddr *) rp->ai_addr, rp->ai_addrlen) < 0) {
-        mrb_raise(mrb, E_RUNTIME_ERROR, "Could not bind");
+        mrb_raise(mrb, E_RUNTIME_ERROR, "Could not bind, "
+            "don't support SO_REUSEPORT? So, can't use worker mode");
       }
       listener = evconnlistener_new(evbase, mrb_http2_acceptcb, app_ctx,
           LEV_OPT_CLOSE_ON_FREE | LEV_OPT_REUSEABLE,16, fd);
