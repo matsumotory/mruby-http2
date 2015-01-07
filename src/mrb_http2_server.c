@@ -19,6 +19,8 @@
 #include "mruby/string.h"
 #include "mruby/compile.h"
 
+#include <sys/wait.h>
+
 typedef struct {
   SSL_CTX *ssl_ctx;
   struct event_base *evbase;
@@ -1161,8 +1163,9 @@ static void mrb_http2_server_session_init(http2_session_data *session_data)
    magic octets and SETTINGS frame */
 static int send_server_connection_header(http2_session_data *session_data)
 {
-  nghttp2_settings_entry iv[1] = {
-    { NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, 100 }
+  nghttp2_settings_entry iv[2] = {
+    { NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, 100 },
+    { NGHTTP2_SETTINGS_INITIAL_WINDOW_SIZE, ((1 << 18) - 1) }
   };
   int rv;
 
@@ -1431,11 +1434,25 @@ static void mrb_start_listen(struct event_base *evbase,
   TRACER;
   for(rp = res; rp; rp = rp->ai_next) {
     struct evconnlistener *listener;
-    listener = evconnlistener_new_bind(evbase, mrb_http2_acceptcb, app_ctx,
-        LEV_OPT_CLOSE_ON_FREE | LEV_OPT_REUSEABLE, 16, rp->ai_addr,
-        rp->ai_addrlen);
+    if (config->worker > 0) {
+      evutil_socket_t fd;
+      fd = socket(rp->ai_family, SOCK_STREAM, IPPROTO_TCP);
+      setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (void *)(int[]) {1}, sizeof(int));
+      setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, (void *)(int[]) {1}, sizeof(int));
+      evutil_make_socket_nonblocking(fd);
 
-    if(listener) {
+      if (bind(fd, (struct sockaddr *) rp->ai_addr, rp->ai_addrlen) < 0) {
+        mrb_raise(mrb, E_RUNTIME_ERROR, "Could not bind");
+      }
+      listener = evconnlistener_new(evbase, mrb_http2_acceptcb, app_ctx,
+          LEV_OPT_CLOSE_ON_FREE | LEV_OPT_REUSEABLE,16, fd);
+    } else {
+      listener = evconnlistener_new_bind(evbase, mrb_http2_acceptcb, app_ctx,
+          LEV_OPT_CLOSE_ON_FREE | LEV_OPT_REUSEABLE, 16, rp->ai_addr,
+          rp->ai_addrlen);
+    }
+
+    if (listener) {
       freeaddrinfo(res);
       return;
     }
@@ -1452,26 +1469,60 @@ static mrb_value mrb_http2_server_run(mrb_state *mrb, mrb_value self)
   app_context app_ctx;
   struct event_base *evbase;
 
-  if (server->config->tls) {
-    ssl_ctx = mrb_http2_create_ssl_ctx(mrb, server->config->key,
-        server->config->cert);
+  if (server->config->worker > 0) {
+    int pid[MRB_HTTP2_WORKER_MAX];
+    int i, status;
+    for (i=0; i< server->config->worker && (pid[i] = fork()) > 0; i++);
+
+    if (i == server->config->worker){
+       for(i = 0; i < server->config->worker; i++){
+         wait(&status);
+       }
+    } else if (pid[i] == 0){
+
+      if (server->config->tls) {
+        ssl_ctx = mrb_http2_create_ssl_ctx(mrb, server->config->key,
+            server->config->cert);
+      }
+
+      evbase = event_base_new();
+
+      init_app_context(&app_ctx, ssl_ctx, evbase);
+      app_ctx.server = server;
+      app_ctx.r = r;
+      app_ctx.self = self;
+
+      TRACER;
+      mrb_start_listen(evbase, server->config, &app_ctx);
+      event_base_loop(app_ctx.evbase, 0);
+      event_base_free(app_ctx.evbase);
+      if (server->config->tls) {
+        SSL_CTX_free(app_ctx.ssl_ctx);
+      }
+      TRACER;
+    }
+  } else {
+    if (server->config->tls) {
+      ssl_ctx = mrb_http2_create_ssl_ctx(mrb, server->config->key,
+          server->config->cert);
+    }
+
+    evbase = event_base_new();
+
+    init_app_context(&app_ctx, ssl_ctx, evbase);
+    app_ctx.server = server;
+    app_ctx.r = r;
+    app_ctx.self = self;
+
+    TRACER;
+    mrb_start_listen(evbase, server->config, &app_ctx);
+    event_base_loop(app_ctx.evbase, 0);
+    event_base_free(app_ctx.evbase);
+    if (server->config->tls) {
+      SSL_CTX_free(app_ctx.ssl_ctx);
+    }
+    TRACER;
   }
-
-  evbase = event_base_new();
-
-  init_app_context(&app_ctx, ssl_ctx, evbase);
-  app_ctx.server = server;
-  app_ctx.r = r;
-  app_ctx.self = self;
-
-  TRACER;
-  mrb_start_listen(evbase, server->config, &app_ctx);
-  event_base_loop(app_ctx.evbase, 0);
-  event_base_free(app_ctx.evbase);
-  if (server->config->tls) {
-    SSL_CTX_free(app_ctx.ssl_ctx);
-  }
-  TRACER;
 
   return self;
 }
@@ -1589,7 +1640,7 @@ static mruby_cb_list *mruby_cb_list_init(mrb_state *mrb)
 static mrb_http2_config_t *mrb_http2_s_config_init(mrb_state *mrb,
     mrb_value args)
 {
-  mrb_value port, flag;
+  mrb_value port, flag, worker;
   char *service;
 
   mrb_http2_config_t *config = (mrb_http2_config_t *)mrb_malloc(mrb,
@@ -1598,8 +1649,10 @@ static mrb_http2_config_t *mrb_http2_s_config_init(mrb_state *mrb,
 
   port = mrb_http2_config_get_obj(mrb, args, "port");
   service = mrb_str_to_cstr(mrb, mrb_fixnum_to_str(mrb, port, 10));
-
   config->service = service;
+
+  worker = mrb_http2_config_get_obj(mrb, args, "worker");
+  config->worker = mrb_fixnum(worker);
 
   // CALLBACK options: defulat DISABLED
   config->callback = MRB_HTTP2_CONFIG_DISABLED;
