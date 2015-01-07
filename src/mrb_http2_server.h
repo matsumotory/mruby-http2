@@ -9,6 +9,7 @@
 
 #include "mrb_http2_request.h"
 
+#define MRB_HTTP2_WORKER_MAX 1024
 #define MRB_HTTP2_READ_LENGTH_MAX ((1 << 16) - 1)
 
 // callback block symbol literal list
@@ -49,6 +50,9 @@ typedef struct {
   const char *server_host;
 
   mruby_cb_list *cb_list;
+
+  // the number of worker process, need SO_REUSEPORT linux kernel 3.9 or later
+  unsigned int worker;
 
 } mrb_http2_config_t;
 
