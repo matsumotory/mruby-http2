@@ -1372,16 +1372,34 @@ static int next_proto_cb(SSL *s, const unsigned char **data,
 static SSL_CTX* mrb_http2_create_ssl_ctx(mrb_state *mrb,
     const char *key_file, const char *cert_file)
 {
+  const char *mrb_http2_cipher_list =
+    "ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-"
+    "AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:"
+    "DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-"
+    "AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-"
+    "AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-"
+    "AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:"
+    "DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:!aNULL:!eNULL:"
+    "!EXPORT:!DES:!RC4:!3DES:!MD5:!PSK";
   SSL_CTX *ssl_ctx;
   ssl_ctx = SSL_CTX_new(SSLv23_server_method());
+
   TRACER;
   if(!ssl_ctx) {
     mrb_raisef(mrb, E_RUNTIME_ERROR, "Could not create SSL/TLS context: %S",
         mrb_str_new_cstr(mrb, ERR_error_string(ERR_get_error(), NULL)));
   }
-  SSL_CTX_set_options(ssl_ctx,
-      SSL_OP_ALL | SSL_OP_NO_SSLv2 | SSL_OP_NO_COMPRESSION |
-      SSL_OP_NO_SESSION_RESUMPTION_ON_RENEGOTIATION);
+
+  SSL_CTX_set_options(ssl_ctx, SSL_OP_ALL | SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 |
+                          SSL_OP_NO_COMPRESSION |
+                          SSL_OP_NO_SESSION_RESUMPTION_ON_RENEGOTIATION |
+                          SSL_OP_SINGLE_ECDH_USE | SSL_OP_NO_TICKET |
+                          SSL_OP_CIPHER_SERVER_PREFERENCE);
+
+  SSL_CTX_set_mode(ssl_ctx, SSL_MODE_AUTO_RETRY);
+  SSL_CTX_set_mode(ssl_ctx, SSL_MODE_RELEASE_BUFFERS);
+  //SSL_CTX_set_cipher_list(ssl_ctx, mrb_http2_cipher_list);
+  SSL_CTX_set_session_cache_mode(ssl_ctx, SSL_SESS_CACHE_SERVER);
 
   if(SSL_CTX_use_PrivateKey_file(ssl_ctx, key_file,
         SSL_FILETYPE_PEM) != 1) {
