@@ -1627,10 +1627,38 @@ static mruby_cb_list *mruby_cb_list_init(mrb_state *mrb)
 #define mrb_http2_config_get_obj(mrb, args, lit) mrb_hash_get(mrb, args, \
     mrb_symbol_value(mrb_intern_lit(mrb, lit)))
 
+static unsigned int mrb_http2_config_get_worker(mrb_state *mrb, mrb_value args)
+{
+  mrb_value w;
+  unsigned int worker;
+
+  // worker => fixnum or "auto"
+  if (!mrb_nil_p(w = mrb_http2_config_get_obj(mrb, args, "worker"))) {
+    if (mrb_type(w) == MRB_TT_STRING
+        && mrb_equal(mrb, w, mrb_str_new_lit(mrb, "auto"))) {
+      worker = sysconf(_SC_NPROCESSORS_ONLN);
+      if (worker < 0 || worker > MRB_HTTP2_WORKER_MAX) {
+        mrb_raise(mrb, E_RUNTIME_ERROR, "failed sysconf(_SC_NPROCESSORS_ONLN)");
+      }
+    } else if (mrb_type(w) == MRB_TT_FIXNUM) {
+      worker = mrb_fixnum(w);
+    } else {
+      mrb_raisef(mrb, E_RUNTIME_ERROR, "invalid worker parmeter: %S", w);
+    }
+  } else {
+    worker = 0;
+  }
+
+#if !defined(__linux__) || !defined(SO_REUSEPORT)
+  worker = 0;
+#endif
+  return worker;
+}
+
 static mrb_http2_config_t *mrb_http2_s_config_init(mrb_state *mrb,
     mrb_value args)
 {
-  mrb_value port, flag, worker;
+  mrb_value port, flag;
   char *service;
 
   mrb_http2_config_t *config = (mrb_http2_config_t *)mrb_malloc(mrb,
@@ -1640,26 +1668,7 @@ static mrb_http2_config_t *mrb_http2_s_config_init(mrb_state *mrb,
   port = mrb_http2_config_get_obj(mrb, args, "port");
   service = mrb_str_to_cstr(mrb, mrb_fixnum_to_str(mrb, port, 10));
   config->service = service;
-
-  // worker => num or "auto"
-  if (!mrb_nil_p(worker = mrb_http2_config_get_obj(mrb, args, "worker"))) {
-    if (mrb_type(worker) == MRB_TT_STRING
-        && mrb_equal(mrb, worker, mrb_str_new_lit(mrb, "auto"))) {
-      if ((config->worker = sysconf(_SC_NPROCESSORS_ONLN)) < 0) {
-        mrb_raise(mrb, E_RUNTIME_ERROR, "failed sysconf(_SC_NPROCESSORS_ONLN)");
-      }
-    } else if (mrb_type(worker) == MRB_TT_FIXNUM) {
-      config->worker = mrb_fixnum(worker);
-    } else {
-      mrb_raisef(mrb, E_RUNTIME_ERROR, "invalid worker parmeter: %S", worker);
-    }
-  } else {
-    config->worker = 0;
-  }
-
-#if !defined(__linux__) || !defined(SO_REUSEPORT)
-  config->worker = 0;
-#endif
+  config->worker = mrb_http2_config_get_worker(mrb, args);
 
   // CALLBACK options: defulat DISABLED
   config->callback = MRB_HTTP2_CONFIG_DISABLED;
