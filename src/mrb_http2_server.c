@@ -237,24 +237,38 @@ static int session_send(http2_session_data *session_data)
    function. */
 static int session_recv(http2_session_data *session_data)
 {
-  int rv;
+  size_t datalen;
+  unsigned char *data;
+  int rv = 0;
   struct evbuffer *input = bufferevent_get_input(session_data->bev);
-  size_t datalen = evbuffer_get_length(input);
-  unsigned char *data = evbuffer_pullup(input, -1);
 
-  TRACER;
-  rv = nghttp2_session_mem_recv(session_data->session, data, datalen);
-  if(rv < 0) {
-    fprintf(stderr, "Fatal error: %s", nghttp2_strerror(rv));
-    return -1;
+  for (;;) {
+    datalen = evbuffer_get_length(input);
+
+    TRACER;
+    if (datalen == 0) {
+      if(session_send(session_data) != 0) {
+        return -1;
+      }
+      return 0;
+    }
+
+    TRACER;
+    data = evbuffer_pullup(input, -1);
+    rv = nghttp2_session_mem_recv(session_data->session, data, datalen);
+    if(rv < 0) {
+      fprintf(stderr, "Fatal error: %s", nghttp2_strerror(rv));
+      return -1;
+    }
+    if (evbuffer_drain(input, rv) != 0) {
+      fprintf(stderr, "Fatal error: evbuffer_drain failed");
+      return -1;
+    }
+    TRACER;
+    //if(session_send(session_data) != 0) {
+    //  return -1;
+    //}
   }
-  evbuffer_drain(input, rv);
-  TRACER;
-  if(session_send(session_data) != 0) {
-    return -1;
-  }
-  TRACER;
-  return 0;
 }
 
 static ssize_t server_send_callback(nghttp2_session *session,
