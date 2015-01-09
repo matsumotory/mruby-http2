@@ -24,6 +24,8 @@ before_script:
   - sudo sh -c 'yes "" | openssl req -new -days 365 -x509 -nodes -keyout server.key -out server.crt'
   - cd -
 script:
+  - rake all test
+  - rake clean
   - rake
   - ./bin/mruby ../mruby-http2/example/http2_server.rb
   - ./bin/mruby ../mruby-http2/example/http2_server_tls.rb
