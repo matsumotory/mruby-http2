@@ -221,14 +221,14 @@ static ssize_t recv_callback(nghttp2_session *session, uint8_t *buf,
       conn->want_io = (err == SSL_ERROR_WANT_READ ?
                              WANT_READ : WANT_WRITE);
       rv = NGHTTP2_ERR_WOULDBLOCK;
-  TRACER;
+      TRACER;
     } else {
       rv = NGHTTP2_ERR_CALLBACK_FAILURE;
-  TRACER;
+      TRACER;
     }
   } else if(rv == 0) {
     rv = NGHTTP2_ERR_EOF;
-  TRACER;
+    TRACER;
   }
   if (!mrb_nil_p(conn->cb_block_hash)) {
     mrb_value cb_block = mrb_hash_get(conn->mrb, conn->cb_block_hash,
@@ -277,18 +277,18 @@ static int on_frame_send_callback(nghttp2_session *session,
           mrb_symbol_value(mrb_intern_cstr(conn->mrb, "request_headers")),
           req_headers);
     }
-  TRACER;
+    TRACER;
     break;
   case NGHTTP2_RST_STREAM:
     mrb_hash_set(conn->mrb, conn->response, mrb_symbol_value(mrb_intern_cstr
           (conn->mrb, "frame_send_header_rst_stream")), mrb_true_value());
-  TRACER;
+    TRACER;
     break;
   case NGHTTP2_GOAWAY:
     mrb_hash_set(conn->mrb, conn->response,
         mrb_symbol_value(mrb_intern_cstr(conn->mrb, "frame_send_header_goway")),
         mrb_true_value());
-  TRACER;
+    TRACER;
     break;
   }
   if (!mrb_nil_p(conn->cb_block_hash)) {
@@ -372,13 +372,13 @@ static int on_header_callback(nghttp2_session *session,
           mrb_symbol_value(mrb_intern_cstr(conn->mrb, "response_headers")),
           response_headers);
     }
-  TRACER;
+    TRACER;
     break;
   case NGHTTP2_GOAWAY:
     mrb_hash_set(conn->mrb, conn->response,
         mrb_symbol_value(mrb_intern_cstr(conn->mrb, "on_header_goway")),
         mrb_true_value());
-  TRACER;
+    TRACER;
     break;
   }
   if (!mrb_nil_p(conn->cb_block_hash)) {
@@ -409,7 +409,7 @@ static int on_stream_close_callback(nghttp2_session *session,
       mrb_raisef(mrb, E_RUNTIME_ERROR, "nghttp2_session_terminate_session: %S",
           mrb_fixnum_value(rv));
     }
-  TRACER;
+    TRACER;
   }
   if (!mrb_nil_p(conn->cb_block_hash)) {
     mrb_value cb_block = mrb_hash_get(conn->mrb, conn->cb_block_hash,
@@ -466,7 +466,7 @@ static int on_data_chunk_recv_callback(nghttp2_session *session, uint8_t flags,
     } else {
       body = strcopy((char *)data, len);
     }
-  TRACER;
+    TRACER;
     body_data = mrb_hash_get(conn->mrb, conn->response,
         mrb_symbol_value(mrb_intern_cstr(conn->mrb, "body")));
     if (!mrb_nil_p(body_data)) {
