@@ -18,9 +18,10 @@ before_script:
   - cd mruby
   - export MRUBY_CONFIG=../mruby-http2/.travis_build_config.rb
 script:
-  - rake all test
-  - ./bin/mruby build/mrbgems/mruby-http2/example/http2_server.rb
+  - rake
+  - ./bin/mruby ../mruby-http2/example/http2_server.rb
   - ./build/host/mrbgems/mruby-http2/nghttp2/src/nghttp -v http://127.0.0.1:8080/index.html
+  - rake all test
 notifications:
   webhooks:
     - secure: "fAUM6YafzwYRwGDOXkdLuQo351nj5dPkGyPFV00D9mrYkiJG2iogrEsNHZvWlE0EvtqcxmTNHUfpS21a4sW4CguviP+zeupNB9tkQz7ckgFGYjLI1fMchEgRMziAOFUjNNn9BOrrrY/6jRVdPMw3noLEeMwzIURT/s544aFvdjQ="
