@@ -1373,6 +1373,8 @@ static SSL_CTX* mrb_http2_create_ssl_ctx(mrb_state *mrb,
     const char *key_file, const char *cert_file)
 {
   SSL_CTX *ssl_ctx;
+  EC_KEY *ecdh;
+
   ssl_ctx = SSL_CTX_new(SSLv23_server_method());
   TRACER;
   if(!ssl_ctx) {
@@ -1382,6 +1384,14 @@ static SSL_CTX* mrb_http2_create_ssl_ctx(mrb_state *mrb,
   SSL_CTX_set_options(ssl_ctx,
       SSL_OP_ALL | SSL_OP_NO_SSLv2 | SSL_OP_NO_COMPRESSION |
       SSL_OP_NO_SESSION_RESUMPTION_ON_RENEGOTIATION);
+
+  ecdh = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
+  if(!ecdh) {
+    mrb_raisef(mrb, E_RUNTIME_ERROR, "EC_KEY_new_by_curv_name failed: %S",
+         mrb_str_new_cstr(mrb, ERR_error_string(ERR_get_error(), NULL)));
+  }
+  SSL_CTX_set_tmp_ecdh(ssl_ctx, ecdh);
+  EC_KEY_free(ecdh);
 
   if(SSL_CTX_use_PrivateKey_file(ssl_ctx, key_file,
         SSL_FILETYPE_PEM) != 1) {
