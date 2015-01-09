@@ -5,7 +5,7 @@ assert("HTTP2::Client#request_headers") do
   assert_equal("GET", r.request_headers[":method"])
   assert_equal("/index.html", r.request_headers[":path"])
   assert_equal("https", r.request_headers[":scheme"])
-  assert_equal("127.0.0.1:8081/", r.request_headers[":authority"])
+  assert_equal("127.0.0.1:8081", r.request_headers[":authority"])
   assert_equal("*/*", r.request_headers["accept"])
 end
 
