@@ -28,7 +28,9 @@ script:
   - ./bin/mruby ../mruby-http2/example/http2_server.rb
   - ./bin/mruby ../mruby-http2/example/http2_server_tls.rb
   - ./build/host/mrbgems/mruby-http2/nghttp2/src/nghttp -v http://127.0.0.1:8080/index.html
+  - ./build/host/mrbgems/mruby-http2/nghttp2/src/nghttp -v http://127.0.0.1:8080/index.html | grep -q "hello trusterd world"
   - ./build/host/mrbgems/mruby-http2/nghttp2/src/nghttp -v https://127.0.0.1:8081/index.html
+  - ./build/host/mrbgems/mruby-http2/nghttp2/src/nghttp -v https://127.0.0.1:8081/index.html | grep -q "hello trusterd world"
   - rake clean && rake all test
 notifications:
   webhooks:
