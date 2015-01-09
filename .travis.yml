@@ -18,7 +18,7 @@ before_script:
   - cd mruby
   - export MRUBY_CONFIG=../mruby-http2/.travis_build_config.rb
   - sudo mkdir -p /usr/local/trusterd/htdocs
-  - sudo echo "hello trusterd world." > /usr/local/trusterd/htdocs/index.html
+  - sudo cp ../mruby-http2/example/index.html /usr/local/trusterd/htdocs/.
 script:
   - rake
   - ./bin/mruby ../mruby-http2/example/http2_server.rb
