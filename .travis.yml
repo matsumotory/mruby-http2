@@ -21,7 +21,7 @@ before_script:
   - sudo mkdir -p /usr/local/trusterd/ssl
   - sudo cp ../mruby-http2/example/index.html /usr/local/trusterd/htdocs/.
   - cd /usr/local/trusterd/ssl
-  - yes "" | openssl req -new -days 365 -x509 -nodes -keyout server.key -out server.crt
+  - sudo sh -c 'yes "" | openssl req -new -days 365 -x509 -nodes -keyout server.key -out server.crt'
   - cd -
 script:
   - rake
