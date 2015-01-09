@@ -1645,6 +1645,11 @@ static unsigned int mrb_http2_config_get_worker(mrb_state *mrb, mrb_value args)
     } else {
       mrb_raisef(mrb, E_RUNTIME_ERROR, "invalid worker parmeter: %S", w);
     }
+    if (worker > MRB_HTTP2_WORKER_MAX) {
+      mrb_raisef(mrb, E_RUNTIME_ERROR, "invalid worker parameter: "
+          "%S > MRB_HTTP2_WORKER_MAX(%S)", mrb_fixnum_value(worker),
+          mrb_fixnum_value(MRB_HTTP2_WORKER_MAX));
+    }
   } else {
     worker = 0;
   }
