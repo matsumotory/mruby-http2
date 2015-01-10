@@ -180,6 +180,7 @@ static void delete_http2_stream_data(mrb_state *mrb,
 {
   TRACER;
   if(stream_data->fd != -1) {
+    shutdown(stream_data->fd, SHUT_WR);
     close(stream_data->fd);
   }
   mrb_free(mrb, stream_data->request_path);
@@ -197,6 +198,7 @@ static void delete_http2_session_data(http2_session_data *session_data)
   if (config->debug) {
     fprintf(stderr, "%s disconnected\n", session_data->client_addr);
   }
+  nghttp2_session_del(session_data->session);
   if (config->tls) {
     ssl = bufferevent_openssl_get_ssl(session_data->bev);
     if(ssl) {
@@ -206,7 +208,6 @@ static void delete_http2_session_data(http2_session_data *session_data)
     }
   }
   bufferevent_free(session_data->bev);
-  nghttp2_session_del(session_data->session);
   for(stream_data = session_data->root.next; stream_data;) {
     http2_stream_data *next = stream_data->next;
     delete_http2_stream_data(mrb, stream_data);
