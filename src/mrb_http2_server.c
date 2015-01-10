@@ -1462,10 +1462,10 @@ static void mrb_start_listen(struct event_base *evbase,
             "don't support SO_REUSEPORT? So, can't use worker mode");
       }
       listener = evconnlistener_new(evbase, mrb_http2_acceptcb, app_ctx,
-          LEV_OPT_CLOSE_ON_FREE | LEV_OPT_REUSEABLE,16, fd);
+          LEV_OPT_CLOSE_ON_FREE | LEV_OPT_REUSEABLE, -1, fd);
     } else {
       listener = evconnlistener_new_bind(evbase, mrb_http2_acceptcb, app_ctx,
-          LEV_OPT_CLOSE_ON_FREE | LEV_OPT_REUSEABLE, 16, rp->ai_addr,
+          LEV_OPT_CLOSE_ON_FREE | LEV_OPT_REUSEABLE, -1, rp->ai_addr,
           rp->ai_addrlen);
     }
 
