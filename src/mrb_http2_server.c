@@ -180,7 +180,6 @@ static void delete_http2_stream_data(mrb_state *mrb,
 {
   TRACER;
   if(stream_data->fd != -1) {
-    shutdown(stream_data->fd, SHUT_WR);
     close(stream_data->fd);
   }
   mrb_free(mrb, stream_data->request_path);
