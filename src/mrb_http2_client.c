@@ -758,6 +758,8 @@ static mrb_value mrb_http2_fetch_uri(mrb_state *mrb,
   }
 
   nghttp2_session_del(conn.session);
+  SSL_set_shutdown(ssl, SSL_RECEIVED_SHUTDOWN);
+  ERR_clear_error();
   SSL_shutdown(ssl);
   SSL_free(ssl);
   SSL_CTX_free(ssl_ctx);
@@ -844,6 +846,8 @@ static mrb_value mrb_http2_get_uri(mrb_state *mrb, mrb_http2_context_t *ctx)
   }
 
   nghttp2_session_del(ctx->conn->session);
+  SSL_set_shutdown(ssl, SSL_RECEIVED_SHUTDOWN);
+  ERR_clear_error();
   SSL_shutdown(ssl);
   SSL_free(ssl);
   SSL_CTX_free(ssl_ctx);

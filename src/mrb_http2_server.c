@@ -200,6 +200,8 @@ static void delete_http2_session_data(http2_session_data *session_data)
   if (config->tls) {
     ssl = bufferevent_openssl_get_ssl(session_data->bev);
     if(ssl) {
+      SSL_set_shutdown(ssl, SSL_RECEIVED_SHUTDOWN);
+      ERR_clear_error();
       SSL_shutdown(ssl);
     }
   }
