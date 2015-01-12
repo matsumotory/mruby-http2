@@ -31,7 +31,7 @@ script:
   - ./build/host/mrbgems/mruby-http2/nghttp2/src/nghttp -v http://127.0.0.1:8080/index.html | grep -q "hello trusterd world"
   - ./build/host/mrbgems/mruby-http2/nghttp2/src/nghttp -v https://127.0.0.1:8081/index.html
   - ./build/host/mrbgems/mruby-http2/nghttp2/src/nghttp -v https://127.0.0.1:8081/index.html | grep -q "hello trusterd world"
-  - rake clean && rake all test
+    #- rake clean && rake all test
 notifications:
   webhooks:
     - secure: "fAUM6YafzwYRwGDOXkdLuQo351nj5dPkGyPFV00D9mrYkiJG2iogrEsNHZvWlE0EvtqcxmTNHUfpS21a4sW4CguviP+zeupNB9tkQz7ckgFGYjLI1fMchEgRMziAOFUjNNn9BOrrrY/6jRVdPMw3noLEeMwzIURT/s544aFvdjQ="

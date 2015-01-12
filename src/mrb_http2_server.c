@@ -133,6 +133,8 @@ static void mrb_http2_request_rec_free(mrb_state *mrb,
   if (r->reqhdrlen != 0) {
     r->reqhdrlen = 0;
   }
+
+  r->status = 0;
 }
 
 static void add_stream(http2_session_data *session_data,
@@ -398,6 +400,7 @@ static int send_response(app_context *app_ctx, nghttp2_session *session,
   //
   // "set_logging_cb" callback ruby block
   //
+  r->phase = MRB_HTTP2_SERVER_LOGGING;
   callback_ruby_block(mrb, app_ctx->self, app_ctx->server->config->callback,
       app_ctx->server->config->cb_list->logging_cb);
 
@@ -663,6 +666,7 @@ static int content_cb_reply(app_context *app_ctx, nghttp2_session *session,
   //
   // "set_content" callback ruby block
   //
+  r->phase = MRB_HTTP2_SERVER_CONTENT;
   callback_ruby_block(mrb, app_ctx->self, config->callback,
       config->cb_list->content_cb);
 
@@ -927,6 +931,7 @@ static int server_on_request_recv(nghttp2_session *session,
 
   // cached time string created strftime()
   // First, create r->date for error_reply
+  session_data->app_ctx->r->phase = MRB_HTTP2_SERVER_READ_REQUEST;
   if (now != session_data->app_ctx->r->prev_req_time) {
     session_data->app_ctx->r->prev_req_time = now;
     set_http_date_str(&now, session_data->app_ctx->r->date);
@@ -978,21 +983,39 @@ static int server_on_request_recv(nghttp2_session *session,
   }
 
   // r-> will free at request_rec_free
-  session_data->app_ctx->r->filename = mrb_http2_strcat(session_data->app_ctx->server->mrb, session_data->app_ctx->server->config->document_root,
+  session_data->app_ctx->r->filename = mrb_http2_strcat(
+      session_data->app_ctx->server->mrb,
+      session_data->app_ctx->server->config->document_root,
       stream_data->request_path);
+
   uri_len = strlen(stream_data->request_path);
-  session_data->app_ctx->r->uri = mrb_http2_strcopy(session_data->app_ctx->server->mrb, stream_data->request_path, uri_len);
+  session_data->app_ctx->r->uri = mrb_http2_strcopy(
+      session_data->app_ctx->server->mrb,
+      stream_data->request_path, uri_len);
 
   //if (session_data->app_ctx->server->config->debug) {
   //  fprintf(stderr,
   //      "%s %s is mapped to %s document_root=%s before map_to_strage_cb\n",
   //      session_data->client_addr, session_data->app_ctx->r->uri, session_data->app_ctx->r->filename, session_data->app_ctx->server->config->document_root);
   //}
+
   //
   // "set_map_to_storage" callback ruby block
   //
-  callback_ruby_block(session_data->app_ctx->server->mrb, session_data->app_ctx->self, session_data->app_ctx->server->config->callback,
+  session_data->app_ctx->r->phase = MRB_HTTP2_SERVER_MAP_TO_STORAGE;
+  callback_ruby_block(session_data->app_ctx->server->mrb,
+      session_data->app_ctx->self,
+      session_data->app_ctx->server->config->callback,
       session_data->app_ctx->server->config->cb_list->map_to_strage_cb);
+
+  if (session_data->app_ctx->r->status
+      && session_data->app_ctx->r->status != HTTP_OK) {
+    if(error_reply(session_data->app_ctx, session, stream_data) != 0) {
+      return NGHTTP2_ERR_CALLBACK_FAILURE;
+    }
+    return 0;
+  }
+
 
   //if (session_data->app_ctx->server->config->debug) {
   //  fprintf(stderr, "%s %s is mapped to %s\n", session_data->client_addr,
@@ -1024,7 +1047,8 @@ static int server_on_request_recv(nghttp2_session *session,
   //}
 
   // run mruby script
-  if (session_data->app_ctx->r->mruby || session_data->app_ctx->r->shared_mruby) {
+  if (session_data->app_ctx->r->mruby
+      || session_data->app_ctx->r->shared_mruby) {
     set_status_record(session_data->app_ctx->r, HTTP_OK);
     if(mruby_reply(session_data->app_ctx, session, stream_data) != 0) {
       return NGHTTP2_ERR_CALLBACK_FAILURE;
@@ -1033,7 +1057,8 @@ static int server_on_request_recv(nghttp2_session *session,
   }
 
   // hook content_cb
-  if (session_data->app_ctx->server->config->callback && session_data->app_ctx->server->config->cb_list->content_cb) {
+  if (session_data->app_ctx->server->config->callback
+      && session_data->app_ctx->server->config->cb_list->content_cb) {
     set_status_record(session_data->app_ctx->r, HTTP_OK);
     if(content_cb_reply(session_data->app_ctx, session, stream_data) != 0) {
       return NGHTTP2_ERR_CALLBACK_FAILURE;
@@ -1067,13 +1092,17 @@ static int server_on_request_recv(nghttp2_session *session,
   session_data->app_ctx->r->finfo = &finfo;
 
   // cached time string created strftime()
-  if (session_data->app_ctx->r->finfo->st_mtime != session_data->app_ctx->r->prev_last_modified) {
-    session_data->app_ctx->r->prev_last_modified = session_data->app_ctx->r->finfo->st_mtime;
-    set_http_date_str(&session_data->app_ctx->r->finfo->st_mtime, session_data->app_ctx->r->last_modified);
+  if (session_data->app_ctx->r->finfo->st_mtime !=
+      session_data->app_ctx->r->prev_last_modified) {
+    session_data->app_ctx->r->prev_last_modified =
+      session_data->app_ctx->r->finfo->st_mtime;
+    set_http_date_str(&session_data->app_ctx->r->finfo->st_mtime,
+        session_data->app_ctx->r->last_modified);
   }
 
   // set content-length: max 10^64
-  snprintf(session_data->app_ctx->r->content_length, 64, "%ld", session_data->app_ctx->r->finfo->st_size);
+  snprintf(session_data->app_ctx->r->content_length, 64, "%ld",
+      session_data->app_ctx->r->finfo->st_size);
   stream_data->fileleft = session_data->app_ctx->r->finfo->st_size;
 
   TRACER;
@@ -1149,11 +1178,16 @@ static void mrb_http2_server_session_init(http2_session_data *session_data)
   nghttp2_session_callbacks_new(&callbacks);
 
   nghttp2_session_callbacks_set_send_callback(callbacks, server_send_callback);
-  nghttp2_session_callbacks_set_on_frame_recv_callback(callbacks, server_on_frame_recv_callback);
-  nghttp2_session_callbacks_set_on_stream_close_callback(callbacks, server_on_stream_close_callback);
-  nghttp2_session_callbacks_set_on_header_callback(callbacks, server_on_header_callback);
-  nghttp2_session_callbacks_set_on_begin_headers_callback(callbacks, server_on_begin_headers_callback);
-  nghttp2_session_callbacks_set_data_source_read_length_callback(callbacks, fixed_data_source_length_callback);
+  nghttp2_session_callbacks_set_on_frame_recv_callback(callbacks,
+      server_on_frame_recv_callback);
+  nghttp2_session_callbacks_set_on_stream_close_callback(callbacks,
+      server_on_stream_close_callback);
+  nghttp2_session_callbacks_set_on_header_callback(callbacks,
+      server_on_header_callback);
+  nghttp2_session_callbacks_set_on_begin_headers_callback(callbacks,
+      server_on_begin_headers_callback);
+  nghttp2_session_callbacks_set_data_source_read_length_callback(callbacks,
+      fixed_data_source_length_callback);
 
   nghttp2_session_server_new2(&session_data->session, callbacks, session_data,
       option);
@@ -1546,6 +1580,8 @@ static mrb_http2_request_rec *mrb_http2_request_rec_init(mrb_state *mrb)
   r->mruby = 0;
   r->shared_mruby = 0;
   r->write_fd = -1;
+  r->status = 0;
+  r->phase = MRB_HTTP2_SERVER_INIT_REQUEST;
 
   return r;
 }
@@ -1994,6 +2030,21 @@ static mrb_value mrb_http2_server_echo(mrb_state *mrb, mrb_value self)
   return mrb_fixnum_value(rv);
 }
 
+static mrb_value mrb_http2_server_set_status(mrb_state *mrb, mrb_value self)
+{
+  mrb_http2_data_t *data = DATA_PTR(self);
+  mrb_int status;
+
+  if (data->r->phase == MRB_HTTP2_SERVER_LOGGING) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "set_status can't use at this pahse");
+  }
+
+  mrb_get_args(mrb, "i", &status);
+  set_status_record(data->r, status);
+
+  return mrb_fixnum_value(status);
+}
+
 void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
 {
   struct RClass *server;
@@ -2030,5 +2081,6 @@ void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
   mrb_define_method(mrb, server, "enable_shared_mruby", mrb_http2_server_enable_shared_mruby, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "rputs", mrb_http2_server_rputs, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, server, "echo", mrb_http2_server_echo, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, server, "set_status", mrb_http2_server_set_status, MRB_ARGS_REQ(1));
   DONE;
 }
