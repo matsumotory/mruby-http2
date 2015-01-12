@@ -2035,6 +2035,10 @@ static mrb_value mrb_http2_server_set_status(mrb_state *mrb, mrb_value self)
   mrb_http2_data_t *data = DATA_PTR(self);
   mrb_int status;
 
+  if (data->r->phase == MRB_HTTP2_SERVER_LOGGING) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "set_status can't use at this pahse");
+  }
+
   mrb_get_args(mrb, "i", &status);
   set_status_record(data->r, status);
 
