@@ -998,7 +998,7 @@ static int server_on_request_recv(nghttp2_session *session,
       session_data->app_ctx->server->config->callback,
       session_data->app_ctx->server->config->cb_list->map_to_strage_cb);
 
-  if (session_data->app_ctx->r->status) {
+  if (session_data->app_ctx->r->status != HTTP_OK) {
     if(error_reply(session_data->app_ctx, session, stream_data) != 0) {
       return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
