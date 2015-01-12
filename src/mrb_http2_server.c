@@ -400,6 +400,7 @@ static int send_response(app_context *app_ctx, nghttp2_session *session,
   //
   // "set_logging_cb" callback ruby block
   //
+  r->phase = MRB_HTTP2_SERVER_LOGGING;
   callback_ruby_block(mrb, app_ctx->self, app_ctx->server->config->callback,
       app_ctx->server->config->cb_list->logging_cb);
 
@@ -665,6 +666,7 @@ static int content_cb_reply(app_context *app_ctx, nghttp2_session *session,
   //
   // "set_content" callback ruby block
   //
+  r->phase = MRB_HTTP2_SERVER_CONTENT;
   callback_ruby_block(mrb, app_ctx->self, config->callback,
       config->cb_list->content_cb);
 
@@ -929,6 +931,7 @@ static int server_on_request_recv(nghttp2_session *session,
 
   // cached time string created strftime()
   // First, create r->date for error_reply
+  session_data->app_ctx->r->phase = MRB_HTTP2_SERVER_READ_REQUEST;
   if (now != session_data->app_ctx->r->prev_req_time) {
     session_data->app_ctx->r->prev_req_time = now;
     set_http_date_str(&now, session_data->app_ctx->r->date);
@@ -995,9 +998,11 @@ static int server_on_request_recv(nghttp2_session *session,
   //      "%s %s is mapped to %s document_root=%s before map_to_strage_cb\n",
   //      session_data->client_addr, session_data->app_ctx->r->uri, session_data->app_ctx->r->filename, session_data->app_ctx->server->config->document_root);
   //}
+
   //
   // "set_map_to_storage" callback ruby block
   //
+  session_data->app_ctx->r->phase = MRB_HTTP2_SERVER_MAP_TO_STORAGE;
   callback_ruby_block(session_data->app_ctx->server->mrb,
       session_data->app_ctx->self,
       session_data->app_ctx->server->config->callback,
@@ -1576,6 +1581,7 @@ static mrb_http2_request_rec *mrb_http2_request_rec_init(mrb_state *mrb)
   r->shared_mruby = 0;
   r->write_fd = -1;
   r->status = 0;
+  r->phase = MRB_HTTP2_SERVER_INIT_REQUEST;
 
   return r;
 }

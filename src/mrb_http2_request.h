@@ -12,6 +12,15 @@
 #include <unistd.h>
 #include "mrb_http2_upstream.h"
 
+typedef enum mrb_http2_server_phase {
+  MRB_HTTP2_SERVER_INIT_REQUEST,
+  MRB_HTTP2_SERVER_READ_REQUEST,
+  MRB_HTTP2_SERVER_MAP_TO_STORAGE,
+  MRB_HTTP2_SERVER_ACCESS_CHECK,
+  MRB_HTTP2_SERVER_CONTENT,
+  MRB_HTTP2_SERVER_LOGGING
+} mrb_http2_server_phase;
+
 #define HTTP_CONTINUE                        100
 #define HTTP_SWITCHING_PROTOCOLS             101
 #define HTTP_PROCESSING                      102
@@ -125,6 +134,9 @@ typedef struct {
 
   // enable mruby script using shared mrb_state
   unsigned int shared_mruby;
+
+  // current request phase
+  mrb_http2_server_phase phase;
 
 } mrb_http2_request_rec;
 
