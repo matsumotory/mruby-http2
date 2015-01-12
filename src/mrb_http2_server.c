@@ -133,6 +133,8 @@ static void mrb_http2_request_rec_free(mrb_state *mrb,
   if (r->reqhdrlen != 0) {
     r->reqhdrlen = 0;
   }
+
+  r->status = 0;
 }
 
 static void add_stream(http2_session_data *session_data,
@@ -991,8 +993,18 @@ static int server_on_request_recv(nghttp2_session *session,
   //
   // "set_map_to_storage" callback ruby block
   //
-  callback_ruby_block(session_data->app_ctx->server->mrb, session_data->app_ctx->self, session_data->app_ctx->server->config->callback,
+  callback_ruby_block(session_data->app_ctx->server->mrb,
+      session_data->app_ctx->self,
+      session_data->app_ctx->server->config->callback,
       session_data->app_ctx->server->config->cb_list->map_to_strage_cb);
+
+  if (session_data->app_ctx->r->status) {
+    if(error_reply(session_data->app_ctx, session, stream_data) != 0) {
+      return NGHTTP2_ERR_CALLBACK_FAILURE;
+    }
+    return 0;
+  }
+
 
   //if (session_data->app_ctx->server->config->debug) {
   //  fprintf(stderr, "%s %s is mapped to %s\n", session_data->client_addr,
@@ -1546,6 +1558,7 @@ static mrb_http2_request_rec *mrb_http2_request_rec_init(mrb_state *mrb)
   r->mruby = 0;
   r->shared_mruby = 0;
   r->write_fd = -1;
+  r->status = 0;
 
   return r;
 }
@@ -1994,6 +2007,17 @@ static mrb_value mrb_http2_server_echo(mrb_state *mrb, mrb_value self)
   return mrb_fixnum_value(rv);
 }
 
+static mrb_value mrb_http2_server_set_status(mrb_state *mrb, mrb_value self)
+{
+  mrb_http2_data_t *data = DATA_PTR(self);
+  mrb_int status;
+
+  mrb_get_args(mrb, "i", &status);
+  set_status_record(data->r, status);
+
+  return mrb_fixnum_value(status);
+}
+
 void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
 {
   struct RClass *server;
@@ -2030,5 +2054,6 @@ void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
   mrb_define_method(mrb, server, "enable_shared_mruby", mrb_http2_server_enable_shared_mruby, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "rputs", mrb_http2_server_rputs, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, server, "echo", mrb_http2_server_echo, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, server, "set_status", mrb_http2_server_set_status, MRB_ARGS_REQ(1));
   DONE;
 }
