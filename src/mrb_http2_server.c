@@ -980,10 +980,15 @@ static int server_on_request_recv(nghttp2_session *session,
   }
 
   // r-> will free at request_rec_free
-  session_data->app_ctx->r->filename = mrb_http2_strcat(session_data->app_ctx->server->mrb, session_data->app_ctx->server->config->document_root,
+  session_data->app_ctx->r->filename = mrb_http2_strcat(
+      session_data->app_ctx->server->mrb,
+      session_data->app_ctx->server->config->document_root,
       stream_data->request_path);
+
   uri_len = strlen(stream_data->request_path);
-  session_data->app_ctx->r->uri = mrb_http2_strcopy(session_data->app_ctx->server->mrb, stream_data->request_path, uri_len);
+  session_data->app_ctx->r->uri = mrb_http2_strcopy(
+      session_data->app_ctx->server->mrb,
+      stream_data->request_path, uri_len);
 
   //if (session_data->app_ctx->server->config->debug) {
   //  fprintf(stderr,
@@ -998,7 +1003,8 @@ static int server_on_request_recv(nghttp2_session *session,
       session_data->app_ctx->server->config->callback,
       session_data->app_ctx->server->config->cb_list->map_to_strage_cb);
 
-  if (session_data->app_ctx->r->status != HTTP_OK) {
+  if (session_data->app_ctx->r->status
+      && session_data->app_ctx->r->status != HTTP_OK) {
     if(error_reply(session_data->app_ctx, session, stream_data) != 0) {
       return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
@@ -1036,7 +1042,8 @@ static int server_on_request_recv(nghttp2_session *session,
   //}
 
   // run mruby script
-  if (session_data->app_ctx->r->mruby || session_data->app_ctx->r->shared_mruby) {
+  if (session_data->app_ctx->r->mruby
+      || session_data->app_ctx->r->shared_mruby) {
     set_status_record(session_data->app_ctx->r, HTTP_OK);
     if(mruby_reply(session_data->app_ctx, session, stream_data) != 0) {
       return NGHTTP2_ERR_CALLBACK_FAILURE;
@@ -1045,7 +1052,8 @@ static int server_on_request_recv(nghttp2_session *session,
   }
 
   // hook content_cb
-  if (session_data->app_ctx->server->config->callback && session_data->app_ctx->server->config->cb_list->content_cb) {
+  if (session_data->app_ctx->server->config->callback
+      && session_data->app_ctx->server->config->cb_list->content_cb) {
     set_status_record(session_data->app_ctx->r, HTTP_OK);
     if(content_cb_reply(session_data->app_ctx, session, stream_data) != 0) {
       return NGHTTP2_ERR_CALLBACK_FAILURE;
@@ -1079,13 +1087,17 @@ static int server_on_request_recv(nghttp2_session *session,
   session_data->app_ctx->r->finfo = &finfo;
 
   // cached time string created strftime()
-  if (session_data->app_ctx->r->finfo->st_mtime != session_data->app_ctx->r->prev_last_modified) {
-    session_data->app_ctx->r->prev_last_modified = session_data->app_ctx->r->finfo->st_mtime;
-    set_http_date_str(&session_data->app_ctx->r->finfo->st_mtime, session_data->app_ctx->r->last_modified);
+  if (session_data->app_ctx->r->finfo->st_mtime !=
+      session_data->app_ctx->r->prev_last_modified) {
+    session_data->app_ctx->r->prev_last_modified =
+      session_data->app_ctx->r->finfo->st_mtime;
+    set_http_date_str(&session_data->app_ctx->r->finfo->st_mtime,
+        session_data->app_ctx->r->last_modified);
   }
 
   // set content-length: max 10^64
-  snprintf(session_data->app_ctx->r->content_length, 64, "%ld", session_data->app_ctx->r->finfo->st_size);
+  snprintf(session_data->app_ctx->r->content_length, 64, "%ld",
+      session_data->app_ctx->r->finfo->st_size);
   stream_data->fileleft = session_data->app_ctx->r->finfo->st_size;
 
   TRACER;
@@ -1161,11 +1173,16 @@ static void mrb_http2_server_session_init(http2_session_data *session_data)
   nghttp2_session_callbacks_new(&callbacks);
 
   nghttp2_session_callbacks_set_send_callback(callbacks, server_send_callback);
-  nghttp2_session_callbacks_set_on_frame_recv_callback(callbacks, server_on_frame_recv_callback);
-  nghttp2_session_callbacks_set_on_stream_close_callback(callbacks, server_on_stream_close_callback);
-  nghttp2_session_callbacks_set_on_header_callback(callbacks, server_on_header_callback);
-  nghttp2_session_callbacks_set_on_begin_headers_callback(callbacks, server_on_begin_headers_callback);
-  nghttp2_session_callbacks_set_data_source_read_length_callback(callbacks, fixed_data_source_length_callback);
+  nghttp2_session_callbacks_set_on_frame_recv_callback(callbacks,
+      server_on_frame_recv_callback);
+  nghttp2_session_callbacks_set_on_stream_close_callback(callbacks,
+      server_on_stream_close_callback);
+  nghttp2_session_callbacks_set_on_header_callback(callbacks,
+      server_on_header_callback);
+  nghttp2_session_callbacks_set_on_begin_headers_callback(callbacks,
+      server_on_begin_headers_callback);
+  nghttp2_session_callbacks_set_data_source_read_length_callback(callbacks,
+      fixed_data_source_length_callback);
 
   nghttp2_session_server_new2(&session_data->session, callbacks, session_data,
       option);
