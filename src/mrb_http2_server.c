@@ -1918,6 +1918,13 @@ static mrb_value mrb_http2_server_date(mrb_state *mrb, mrb_value self)
   return mrb_str_new_cstr(mrb, data->r->date);
 }
 
+static mrb_value mrb_http2_server_content_length(mrb_state *mrb, mrb_value self)
+{
+  mrb_http2_data_t *data = DATA_PTR(self);
+
+  return mrb_fixnum_value(data->r->finfo->st_size);
+}
+
 static void mrb_http2_upstream_init(mrb_state *mrb, mrb_value self)
 {
   mrb_http2_data_t *data = DATA_PTR(self);
@@ -2085,6 +2092,7 @@ void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
   mrb_define_method(mrb, server, "user_agent", mrb_http2_server_user_agent, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "status", mrb_http2_server_status, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "date", mrb_http2_server_date, MRB_ARGS_NONE());
+  mrb_define_method(mrb, server, "content_length", mrb_http2_server_content_length, MRB_ARGS_NONE());
 
   // upstream methods
   mrb_define_method(mrb, server, "upstream", mrb_http2_server_upstream, MRB_ARGS_NONE());
