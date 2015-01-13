@@ -889,6 +889,7 @@ static int mrb_http2_200_send_response(app_context *app_ctx,
     MAKE_NV_CS("last-modified", r->last_modified)
   };
 
+  r->status = 200;
   if(send_response(app_ctx, session, hdrs, ARRLEN(hdrs), stream_data) != 0) {
     close(stream_data->fd);
     return NGHTTP2_ERR_CALLBACK_FAILURE;
