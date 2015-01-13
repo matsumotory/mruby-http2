@@ -370,24 +370,24 @@ static int send_response(app_context *app_ctx, nghttp2_session *session,
   int rv;
   mrb_state *mrb = app_ctx->server->mrb;
   mrb_http2_request_rec *r = app_ctx->r;
-  //int i;
+  int i;
 
   nghttp2_data_provider data_prd;
   data_prd.source.ptr = stream_data;
   data_prd.read_callback = file_read_callback;
 
-  //if (app_ctx->server->config->debug) {
-  //  for (i = 0; i < nvlen; i++) {
-  //    char *name = mrb_http2_strcopy(mrb, (char *)nva[i].name,
-  //        nva[i].namelen);
-  //    char *value = mrb_http2_strcopy(mrb, (char *)nva[i].value,
-  //        nva[i].valuelen);
-  //    fprintf(stderr, "%s: nva[%d]={name=%s, value=%s}\n", __func__,
-  //        i, name, value);
-  //    mrb_free(mrb, name);
-  //    mrb_free(mrb, value);
-  //  }
-  //}
+  if (app_ctx->server->config->debug) {
+    for (i = 0; i < nvlen; i++) {
+      char *name = mrb_http2_strcopy(mrb, (char *)nva[i].name,
+          nva[i].namelen);
+      char *value = mrb_http2_strcopy(mrb, (char *)nva[i].value,
+          nva[i].valuelen);
+      fprintf(stderr, "%s: nva[%d]={name=%s, value=%s}\n", __func__,
+          i, name, value);
+      mrb_free(mrb, name);
+      mrb_free(mrb, value);
+    }
+  }
 
   TRACER;
   rv = nghttp2_submit_response(session, stream_data->stream_id, nva, nvlen,
@@ -815,12 +815,13 @@ static int server_on_header_callback(nghttp2_session *session,
   http2_session_data *session_data = (http2_session_data *)user_data;
 
   http2_stream_data *stream_data;
-  //nghttp2_nv nv;
   const char PATH[] = ":path";
 
   TRACER;
   switch(frame->hd.type) {
+    nghttp2_nv nv;
   case NGHTTP2_HEADERS:
+
     if(frame->headers.cat != NGHTTP2_HCAT_REQUEST) {
       break;
     }
@@ -831,9 +832,9 @@ static int server_on_header_callback(nghttp2_session *session,
     }
 
     // create nv and add stream_data->nva
-    //mrb_http2_create_nv(session_data->app_ctx->server->mrb, &nv, name, namelen, value, valuelen);
-    //stream_data->nvlen = mrb_http2_add_nv(stream_data->nva,
-    //    stream_data->nvlen, &nv);
+    mrb_http2_create_nv(session_data->app_ctx->server->mrb, &nv, name, namelen, value, valuelen);
+    stream_data->nvlen = mrb_http2_add_nv(stream_data->nva,
+        stream_data->nvlen, &nv);
 
     if(namelen == sizeof(PATH) - 1 && memcmp(PATH, name, namelen) == 0) {
       size_t j;
@@ -921,7 +922,6 @@ static int server_on_request_recv(nghttp2_session *session,
     http2_session_data *session_data, http2_stream_data *stream_data)
 {
   int fd;
-  //int i;
   struct stat finfo;
   size_t uri_len;
   time_t now = time(NULL);
@@ -942,21 +942,22 @@ static int server_on_request_recv(nghttp2_session *session,
   session_data->app_ctx->r->conn = session_data->conn;
 
   // get requset header table and table length
-  //session_data->app_ctx->r->reqhdr = stream_data->nva;
-  //session_data->app_ctx->r->reqhdrlen = stream_data->nvlen;
+  session_data->app_ctx->r->reqhdr = stream_data->nva;
+  session_data->app_ctx->r->reqhdrlen = stream_data->nvlen;
 
-  //if (session_data->app_ctx->server->config->debug) {
-  //  for (i = 0; i < stream_data->nvlen; i++) {
-  //    char *name = mrb_http2_strcopy(session_data->app_ctx->server->mrb, (char *)stream_data->nva[i].name,
-  //        stream_data->nva[i].namelen);
-  //    char *value = mrb_http2_strcopy(session_data->app_ctx->server->mrb, (char *)stream_data->nva[i].value,
-  //        stream_data->nva[i].valuelen);
-  //    fprintf(stderr, "%s: nva[%d]={name=%s, value=%s}\n", __func__, i,
-  //        name, value);
-  //    mrb_free(session_data->app_ctx->server->mrb, name);
-  //    mrb_free(session_data->app_ctx->server->mrb, value);
-  //  }
-  //}
+  if (session_data->app_ctx->server->config->debug) {
+    int i;
+    for (i = 0; i < stream_data->nvlen; i++) {
+      char *name = mrb_http2_strcopy(session_data->app_ctx->server->mrb, (char *)stream_data->nva[i].name,
+          stream_data->nva[i].namelen);
+      char *value = mrb_http2_strcopy(session_data->app_ctx->server->mrb, (char *)stream_data->nva[i].value,
+          stream_data->nva[i].valuelen);
+      fprintf(stderr, "%s: nva[%d]={name=%s, value=%s}\n", __func__, i,
+          name, value);
+      mrb_free(session_data->app_ctx->server->mrb, name);
+      mrb_free(session_data->app_ctx->server->mrb, value);
+    }
+  }
 
   TRACER;
   if(!stream_data->request_path) {
