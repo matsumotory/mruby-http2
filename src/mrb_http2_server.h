@@ -12,6 +12,9 @@
 #define MRB_HTTP2_WORKER_MAX 1024
 #define MRB_HTTP2_READ_LENGTH_MAX ((1 << 16) - 1)
 
+typedef unsigned int mrb_http2_config_flag;
+typedef const char mrb_http2_config_cstr;
+
 // callback block symbol literal list
 typedef struct {
 
@@ -29,25 +32,25 @@ typedef struct {
 // mruby-http2 config parameter getting from HTTP2::Server#init
 typedef struct {
 
-  unsigned int daemon;
-  unsigned int debug;
-  unsigned int tls;
-  unsigned int callback;
+  mrb_http2_config_flag daemon;
+  mrb_http2_config_flag debug;
+  mrb_http2_config_flag tls;
+  mrb_http2_config_flag callback;
 
   // connection record option
   // default enabled and can use connection methods
-  unsigned int connection_record;
+  mrb_http2_config_flag connection_record;
 
-  const char *key;
-  const char *cert;
-  const char *service;
-  const char *document_root;
+  mrb_http2_config_cstr *key;
+  mrb_http2_config_cstr *cert;
+  mrb_http2_config_cstr *service;
+  mrb_http2_config_cstr *document_root;
 
   // server response header
-  const char *server_name;
+  mrb_http2_config_cstr *server_name;
 
   // server listen hostname
-  const char *server_host;
+  mrb_http2_config_cstr *server_host;
 
   mruby_cb_list *cb_list;
 
