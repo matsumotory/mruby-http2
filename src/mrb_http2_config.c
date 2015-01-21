@@ -97,7 +97,27 @@ static void set_config_crt(mrb_state *mrb, mrb_value args,
   }
 }
 
-static void mrb_http2_config_define(mrb_state *mrb, mrb_value args,
+static void set_config_port(mrb_state *mrb, mrb_value args,
+    mrb_http2_config_t *config, mrb_value val)
+{
+  config->service = mrb_str_to_cstr(mrb, mrb_fixnum_to_str(mrb, val, 10));
+}
+
+static void set_config_worker(mrb_state *mrb, mrb_value args,
+    mrb_http2_config_t *config, mrb_value val)
+{
+  config->worker = mrb_http2_config_get_worker(mrb, args, val);
+}
+
+//
+// Configuration API
+//
+// mrb_http2_config_define()
+// mrb_http2_config_define_cstr()
+// mrb_http2_config_define_flag()
+//
+
+void mrb_http2_config_define(mrb_state *mrb, mrb_value args,
     mrb_http2_config_t *config, void (*func_ptr)(), const char *key)
 {
   mrb_value val = mrb_http2_config_get_obj_cstr(mrb, args, key);
@@ -106,7 +126,7 @@ static void mrb_http2_config_define(mrb_state *mrb, mrb_value args,
 
 }
 
-static void mrb_http2_config_define_cstr(mrb_state *mrb, mrb_value args,
+void mrb_http2_config_define_cstr(mrb_state *mrb, mrb_value args,
     mrb_http2_config_cstr **config_cstr, void (*func_ptr)(), const char *key)
 {
   mrb_value val = mrb_http2_config_get_obj_cstr(mrb, args, key);
@@ -122,7 +142,7 @@ static void mrb_http2_config_define_cstr(mrb_state *mrb, mrb_value args,
   }
 }
 
-static void mrb_http2_config_define_flag(mrb_state *mrb, mrb_value args,
+void mrb_http2_config_define_flag(mrb_state *mrb, mrb_value args,
     mrb_http2_config_flag *config_flag, void (*func_ptr)(), const char *key)
 {
   mrb_value val = mrb_http2_config_get_obj_cstr(mrb, args, key);
@@ -136,18 +156,6 @@ static void mrb_http2_config_define_flag(mrb_state *mrb, mrb_value args,
       *config_flag = MRB_HTTP2_CONFIG_DISABLED;
     }
   }
-}
-
-static void set_config_port(mrb_state *mrb, mrb_value args,
-    mrb_http2_config_t *config, mrb_value val)
-{
-  config->service = mrb_str_to_cstr(mrb, mrb_fixnum_to_str(mrb, val, 10));
-}
-
-static void set_config_worker(mrb_state *mrb, mrb_value args,
-    mrb_http2_config_t *config, mrb_value val)
-{
-  config->worker = mrb_http2_config_get_worker(mrb, args, val);
 }
 
 static void config_defualt_value(mrb_state *mrb, mrb_http2_config_t *config)

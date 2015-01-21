@@ -60,4 +60,16 @@ typedef struct {
 
 mrb_http2_config_t *mrb_http2_s_config_init(mrb_state *mrb, mrb_value args);
 
+// Configuration API
+void mrb_http2_config_define(mrb_state *mrb, mrb_value args,
+    mrb_http2_config_t *config, void (*func_ptr)(), const char *key);
+
+void mrb_http2_config_define_cstr(mrb_state *mrb, mrb_value args,
+    mrb_http2_config_cstr **config_cstr, void (*func_ptr)(), const char *key);
+
+void mrb_http2_config_define_flag(mrb_state *mrb, mrb_value args,
+    mrb_http2_config_flag *config_flag, void (*func_ptr)(), const char *key);
+
+
+
 #endif
