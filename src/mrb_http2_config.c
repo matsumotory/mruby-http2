@@ -128,7 +128,7 @@ static void mrb_http2_config_define_flag(mrb_state *mrb, mrb_value args,
   } else {
     if (!mrb_nil_p(val) && mrb_obj_equal(mrb, val, mrb_true_value())) {
       *config_flag = MRB_HTTP2_CONFIG_ENABLED;
-    } else {
+    } else if (!mrb_nil_p(val) && mrb_obj_equal(mrb, val, mrb_false_value())) {
       *config_flag = MRB_HTTP2_CONFIG_DISABLED;
     }
   }
@@ -163,9 +163,6 @@ mrb_http2_config_t *mrb_http2_s_config_init(mrb_state *mrb,
   config->server_name = MRB_HTTP2_CONFIG_LIT(mrb, MRUBY_HTTP2_SERVER);
   config->document_root = MRB_HTTP2_CONFIG_LIT(mrb, "./");
 
-  mrb_http2_config_define(mrb, args, config, set_config_port, "port");
-  mrb_http2_config_define(mrb, args, config, set_config_worker, "worker");
-
   mrb_http2_config_define_flag(mrb, args, &config->callback, NULL, "callback");
   mrb_http2_config_define_flag(mrb, args, &config->daemon, NULL, "daemon");
   mrb_http2_config_define_flag(mrb, args, &config->debug, NULL, "debug");
@@ -176,6 +173,8 @@ mrb_http2_config_t *mrb_http2_s_config_init(mrb_state *mrb,
   mrb_http2_config_define_cstr(mrb, args, &config->server_name,  NULL, "server_name");
   mrb_http2_config_define_cstr(mrb, args, &config->document_root,  NULL, "document_root");
 
+  mrb_http2_config_define(mrb, args, config, set_config_port, "port");
+  mrb_http2_config_define(mrb, args, config, set_config_worker, "worker");
   mrb_http2_config_define(mrb, args, config, set_config_key, "key");
   mrb_http2_config_define(mrb, args, config, set_config_crt, "crt");
 
