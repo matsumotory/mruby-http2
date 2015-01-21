@@ -36,7 +36,7 @@ typedef struct http2_stream_data {
   char *request_path;
   int32_t stream_id;
   int fd;
-  int64_t fileleft;
+  int64_t readleft;
   nghttp2_nv nva[MRB_HTTP2_HEADER_MAX];
   size_t nvlen;
 } http2_stream_data;
@@ -171,7 +171,7 @@ static http2_stream_data* create_http2_stream_data(mrb_state *mrb,
   memset(stream_data, 0, sizeof(http2_stream_data));
   stream_data->stream_id = stream_id;
   stream_data->fd = -1;
-  stream_data->fileleft = 0;
+  stream_data->readleft = 0;
   stream_data->nvlen = 0;
 
   add_stream(session_data, stream_data);
@@ -354,9 +354,9 @@ static ssize_t file_read_callback(nghttp2_session *session,
     return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
   }
 
-  stream_data->fileleft -= nread;
-  if(nread == 0 || stream_data->fileleft == 0) {
-    if (stream_data->fileleft != 0) {
+  stream_data->readleft -= nread;
+  if(nread == 0 || stream_data->readleft == 0) {
+    if (stream_data->readleft != 0) {
       return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
     }
     *data_flags |= NGHTTP2_DATA_FLAG_EOF;
@@ -445,6 +445,7 @@ static int error_reply(app_context *app_ctx, nghttp2_session *session,
   TRACER;
   rv = pipe(pipefd);
   if(rv != 0) {
+    mrb_warn(app_ctx->server->mrb, "Could not pipefd");
     rv = nghttp2_submit_rst_stream(session, NGHTTP2_FLAG_NONE,
         stream_data->stream_id, NGHTTP2_INTERNAL_ERROR);
     if(rv != 0) {
@@ -1106,7 +1107,7 @@ static int server_on_request_recv(nghttp2_session *session,
   // set content-length: max 10^64
   snprintf(session_data->app_ctx->r->content_length, 64, "%ld",
       session_data->app_ctx->r->finfo->st_size);
-  stream_data->fileleft = session_data->app_ctx->r->finfo->st_size;
+  stream_data->readleft = session_data->app_ctx->r->finfo->st_size;
 
   TRACER;
   return mrb_http2_200_send_response(session_data->app_ctx, session,
