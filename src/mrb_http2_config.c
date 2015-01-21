@@ -6,6 +6,7 @@
 #include "mrb_http2.h"
 #include "mrb_http2_config.h"
 
+#define MRB_HTTP2_CONFIG_LIT(mrb, lit) mrb_str_to_cstr(mrb, mrb_str_new_lit(mrb, lit))
 #define mrb_http2_config_get_obj(mrb, args, lit) mrb_hash_get(mrb, args, \
     mrb_symbol_value(mrb_intern_lit(mrb, lit)))
 #define mrb_http2_config_get_obj_cstr(mrb, args, str) mrb_hash_get(mrb, args, \
@@ -145,8 +146,6 @@ static void set_config_worker(mrb_state *mrb, mrb_value args,
 {
   config->worker = mrb_http2_config_get_worker(mrb, args, val);
 }
-
-#define MRB_HTTP2_CONFIG_LIT(mrb, lit) mrb_str_to_cstr(mrb, mrb_str_new_lit(mrb, lit))
 
 mrb_http2_config_t *mrb_http2_s_config_init(mrb_state *mrb,
     mrb_value args)
