@@ -737,6 +737,7 @@ static int mruby_reply(app_context *app_ctx, nghttp2_session *session,
   struct RProc *proc = NULL;
   FILE *rfp;
   mrbc_context *c;
+  int64_t size;
 
   if (r->shared_mruby) {
     // share one mrb_state
@@ -798,23 +799,30 @@ static int mruby_reply(app_context *app_ctx, nghttp2_session *session,
   nvlen += 1;
 
   if (r->status >= 100 && r->status < 200) {
-    rv = write(pipefd[1], ERROR_100_HTML, sizeof(ERROR_100_HTML) - 1);
+    size = sizeof(ERROR_100_HTML) - 1;
+    rv = write(pipefd[1], ERROR_100_HTML, size);
   } else if (r->status >= 200 && r->status < 300) {
-    // do nothing, because write data in mruby script
+    size = r->write_size;
   } else if (r->status >= 300 && r->status < 400) {
-    rv = write(pipefd[1], ERROR_300_HTML, sizeof(ERROR_300_HTML) - 1);
+    size = sizeof(ERROR_300_HTML) - 1;
+    rv = write(pipefd[1], ERROR_300_HTML, size);
   } else if (r->status >= 400 && r->status < 500) {
-    rv = write(pipefd[1], ERROR_404_HTML, sizeof(ERROR_404_HTML) - 1);
+    size = sizeof(ERROR_404_HTML) - 1;
+    rv = write(pipefd[1], ERROR_404_HTML, size);
   } else if (r->status == HTTP_INTERNAL_SERVER_ERROR) {
-    rv = write(pipefd[1], ERROR_500_HTML, sizeof(ERROR_500_HTML) - 1);
+    size = sizeof(ERROR_500_HTML) - 1;
+    rv = write(pipefd[1], ERROR_500_HTML, size);
   } else if (r->status > HTTP_INTERNAL_SERVER_ERROR) {
-    rv = write(pipefd[1], ERROR_503_HTML, sizeof(ERROR_503_HTML) - 1);
+    size = sizeof(ERROR_503_HTML) - 1;
+    rv = write(pipefd[1], ERROR_503_HTML, size);
   } else {
-    rv = write(pipefd[1], ERROR_500_HTML, sizeof(ERROR_500_HTML) - 1);
+    size = sizeof(ERROR_500_HTML) - 1;
+    rv = write(pipefd[1], ERROR_500_HTML, size);
   }
 
   close(pipefd[1]);
   stream_data->fd = pipefd[0];
+  stream_data->readleft = size;
   TRACER;
   if(send_response(app_ctx, session, nva, nvlen, stream_data) != 0) {
     close(pipefd[0]);
