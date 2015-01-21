@@ -7,6 +7,9 @@
 #include "mrb_http2_config.h"
 
 #define MRB_HTTP2_CONFIG_LIT(mrb, lit) mrb_str_to_cstr(mrb, mrb_str_new_lit(mrb, lit))
+#define MRB_HTTP2_CONFIG_ENABLED 1
+#define MRB_HTTP2_CONFIG_DISABLED 0
+
 #define mrb_http2_config_get_obj(mrb, args, lit) mrb_hash_get(mrb, args, \
     mrb_symbol_value(mrb_intern_lit(mrb, lit)))
 #define mrb_http2_config_get_obj_cstr(mrb, args, str) mrb_hash_get(mrb, args, \
@@ -147,13 +150,8 @@ static void set_config_worker(mrb_state *mrb, mrb_value args,
   config->worker = mrb_http2_config_get_worker(mrb, args, val);
 }
 
-mrb_http2_config_t *mrb_http2_s_config_init(mrb_state *mrb,
-    mrb_value args)
+static void config_defualt_value(mrb_state *mrb, mrb_http2_config_t *config)
 {
-  mrb_http2_config_t *config = (mrb_http2_config_t *)mrb_malloc(mrb,
-      sizeof(mrb_http2_config_t));
-  memset(config, 0, sizeof(mrb_http2_config_t));
-
   config->daemon = MRB_HTTP2_CONFIG_DISABLED;
   config->debug = MRB_HTTP2_CONFIG_DISABLED;
   config->tls = MRB_HTTP2_CONFIG_ENABLED;
@@ -161,6 +159,16 @@ mrb_http2_config_t *mrb_http2_s_config_init(mrb_state *mrb,
   config->server_host = MRB_HTTP2_CONFIG_LIT(mrb, "0.0.0.0");
   config->server_name = MRB_HTTP2_CONFIG_LIT(mrb, MRUBY_HTTP2_SERVER);
   config->document_root = MRB_HTTP2_CONFIG_LIT(mrb, "./");
+}
+
+mrb_http2_config_t *mrb_http2_s_config_init(mrb_state *mrb,
+    mrb_value args)
+{
+  mrb_http2_config_t *config = (mrb_http2_config_t *)mrb_malloc(mrb,
+      sizeof(mrb_http2_config_t));
+  memset(config, 0, sizeof(mrb_http2_config_t));
+
+  config_defualt_value(mrb, config);
 
   mrb_http2_config_define_flag(mrb, args, &config->callback, NULL, "callback");
   mrb_http2_config_define_flag(mrb, args, &config->daemon, NULL, "daemon");

@@ -59,8 +59,6 @@
 #define TRACER
 #endif
 #define OUTPUT_WOULDBLOCK_THRESHOLD (1 << 16)
-#define MRB_HTTP2_CONFIG_ENABLED 1
-#define MRB_HTTP2_CONFIG_DISABLED 0
 #define ARRLEN(x) (sizeof(x)/sizeof(x[0]))
 #define MAKE_NV(NAME, VALUE)                                           \
   {(uint8_t*)NAME, (uint8_t*)VALUE,                                    \
