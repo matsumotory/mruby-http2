@@ -437,6 +437,8 @@ static int error_reply(app_context *app_ctx, nghttp2_session *session,
   mrb_http2_request_rec *r = app_ctx->r;
   int rv;
   int pipefd[2];
+  int64_t size;
+
   nghttp2_nv hdrs[] = {
     MAKE_NV_CS(":status", r->status_line),
     MAKE_NV_CS("date", r->date)
@@ -456,13 +458,16 @@ static int error_reply(app_context *app_ctx, nghttp2_session *session,
   }
 
   if (r->status == HTTP_SERVICE_UNAVAILABLE) {
-    rv = write(pipefd[1], ERROR_503_HTML, sizeof(ERROR_503_HTML) - 1);
+    size = sizeof(ERROR_503_HTML) - 1;
+    rv = write(pipefd[1], ERROR_503_HTML, size);
   } else {
-    rv = write(pipefd[1], ERROR_404_HTML, sizeof(ERROR_404_HTML) - 1);
+    size = sizeof(ERROR_404_HTML) - 1;
+    rv = write(pipefd[1], ERROR_404_HTML, size);
   }
 
   close(pipefd[1]);
   stream_data->fd = pipefd[0];
+  stream_data->readleft = size;
   TRACER;
   if(send_response(app_ctx, session, hdrs, ARRLEN(hdrs), stream_data) != 0) {
     close(pipefd[0]);
@@ -650,6 +655,7 @@ static int content_cb_reply(app_context *app_ctx, nghttp2_session *session,
   int pipefd[2];
   nghttp2_nv nva[MRB_HTTP2_HEADER_MAX];
   size_t nvlen = 0;
+  int64_t size;
 
   TRACER;
   rv = pipe(pipefd);
