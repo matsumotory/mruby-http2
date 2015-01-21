@@ -113,8 +113,15 @@ static void set_config_worker(mrb_state *mrb, mrb_value args,
 // Configuration API
 //
 // mrb_http2_config_define()
+//  need to use setting function ptr
+//
 // mrb_http2_config_define_cstr()
+//  string value on Ruby config or use function ptr more complex
+//  :key => "string value",
+//
 // mrb_http2_config_define_flag()
+//  true or false value on Ruby config or use function ptr more complex
+//  :key => true,
 //
 
 void mrb_http2_config_define(mrb_state *mrb, mrb_value args,
