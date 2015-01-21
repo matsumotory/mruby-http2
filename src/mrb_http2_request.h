@@ -129,6 +129,9 @@ typedef struct {
   // write fd when using pipe
   int write_fd;
 
+  // write size when sing pipe from mruby
+  int64_t write_size;
+
   // enable mruby script using new mrb_state each request
   unsigned int mruby;
 
