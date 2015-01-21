@@ -5,6 +5,7 @@
 */
 #include "mrb_http2.h"
 #include "mrb_http2_server.h"
+#include "mrb_http2_config.h"
 
 #include <event.h>
 #include <event2/event.h>
@@ -1588,32 +1589,6 @@ static mrb_http2_request_rec *mrb_http2_request_rec_init(mrb_state *mrb)
   return r;
 }
 
-static char *may_get_config_str_to_cstr(mrb_state *mrb, mrb_value args,
-    const char *name)
-{
-  mrb_value val;
-  if (mrb_nil_p(val = mrb_hash_get(mrb, args,
-                  mrb_symbol_value(mrb_intern_cstr(mrb, name))))) {
-    return NULL;
-  }
-
-  //return mrb_str_to_cstr(mrb, val);
-  return mrb_http2_strcopy(mrb, RSTRING_PTR(val), RSTRING_LEN(val));
-}
-
-static char *must_get_config_str_to_cstr(mrb_state *mrb, mrb_value args,
-    const char *name)
-{
-  mrb_value val;
-  if (mrb_nil_p(val = mrb_hash_get(mrb, args,
-                  mrb_symbol_value(mrb_intern_cstr(mrb, name))))) {
-    mrb_raisef(mrb, E_ARGUMENT_ERROR, "%S not found",
-        mrb_str_new_cstr(mrb, name));
-  }
-
-  return mrb_http2_strcopy(mrb, RSTRING_PTR(val), RSTRING_LEN(val));
-}
-
 static mrb_value mrb_http2_server_set_map_to_strage_cb(mrb_state *mrb,
     mrb_value self)
 {
@@ -1660,123 +1635,6 @@ static mrb_value mrb_http2_server_set_logging_cb(mrb_state *mrb,
   list->logging_cb = cbid;
 
   return b;
-}
-
-static mruby_cb_list *mruby_cb_list_init(mrb_state *mrb)
-{
-  mruby_cb_list *list = (mruby_cb_list *)mrb_malloc(mrb, sizeof(mruby_cb_list));
-  memset(list, 0, sizeof(mruby_cb_list));
-
-  list->map_to_strage_cb = NULL;
-  list->content_cb = NULL;
-  list->logging_cb = NULL;
-
-  return list;
-}
-
-#define mrb_http2_config_get_obj(mrb, args, lit) mrb_hash_get(mrb, args, \
-    mrb_symbol_value(mrb_intern_lit(mrb, lit)))
-
-static unsigned int mrb_http2_config_get_worker(mrb_state *mrb, mrb_value args)
-{
-  mrb_value w;
-  unsigned int worker;
-
-  // worker => fixnum or "auto"
-  if (!mrb_nil_p(w = mrb_http2_config_get_obj(mrb, args, "worker"))) {
-    if (mrb_type(w) == MRB_TT_STRING
-        && mrb_equal(mrb, w, mrb_str_new_lit(mrb, "auto"))) {
-      worker = sysconf(_SC_NPROCESSORS_ONLN);
-      if (worker < 0 || worker > MRB_HTTP2_WORKER_MAX) {
-        mrb_raise(mrb, E_RUNTIME_ERROR, "failed sysconf(_SC_NPROCESSORS_ONLN)");
-      }
-    } else if (mrb_type(w) == MRB_TT_FIXNUM) {
-      worker = mrb_fixnum(w);
-    } else {
-      mrb_raisef(mrb, E_RUNTIME_ERROR, "invalid worker parmeter: %S", w);
-    }
-    if (worker > MRB_HTTP2_WORKER_MAX) {
-      mrb_raisef(mrb, E_RUNTIME_ERROR, "invalid worker parameter: "
-          "%S > MRB_HTTP2_WORKER_MAX(%S)", mrb_fixnum_value(worker),
-          mrb_fixnum_value(MRB_HTTP2_WORKER_MAX));
-    }
-  } else {
-    worker = 0;
-  }
-
-#if !defined(__linux__) || !defined(SO_REUSEPORT)
-  worker = 0;
-#endif
-  return worker;
-}
-
-static mrb_http2_config_t *mrb_http2_s_config_init(mrb_state *mrb,
-    mrb_value args)
-{
-  mrb_value port, flag;
-  char *service;
-
-  mrb_http2_config_t *config = (mrb_http2_config_t *)mrb_malloc(mrb,
-      sizeof(mrb_http2_config_t));
-  memset(config, 0, sizeof(mrb_http2_config_t));
-
-  port = mrb_http2_config_get_obj(mrb, args, "port");
-  service = mrb_str_to_cstr(mrb, mrb_fixnum_to_str(mrb, port, 10));
-  config->service = service;
-  config->worker = mrb_http2_config_get_worker(mrb, args);
-
-  // CALLBACK options: defulat DISABLED
-  config->callback = MRB_HTTP2_CONFIG_DISABLED;
-  if (!mrb_nil_p(flag = mrb_http2_config_get_obj(mrb, args, "callback"))
-      && mrb_obj_equal(mrb, flag, mrb_true_value())) {
-    config->callback = MRB_HTTP2_CONFIG_ENABLED;
-  }
-
-  // DAEMON options: defulat DISABLED
-  config->daemon = MRB_HTTP2_CONFIG_DISABLED;
-  if (!mrb_nil_p(flag = mrb_http2_config_get_obj(mrb, args, "daemon"))
-      && mrb_obj_equal(mrb, flag, mrb_true_value())) {
-    config->daemon = MRB_HTTP2_CONFIG_ENABLED;
-  }
-
-  // DEBUG options: defulat DISABLED
-  config->debug = MRB_HTTP2_CONFIG_DISABLED;
-  if (!mrb_nil_p(flag = mrb_http2_config_get_obj(mrb, args, "debug"))
-      && mrb_obj_equal(mrb, flag, mrb_true_value())) {
-    config->debug = MRB_HTTP2_CONFIG_ENABLED;
-  }
-
-  // TLS options: defulat ENABLED
-  config->tls = MRB_HTTP2_CONFIG_ENABLED;
-  if (!mrb_nil_p(flag = mrb_http2_config_get_obj(mrb, args, "tls"))
-      && mrb_obj_equal(mrb, flag, mrb_false_value())) {
-    config->tls = MRB_HTTP2_CONFIG_DISABLED;
-  }
-
-  // CONNECTION_RECORD options: defulat ENABLED
-  config->connection_record = MRB_HTTP2_CONFIG_ENABLED;
-  if (!mrb_nil_p(flag = mrb_http2_config_get_obj(mrb, args,
-          "connection_record"))
-      && mrb_obj_equal(mrb, flag, mrb_false_value())) {
-    config->connection_record = MRB_HTTP2_CONFIG_DISABLED;
-  }
-
-  if (config->tls) {
-    config->key = must_get_config_str_to_cstr(mrb, args, "key");
-    config->cert = must_get_config_str_to_cstr(mrb, args, "crt");
-  } else {
-    config->key = NULL;
-    config->cert = NULL;
-  }
-
-  config->server_host = may_get_config_str_to_cstr(mrb, args, "server_host");
-
-  config->document_root = must_get_config_str_to_cstr(mrb, args,
-      "document_root");
-  config->server_name = must_get_config_str_to_cstr(mrb, args, "server_name");
-  config->cb_list = mruby_cb_list_init(mrb);
-
-  return config;
 }
 
 static mrb_value mrb_http2_server_init(mrb_state *mrb, mrb_value self)

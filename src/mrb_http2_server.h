@@ -8,53 +8,9 @@
 #define MRB_HTTP2_SERVER_H
 
 #include "mrb_http2_request.h"
+#include "mrb_http2_config.h"
 
-#define MRB_HTTP2_WORKER_MAX 1024
 #define MRB_HTTP2_READ_LENGTH_MAX ((1 << 16) - 1)
-
-// callback block symbol literal list
-typedef struct {
-
-  // callback block at a phase of mapping uri to filename
-  const char *map_to_strage_cb;
-
-  // callback block at a phase of creating content
-  const char *content_cb;
-
-  // callback block after send response
-  const char *logging_cb;
-
-} mruby_cb_list;
-
-// mruby-http2 config parameter getting from HTTP2::Server#init
-typedef struct {
-
-  unsigned int daemon;
-  unsigned int debug;
-  unsigned int tls;
-  unsigned int callback;
-
-  // connection record option
-  // default enabled and can use connection methods
-  unsigned int connection_record;
-
-  const char *key;
-  const char *cert;
-  const char *service;
-  const char *document_root;
-
-  // server response header
-  const char *server_name;
-
-  // server listen hostname
-  const char *server_host;
-
-  mruby_cb_list *cb_list;
-
-  // the number of worker process, need SO_REUSEPORT linux kernel 3.9 or later
-  unsigned int worker;
-
-} mrb_http2_config_t;
 
 typedef struct {
   const char *service;
