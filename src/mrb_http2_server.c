@@ -968,10 +968,10 @@ static int server_on_request_recv(nghttp2_session *session,
     }
     return 0;
   }
-  //if (session_data->app_ctx->server->config->debug) {
-  //  fprintf(stderr, "%s GET %s\n", session_data->client_addr,
-  //      stream_data->request_path);
-  //}
+  if (session_data->app_ctx->server->config->debug) {
+    fprintf(stderr, "%s GET %s\n", session_data->client_addr,
+        stream_data->request_path);
+  }
   TRACER;
   if(!check_path(stream_data->request_path)) {
     if (session_data->app_ctx->server->config->debug) {
@@ -996,11 +996,11 @@ static int server_on_request_recv(nghttp2_session *session,
       session_data->app_ctx->server->mrb,
       stream_data->request_path, uri_len);
 
-  //if (session_data->app_ctx->server->config->debug) {
-  //  fprintf(stderr,
-  //      "%s %s is mapped to %s document_root=%s before map_to_strage_cb\n",
-  //      session_data->client_addr, session_data->app_ctx->r->uri, session_data->app_ctx->r->filename, session_data->app_ctx->server->config->document_root);
-  //}
+  if (session_data->app_ctx->server->config->debug) {
+    fprintf(stderr,
+        "%s %s is mapped to %s document_root=%s before map_to_strage_cb\n",
+        session_data->client_addr, session_data->app_ctx->r->uri, session_data->app_ctx->r->filename, session_data->app_ctx->server->config->document_root);
+  }
 
   //
   // "set_map_to_storage" callback ruby block
@@ -1020,10 +1020,10 @@ static int server_on_request_recv(nghttp2_session *session,
   }
 
 
-  //if (session_data->app_ctx->server->config->debug) {
-  //  fprintf(stderr, "%s %s is mapped to %s\n", session_data->client_addr,
-  //      session_data->app_ctx->r->uri, session_data->app_ctx->r->filename);
-  //}
+  if (session_data->app_ctx->server->config->debug) {
+    fprintf(stderr, "%s %s is mapped to %s\n", session_data->client_addr,
+        session_data->app_ctx->r->uri, session_data->app_ctx->r->filename);
+  }
 
   // check proxy config
   //if (session_data->app_ctx->r->upstream && session_data->app_ctx->r->upstream->server) {
