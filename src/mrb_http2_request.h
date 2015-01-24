@@ -11,6 +11,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include "mrb_http2_upstream.h"
+#include "mruby.h"
 
 typedef enum mrb_http2_server_phase {
   MRB_HTTP2_SERVER_INIT_REQUEST,
@@ -142,5 +143,8 @@ typedef struct {
   mrb_http2_server_phase phase;
 
 } mrb_http2_request_rec;
+
+mrb_http2_request_rec *mrb_http2_request_rec_init(mrb_state *mrb);
+void mrb_http2_request_rec_free(mrb_state *mrb, mrb_http2_request_rec *r);
 
 #endif

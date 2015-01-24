@@ -7,7 +7,7 @@
 #ifndef MRB_HTTP2_SERVER_H
 #define MRB_HTTP2_SERVER_H
 
-#include "mrb_http2_request.h"
+#include "mruby.h"
 #include "mrb_http2_config.h"
 
 #define MRB_HTTP2_READ_LENGTH_MAX ((1 << 16) - 1)
@@ -21,11 +21,6 @@ typedef struct {
   // callback Ruby block hash table
   mrb_value cb_hash;
 } mrb_http2_server_t;
-
-typedef struct {
-  mrb_http2_server_t *s;
-  mrb_http2_request_rec *r;
-} mrb_http2_data_t;
 
 void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2);
 
