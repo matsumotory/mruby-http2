@@ -1,15 +1,15 @@
-# HTTP2 Module for mruby  [![Build Status](https://travis-ci.org/matsumoto-r/mruby-http2.svg?branch=master)](https://travis-ci.org/matsumoto-r/mruby-http2)
+# HTTP2 Module for mruby  [![Build Status](https://travis-ci.org/trusterd/mruby-http2.svg?branch=master)](https://travis-ci.org/trusterd/mruby-http2)
 HTTP2 module for mruby using [nghttp2](https://github.com/tatsuhiro-t/nghttp2). You can access Web site using HTTP/2 protocol from mruby applications or devices with mruby, and run HTTP/2 Web server easily.
 
-- [HTTP/2 Web Server by mruby-http2](https://github.com/matsumoto-r/mruby-http2/blob/master/README.md#http2server)
-- [HTTP/2 Client by mruby-http2](https://github.com/matsumoto-r/mruby-http2/blob/master/README.md#http2client)
+- [HTTP/2 Web Server by mruby-http2](https://github.com/trusterdmruby-http2/blob/master/README.md#http2server)
+- [HTTP/2 Client by mruby-http2](https://github.com/trusterd/mruby-http2/blob/master/README.md#http2client)
 
 #### [HTTP/2](http://http2.github.io/) 
 
 HTTP/2 is a replacement for how HTTP is expressed "on the wire". It is not a ground-up rewrite of the protocol; HTTP methods, status codes and semantics will be the same, and it should be possible to use the same APIs as HTTP/1.x (possibly with some small additions) to represent the protocol.
 
-## [Trusterd HTTP/2 Web Server](https://github.com/matsumoto-r/trusterd)
-[Trusterd](https://github.com/matsumoto-r/trusterd) is a HTTP/2 Web Server implementation using mruby-http2.
+## [Trusterd HTTP/2 Web Server](https://github.com/trusterd/trusterd)
+[Trusterd](https://github.com/trusterd/trusterd) is a HTTP/2 Web Server implementation using mruby-http2.
 
 ## Benchmark
 Please see [link](https://gist.github.com/matsumoto-r/9702123).
@@ -25,7 +25,7 @@ MRuby::Build.new do |conf|
 
   # ... (snip) ...
 
-  conf.gem :github => 'matsumoto-r/mruby-http2'
+  conf.gem :github => 'trusterd/mruby-http2'
 end
 ```
 
@@ -144,7 +144,7 @@ p r.response
 ```
 ### HTTP2::Server
 ##### run HTTP/2 server
-###### If you want to get more information, Please see [Trusterd HTTP/2 Web Server](https://github.com/matsumoto-r/trusterd) using mruby-http2.
+###### If you want to get more information, Please see [Trusterd HTTP/2 Web Server](https://github.com/trusterd/trusterd) using mruby-http2.
 ```ruby
 root_dir = "/usr/local/trusterd"
 
