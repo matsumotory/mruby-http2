@@ -7,18 +7,20 @@
 #ifndef MRB_HTTP2_UPSTREAM_H
 #define MRB_HTTP2_UPSTREAM_H
 
+#include "mruby.h"
+
 typedef enum {
   MRB_HTTP_PROXY_REVERSE,
   MRB_HTTP_PROXY_NONE
 } upstream_type;
 
-typedef struct {                                                                     
+typedef struct {
 
   // response data
-  char *data;                                                                        
+  char *data;
 
   // response length
-  size_t len;                                                                        
+  size_t len;
 
   // response header object
   mrb_value headers;
@@ -32,7 +34,7 @@ typedef struct {
   // response status code
   uint64_t content_length;
 
-} upstream_response;                                                                 
+} upstream_response;
 
 typedef struct {
   // upstrema type

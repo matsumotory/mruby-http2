@@ -40,7 +40,6 @@
 #include "mruby/hash.h"
 #include "mruby/string.h"
 #include "mruby/class.h"
-#include "mrb_http2.h"
 #include "mruby/numeric.h"
 
 #define DONE mrb_gc_arena_restore(mrb, 0);

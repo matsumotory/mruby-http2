@@ -5,7 +5,8 @@
 */
 #include "mrb_http2.h"
 #include "mrb_http2_server.h"
-#include "mrb_http2_config.h"
+#include "mrb_http2_request.h"
+#include "mrb_http2_data.h"
 
 #include <event.h>
 #include <event2/event.h>
@@ -94,49 +95,6 @@ static void mrb_http2_conn_rec_free(mrb_state *mrb,
   }
   mrb_free(mrb, conn->client_ip);
   mrb_free(mrb, conn);
-}
-
-static void mrb_http2_request_rec_free(mrb_state *mrb,
-    mrb_http2_request_rec *r)
-{
-  TRACER;
-  if (r->filename != NULL) {
-    mrb_free(mrb, r->filename);
-    r->filename = NULL;
-  }
-  if (r->uri != NULL) {
-    mrb_free(mrb, r->uri);
-    r->uri = NULL;
-  }
-  if (r->upstream != NULL) {
-    if (r->upstream->res->data != NULL) {
-      mrb_free(mrb, r->upstream->res->data);
-    }
-    mrb_free(mrb, r->upstream->res);
-    mrb_free(mrb, r->upstream);
-    r->upstream = NULL;
-  }
-
-  // disable mruby script for each request
-  r->mruby = 0;
-  r->shared_mruby = 0;
-
-  // unset write fd record for each request
-  r->write_fd = -1;
-  r->write_size = 0;
-
-  // for conn_rec_free when disconnected
-  if (r->conn != NULL) {
-    r->conn = NULL;
-  }
-  if (r->reqhdr != NULL) {
-    r->reqhdr = NULL;
-  }
-  if (r->reqhdrlen != 0) {
-    r->reqhdrlen = 0;
-  }
-
-  r->status = 0;
 }
 
 static void add_stream(http2_session_data *session_data,
@@ -1587,29 +1545,6 @@ static mrb_value mrb_http2_server_run(mrb_state *mrb, mrb_value self)
   }
 
   return self;
-}
-
-static mrb_http2_request_rec *mrb_http2_request_rec_init(mrb_state *mrb)
-{
-  mrb_http2_request_rec *r = (mrb_http2_request_rec *)mrb_malloc(mrb,
-      sizeof(mrb_http2_request_rec));
-  memset(r, 0, sizeof(mrb_http2_request_rec));
-
-  // NULL check when request_rec freed
-  r->filename = NULL;
-  r->uri = NULL;
-  r->prev_req_time = 0;
-  r->prev_last_modified = 0;
-  r->reqhdr = NULL;
-  r->reqhdrlen = 0;
-  r->upstream = NULL;
-  r->mruby = 0;
-  r->shared_mruby = 0;
-  r->write_fd = -1;
-  r->status = 0;
-  r->phase = MRB_HTTP2_SERVER_INIT_REQUEST;
-
-  return r;
 }
 
 static mrb_value mrb_http2_server_set_map_to_strage_cb(mrb_state *mrb,
