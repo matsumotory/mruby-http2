@@ -394,14 +394,18 @@ static int error_reply(app_context *app_ctx, nghttp2_session *session,
     http2_stream_data *stream_data)
 {
   mrb_http2_request_rec *r = app_ctx->r;
+  mrb_state *mrb = app_ctx->server->mrb;
   int rv;
   int pipefd[2];
   int64_t size;
+  nghttp2_nv nva[MRB_HTTP2_HEADER_MAX];
+  size_t nvlen = 0;
 
-  nghttp2_nv hdrs[] = {
-    MAKE_NV_CS(":status", r->status_line),
-    MAKE_NV_CS("date", r->date)
-  };
+  // create headers for HTTP/2
+  MRB_HTTP2_CREATE_NV_CS(mrb, &nva[nvlen], ":status", r->status_line);
+  nvlen += 1;
+  MRB_HTTP2_CREATE_NV_CS(mrb, &nva[nvlen], "date", r->date);
+  nvlen += 1;
 
   TRACER;
   rv = pipe(pipefd);
@@ -427,8 +431,14 @@ static int error_reply(app_context *app_ctx, nghttp2_session *session,
   close(pipefd[1]);
   stream_data->fd = pipefd[0];
   stream_data->readleft = size;
+
+  // set content-length: max 10^64
+  snprintf(r->content_length, 64, "%ld", size);
+  MRB_HTTP2_CREATE_NV_CS(mrb, &nva[nvlen], "content_length", r->content_length);
+  nvlen += 1;
+
   TRACER;
-  if(send_response(app_ctx, session, hdrs, ARRLEN(hdrs), stream_data) != 0) {
+  if(send_response(app_ctx, session, nva, nvlen, stream_data) != 0) {
     close(pipefd[0]);
     return -1;
   }
