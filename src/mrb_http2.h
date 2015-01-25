@@ -72,6 +72,10 @@
   mrb_http2_create_nv(MRB, NV, (uint8_t*)NAME, (uint16_t)(sizeof(NAME) - 1), \
     (uint8_t*)VALUE,  (uint16_t)(strlen(VALUE)))
 
+#define MRB_HTTP2_CREATE_NV_LIT(MRB, NV, NAME, VALUE)                         \
+  mrb_http2_create_nv(MRB, NV, (uint8_t*)NAME, (uint16_t)(sizeof(NAME) - 1), \
+    (uint8_t*)VALUE,  (uint16_t)(sizeof(VALUE) - 1))
+
 #define MRB_HTTP2_CREATE_NV_OBJ(MRB, NV, NAME, VALUE)               \
   mrb_http2_create_nv(MRB, NV, (uint8_t*)RSTRING_PTR(NAME),         \
       (uint16_t)(RSTRING_LEN(NAME)), (uint8_t*)RSTRING_PTR(VALUE),  \
