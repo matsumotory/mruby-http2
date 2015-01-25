@@ -434,7 +434,7 @@ static int error_reply(app_context *app_ctx, nghttp2_session *session,
 
   // set content-length: max 10^64
   snprintf(r->content_length, 64, "%ld", size);
-  MRB_HTTP2_CREATE_NV_CS(mrb, &nva[nvlen], "content_length", r->content_length);
+  MRB_HTTP2_CREATE_NV_CS(mrb, &nva[nvlen], "content-length", r->content_length);
   nvlen += 1;
 
   TRACER;
