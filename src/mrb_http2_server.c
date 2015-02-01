@@ -202,11 +202,9 @@ static int tls_session_send(http2_session_data *session_data)
 
   TRACER;
   while(1) {
+    size_t writeleft;
     unsigned char *data;
     size_t datalen = nghttp2_session_mem_send(session_data->session, &data);
-    if (session_data->app_ctx->server->config->debug) {
-      fprintf(stderr, "%s: datalen = %d\n", __func__, datalen);
-    }
     if (datalen < 0) {
       fprintf(stderr, "Fatal error: %s", nghttp2_strerror(datalen));
       return -1;
@@ -214,7 +212,22 @@ static int tls_session_send(http2_session_data *session_data)
     if (datalen == 0) {
       return 0;
     }
-    bufferevent_write(session_data->bev, data, datalen);
+    writeleft = datalen;
+    while (writeleft > 0) {
+      size_t writelen;
+      if (writeleft > 1400) {
+        writelen = 1400;
+      } else {
+        writelen = writeleft;
+      }
+
+      writeleft -= writelen;
+      if (session_data->app_ctx->server->config->debug) {
+        fprintf(stderr, "%s: writelen = %d writeleft=%d/%d\n", __func__, writelen, writeleft, datalen);
+      }
+      bufferevent_write(session_data->bev, data, writelen);
+      data += writelen;
+    }
   }
 }
 
@@ -1316,7 +1329,6 @@ static int send_server_connection_header(http2_session_data *session_data)
 static SSL* mrb_http2_create_ssl(mrb_state *mrb, SSL_CTX *ssl_ctx)
 {
   SSL *ssl;
-  BIO *rbio, *wbio;
 
   if (ssl_ctx == NULL) {
     return NULL;
@@ -1329,10 +1341,6 @@ static SSL* mrb_http2_create_ssl(mrb_state *mrb, SSL_CTX *ssl_ctx)
         "Could not create SSL/TLS session object: %S",
         mrb_str_new_cstr(mrb, ERR_error_string(ERR_get_error(), NULL)));
   }
-  rbio = SSL_get_rbio(ssl);
-  wbio = SSL_get_rbio(ssl);
-  BIO_set_write_buffer_size(rbio, MRB_HTTP2_SSL_BUFSIZE);
-  BIO_set_write_buffer_size(wbio, MRB_HTTP2_SSL_BUFSIZE);
 
   TRACER;
   return ssl;
