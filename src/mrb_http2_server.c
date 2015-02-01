@@ -207,12 +207,81 @@ static int session_recv(http2_session_data *session_data)
   unsigned char *data = evbuffer_pullup(input, -1);
 
   TRACER;
+  printf("%s: datalen = %d\n", __func__, datalen);
   rv = nghttp2_session_mem_recv(session_data->session, data, datalen);
   if(rv < 0) {
     fprintf(stderr, "Fatal error: %s", nghttp2_strerror(rv));
     return -1;
   }
   evbuffer_drain(input, rv);
+  TRACER;
+  if(session_send(session_data) != 0) {
+    return -1;
+  }
+  TRACER;
+  return 0;
+}
+
+static int session_recv2(http2_session_data *session_data)
+{
+  int rv, nread;
+  unsigned char data[4096];
+
+  while (1) {
+    nread = bufferevent_read(session_data->bev, data, sizeof(data));
+    TRACER;
+    if (nread <= 0) {
+      return 0;
+    }
+    //printf("%s: datalen = %d\n", __func__, nread);
+    rv = nghttp2_session_mem_recv(session_data->session, data, nread);
+    if(rv < 0) {
+      fprintf(stderr, "Fatal error: %s", nghttp2_strerror(rv));
+      return -1;
+    }
+    TRACER;
+    if(session_send(session_data) != 0) {
+      return -1;
+    }
+    TRACER;
+  }
+}
+
+#define MRB_HTTP2_SSL_RECORD_SIZE 4096
+
+static int ssl_session_recv(http2_session_data *session_data)
+{
+  SSL *ssl = bufferevent_openssl_get_ssl(session_data->bev);
+  unsigned char data[MRB_HTTP2_SSL_RECORD_SIZE];
+
+  ERR_clear_error();
+  int rv, nread;
+  nread = SSL_read(ssl, data, sizeof(data));
+
+  if (nread == 0) {
+    return -1;
+  } else if (nread < 0) {
+    int err = SSL_get_error(ssl, nread);
+    switch (err) {
+    case SSL_ERROR_WANT_READ:
+      if(session_send(session_data) != 0) {
+        return -1;
+      }
+      TRACER;
+      return 0;
+    case SSL_ERROR_WANT_WRITE:
+      return -1;
+    default:
+      return -1;
+    }
+  }
+
+  TRACER;
+  rv = nghttp2_session_mem_recv(session_data->session, data, nread);
+  if (rv < 0) {
+    fprintf(stderr, "Fatal error: %s", nghttp2_strerror(rv));
+    return -1;
+  }
   TRACER;
   if(session_send(session_data) != 0) {
     return -1;
@@ -1304,9 +1373,16 @@ static void mrb_http2_server_readcb(struct bufferevent *bev, void *ptr)
   http2_session_data *session_data = (http2_session_data *)ptr;
 
   TRACER;
-  if(session_recv(session_data) != 0) {
-    delete_http2_session_data(session_data);
-    return;
+  if (session_data->app_ctx->server->config->tls) {
+    if (session_recv2(session_data) != 0) {
+      delete_http2_session_data(session_data);
+      return;
+    }
+  } else {
+    if (session_recv2(session_data) != 0) {
+      delete_http2_session_data(session_data);
+      return;
+    }
   }
 }
 
@@ -1413,7 +1489,16 @@ static SSL_CTX* mrb_http2_create_ssl_ctx(mrb_state *mrb,
   }
   SSL_CTX_set_options(ssl_ctx,
       SSL_OP_ALL | SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_COMPRESSION |
-      SSL_OP_NO_SESSION_RESUMPTION_ON_RENEGOTIATION);
+      SSL_OP_NO_SESSION_RESUMPTION_ON_RENEGOTIATION |
+      SSL_OP_SINGLE_ECDH_USE | SSL_OP_NO_TICKET |
+      SSL_OP_CIPHER_SERVER_PREFERENCE);
+
+  // in reference to nghttp2
+  SSL_CTX_set_mode(ssl_ctx, SSL_MODE_AUTO_RETRY);
+  SSL_CTX_set_mode(ssl_ctx, SSL_MODE_RELEASE_BUFFERS);
+  const unsigned char sid_ctx[] = "mruby-http2";
+  SSL_CTX_set_session_id_context(ssl_ctx, sid_ctx, sizeof(sid_ctx) - 1);
+  SSL_CTX_set_session_cache_mode(ssl_ctx, SSL_SESS_CACHE_SERVER);
 
   ecdh = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
   if(!ecdh) {
