@@ -204,7 +204,9 @@ static int tls_session_send(http2_session_data *session_data)
   while(1) {
     unsigned char *data;
     size_t datalen = nghttp2_session_mem_send(session_data->session, &data);
-    fprintf(stderr, "%s: datalen = %d\n", __func__, datalen);
+    if (session_data->app_ctx->server->config->debug) {
+      fprintf(stderr, "%s: datalen = %d\n", __func__, datalen);
+    }
     if (datalen < 0) {
       fprintf(stderr, "Fatal error: %s", nghttp2_strerror(datalen));
       return -1;
@@ -228,7 +230,9 @@ static int session_recv(http2_session_data *session_data)
   unsigned char *data = evbuffer_pullup(input, -1);
 
   TRACER;
-  //fprintf(stderr, "%s: datalen = %d\n", __func__, datalen);
+  if (session_data->app_ctx->server->config->debug) {
+    fprintf(stderr, "%s: datalen = %d\n", __func__, datalen);
+  }
   rv = nghttp2_session_mem_recv(session_data->session, data, datalen);
   if(rv < 0) {
     fprintf(stderr, "Fatal error: %s", nghttp2_strerror(rv));
@@ -254,7 +258,9 @@ static int session_recv2(http2_session_data *session_data)
     if (nread <= 0) {
       return 0;
     }
-    //fprintf(stderr, "%s: datalen = %d\n", __func__, nread);
+    if (session_data->app_ctx->server->config->debug) {
+      fprintf(stderr, "%s: datalen = %d\n", __func__, nread);
+    }
     rv = nghttp2_session_mem_recv(session_data->session, data, nread);
     if(rv < 0) {
       fprintf(stderr, "Fatal error: %s", nghttp2_strerror(rv));
@@ -279,7 +285,9 @@ static int tls_session_recv(http2_session_data *session_data)
   while (1) {
     int rv, nread;
     nread = SSL_read(ssl, data, sizeof(data));
-    //fprintf(stderr, "SSL_read len: %d\n", nread);
+    if (session_data->app_ctx->server->config->debug) {
+      fprintf(stderr, "SSL_read len: %d\n", nread);
+    }
 
     if (nread == 0) {
       return -1;
@@ -322,7 +330,9 @@ static ssize_t server_send_callback(nghttp2_session *session,
      OUTPUT_WOULDBLOCK_THRESHOLD) {
     return NGHTTP2_ERR_WOULDBLOCK;
   }
-  //fprintf(stderr, "%s: datalen = %d\n", __func__, length);
+  if (session_data->app_ctx->server->config->debug) {
+    fprintf(stderr, "%s: datalen = %d\n", __func__, length);
+  }
   bufferevent_write(session_data->bev, data, length);
   TRACER;
   return length;
