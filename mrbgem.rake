@@ -44,7 +44,11 @@ MRuby::Gem::Specification.new('mruby-http2') do |spec|
       run_command e, 'autoreconf -i'
       run_command e, 'automake'
       run_command e, 'autoconf'
-      run_command e, './configure'
+      if RUBY_PLATFORM =~ /darwin/i
+        run_command e, './configure --disable-threads'
+      else
+        run_command e, './configure'
+      end
       run_command e, 'make'
     end
   end
