@@ -1408,11 +1408,6 @@ static http2_session_data* create_http2_session_data(mrb_state *mrb,
 
     //fprintf(stderr, "bev defalt buf size: read=%d write=%d\n", bufferevent_get_read_limit(session_data->bev), bufferevent_get_write_limit(session_data->bev));
   }
-  if (session_data->bev == NULL) {
-    // accept socket failed
-    delete_http2_session_data(session_data);
-    return NULL;
-  }
 
   rv = getnameinfo(addr, addrlen, host, sizeof(host), NULL, 0, NI_NUMERICHOST);
   if(rv != 0) {
@@ -1523,7 +1518,9 @@ static void mrb_http2_acceptcb(struct evconnlistener *listener, int fd,
 
   TRACER;
   session_data = create_http2_session_data(mrb, app_ctx, fd, addr, addrlen);
-  if (session_data == NULL) {
+  if (session_data->bev == NULL) {
+    // accept socket failed
+    delete_http2_session_data(session_data);
     return;
   }
   bufferevent_setcb(session_data->bev, mrb_http2_server_readcb,
