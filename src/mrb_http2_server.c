@@ -1538,13 +1538,15 @@ static void mrb_http2_acceptcb(struct evconnlistener *listener, int fd,
   //bufferevent_socket_connect(session_data->bev, NULL, 0);
 }
 
-static int next_proto_cb(SSL *s, const unsigned char **data,
-    unsigned int *len, void *arg)
+
+const char *npn_proto = "\x05h2-16\x05h2-14";
+
+static int npn_advertise_cb(SSL *s, const unsigned char **data,
+    unsigned int *len, void *proto)
 {
-  *data = next_proto_list;
-  *len = next_proto_list_len;
-  TRACER;
-  return SSL_TLSEXT_ERR_OK;
+    *data = proto;
+    *len = (unsigned int)strlen(proto);
+    return SSL_TLSEXT_ERR_OK;
 }
 
 static SSL_CTX* mrb_http2_create_ssl_ctx(mrb_state *mrb,
@@ -1599,12 +1601,7 @@ static SSL_CTX* mrb_http2_create_ssl_ctx(mrb_state *mrb,
         mrb_str_new_cstr(mrb, cert_file));
   }
 
-  next_proto_list[0] = NGHTTP2_PROTO_VERSION_ID_LEN;
-  memcpy(&next_proto_list[1], NGHTTP2_PROTO_VERSION_ID,
-      NGHTTP2_PROTO_VERSION_ID_LEN);
-  next_proto_list_len = 1 + NGHTTP2_PROTO_VERSION_ID_LEN;
-
-  SSL_CTX_set_next_protos_advertised_cb(ssl_ctx, next_proto_cb, NULL);
+  SSL_CTX_set_next_protos_advertised_cb(ssl_ctx, npn_advertise_cb, npn_proto);
   TRACER;
   return ssl_ctx;
 }
