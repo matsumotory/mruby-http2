@@ -23,6 +23,7 @@
 #include "mruby/compile.h"
 
 #include <sys/wait.h>
+#include <sys/resource.h>
 #include <unistd.h>
 
 typedef struct {
@@ -1765,6 +1766,17 @@ static mrb_value mrb_http2_server_set_logging_cb(mrb_state *mrb,
   return b;
 }
 
+static void tune_rlimit(mrb_state *mrb)
+{
+  struct rlimit r_cfg = {65536, 65536};
+  if (setrlimit(RLIMIT_NOFILE, &r_cfg) != 0) {
+    int err = errno;
+    mrb_raisef(mrb, E_RUNTIME_ERROR, "tune_rlimit failed: %S",
+        mrb_str_new_cstr(mrb, strerror(err)));
+  }
+  fprintf(stderr, "tune RLIMIT_NOFILE to 65536\n");
+}
+
 static mrb_value mrb_http2_server_init(mrb_state *mrb, mrb_value self)
 {
   mrb_http2_server_t *server;
@@ -1796,6 +1808,8 @@ static mrb_value mrb_http2_server_init(mrb_state *mrb, mrb_value self)
     SSL_load_error_strings();
     SSL_library_init();
   }
+
+  tune_rlimit(mrb);
 
   DATA_TYPE(self) = &mrb_http2_server_type;
   DATA_PTR(self) = data;
