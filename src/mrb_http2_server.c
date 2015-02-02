@@ -280,7 +280,7 @@ static int session_recv2(http2_session_data *session_data)
       return -1;
     }
     TRACER;
-    if(tls_session_send(session_data) != 0) {
+    if(session_send(session_data) != 0) {
       return -1;
     }
     TRACER;
@@ -1392,17 +1392,26 @@ static http2_session_data* create_http2_session_data(mrb_state *mrb,
     session_data->bev = bufferevent_socket_new(app_ctx->evbase, fd,
         BEV_OPT_DEFER_CALLBACKS | BEV_OPT_CLOSE_ON_FREE);
   } else {
+    BIO *bio;
     TRACER;
     session_data->bev = bufferevent_openssl_socket_new(app_ctx->evbase, fd, ssl,
         BUFFEREVENT_SSL_ACCEPTING,
         BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS);
+    bio = SSL_get_wbio(ssl);
+    BIO_set_read_buffer_size(bio, 1400);
+    BIO_set_write_buffer_size(bio, 1400);
 
     //struct timeval cfg_tick = { 0, 500*1000 };
-    //size_t cfg_size = 1500;
+    //size_t cfg_size = 1400;
     //struct ev_token_bucket_cfg *cfg = ev_token_bucket_cfg_new( cfg_size, cfg_size * 4, cfg_size, cfg_size * 4, &cfg_tick);
     //bufferevent_set_rate_limit(session_data->bev, cfg);
 
     //fprintf(stderr, "bev defalt buf size: read=%d write=%d\n", bufferevent_get_read_limit(session_data->bev), bufferevent_get_write_limit(session_data->bev));
+  }
+  if (session_data->bev == NULL) {
+    // accept socket failed
+    delete_http2_session_data(session_data);
+    return NULL;
   }
 
   rv = getnameinfo(addr, addrlen, host, sizeof(host), NULL, 0, NI_NUMERICHOST);
@@ -1458,7 +1467,7 @@ static void mrb_http2_server_writecb(struct bufferevent *bev, void *ptr)
   }
   TRACER;
   if (session_data->app_ctx->server->config->tls) {
-    if(tls_session_send(session_data) != 0) {
+    if(session_send(session_data) != 0) {
       delete_http2_session_data(session_data);
       return;
     }
@@ -1514,6 +1523,9 @@ static void mrb_http2_acceptcb(struct evconnlistener *listener, int fd,
 
   TRACER;
   session_data = create_http2_session_data(mrb, app_ctx, fd, addr, addrlen);
+  if (session_data == NULL) {
+    return;
+  }
   bufferevent_setcb(session_data->bev, mrb_http2_server_readcb,
       mrb_http2_server_writecb, mrb_http2_server_eventcb, session_data);
   if (!app_ctx->server->config->tls) {
