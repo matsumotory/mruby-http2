@@ -1553,28 +1553,33 @@ static SSL_CTX* mrb_http2_create_ssl_ctx(mrb_state *mrb,
   SSL_CTX *ssl_ctx;
   EC_KEY *ecdh;
 
+  SSL_load_error_strings();
+  SSL_library_init();
+  OpenSSL_add_all_algorithms();
+
   ssl_ctx = SSL_CTX_new(SSLv23_server_method());
   TRACER;
   if(!ssl_ctx) {
     mrb_raisef(mrb, E_RUNTIME_ERROR, "Could not create SSL/TLS context: %S",
         mrb_str_new_cstr(mrb, ERR_error_string(ERR_get_error(), NULL)));
   }
-  SSL_CTX_set_options(ssl_ctx,
-      SSL_OP_ALL | SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_COMPRESSION |
-      SSL_OP_NO_SESSION_RESUMPTION_ON_RENEGOTIATION |
-      SSL_OP_SINGLE_ECDH_USE | SSL_OP_NO_TICKET |
-      SSL_OP_CIPHER_SERVER_PREFERENCE);
+  SSL_CTX_set_options(ssl_ctx, SSL_OP_ALL | SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3);
+  //SSL_CTX_set_options(ssl_ctx, SSL_OP_NO_COMPRESSION);
+  //SSL_CTX_set_options(ssl_ctx, SSL_OP_NO_SESSION_RESUMPTION_ON_RENEGOTIATION);
+  //SSL_CTX_set_options(ssl_ctx, SSL_OP_SINGLE_ECDH_USE);
+  //SSL_CTX_set_options(ssl_ctx, SSL_OP_NO_TICKET);
+  //SSL_CTX_set_options(ssl_ctx, SSL_OP_CIPHER_SERVER_PREFERENCE);
 
   // in reference to nghttp2
   if (SSL_CTX_set_cipher_list(ssl_ctx, DEFAULT_CIPHER_LIST) == 0) {
     mrb_raisef(mrb, E_RUNTIME_ERROR, "SSL_CTX_set_cipher_list failed: %S",
          mrb_str_new_cstr(mrb, ERR_error_string(ERR_get_error(), NULL)));
   }
-  SSL_CTX_set_mode(ssl_ctx, SSL_MODE_AUTO_RETRY);
-  SSL_CTX_set_mode(ssl_ctx, SSL_MODE_RELEASE_BUFFERS);
-  const unsigned char sid_ctx[] = "mruby-http2";
-  SSL_CTX_set_session_id_context(ssl_ctx, sid_ctx, sizeof(sid_ctx) - 1);
-  SSL_CTX_set_session_cache_mode(ssl_ctx, SSL_SESS_CACHE_SERVER);
+  //SSL_CTX_set_mode(ssl_ctx, SSL_MODE_AUTO_RETRY);
+  //SSL_CTX_set_mode(ssl_ctx, SSL_MODE_RELEASE_BUFFERS);
+  //const unsigned char sid_ctx[] = "mruby-http2";
+  //SSL_CTX_set_session_id_context(ssl_ctx, sid_ctx, sizeof(sid_ctx) - 1);
+  //SSL_CTX_set_session_cache_mode(ssl_ctx, SSL_SESS_CACHE_SERVER);
 
   ecdh = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
   if(!ecdh) {
@@ -1803,11 +1808,6 @@ static mrb_value mrb_http2_server_init(mrb_state *mrb, mrb_value self)
 
   data->s = server;
   data->r = mrb_http2_request_rec_init(mrb);
-
-  if (server->config->tls) {
-    SSL_load_error_strings();
-    SSL_library_init();
-  }
 
   tune_rlimit(mrb);
 
