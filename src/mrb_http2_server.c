@@ -1507,8 +1507,12 @@ static http2_session_data* create_http2_session_data(mrb_state *mrb,
     //fprintf(stderr, "bufferevent_rate_limit_group_set_min_share return: %d\n", bufferevent_rate_limit_group_set_min_share(cfg_group, 512));
     //ev_token_bucket_cfg_free(cfg);
     TRACER;
-#if defined(__linux__)
+#ifdef TCP_CORK
     setsockopt(fd, IPPROTO_TCP, TCP_CORK, (char *)&val, sizeof(val));
+#endif
+
+#ifdef TCP_NOPUSH
+    setsockopt(fd, IPPROTO_TCP, TCP_NOPUSH, (char *)&val, sizeof(val));
 #endif
     session_data->bev = bufferevent_openssl_socket_new(app_ctx->evbase, fd, ssl,
         BUFFEREVENT_SSL_ACCEPTING,
