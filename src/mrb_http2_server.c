@@ -1910,7 +1910,7 @@ static mrb_value mrb_http2_server_init(mrb_state *mrb, mrb_value self)
   data->s = server;
   data->r = mrb_http2_request_rec_init(mrb);
 
-  tune_rlimit(mrb);
+  //tune_rlimit(mrb);
 
   DATA_TYPE(self) = &mrb_http2_server_type;
   DATA_PTR(self) = data;
