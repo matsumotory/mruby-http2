@@ -1394,6 +1394,13 @@ static http2_session_data* create_http2_session_data(mrb_state *mrb,
         BEV_OPT_DEFER_CALLBACKS | BEV_OPT_CLOSE_ON_FREE);
   } else {
     BIO *bio;
+    struct timeval cfg_tick = { 0, 500*1000 };
+    size_t cfg_size = 1400;
+    struct ev_token_bucket_cfg *cfg = ev_token_bucket_cfg_new(cfg_size, cfg_size * 4, cfg_size, cfg_size * 4, &cfg_tick);
+    struct bufferevent_rate_limit_group *cfg_group = bufferevent_rate_limit_group_new(app_ctx->evbase, cfg);
+    //bufferevent_rate_limit_group_set_cfg(cfg_group, cfg);
+    //bufferevent_rate_limit_group_set_min_share(cfg_group, 1400);
+    //ev_token_bucket_cfg_free(cfg);
     TRACER;
     session_data->bev = bufferevent_openssl_socket_new(app_ctx->evbase, fd, ssl,
         BUFFEREVENT_SSL_ACCEPTING,
@@ -1402,10 +1409,7 @@ static http2_session_data* create_http2_session_data(mrb_state *mrb,
     BIO_set_read_buffer_size(bio, 1400);
     BIO_set_write_buffer_size(bio, 1400);
 
-    //struct timeval cfg_tick = { 0, 500*1000 };
-    //size_t cfg_size = 1400;
-    //struct ev_token_bucket_cfg *cfg = ev_token_bucket_cfg_new( cfg_size, cfg_size * 4, cfg_size, cfg_size * 4, &cfg_tick);
-    //bufferevent_set_rate_limit(session_data->bev, cfg);
+    bufferevent_set_rate_limit(session_data->bev, cfg);
 
     //fprintf(stderr, "bev defalt buf size: read=%d write=%d\n", bufferevent_get_read_limit(session_data->bev), bufferevent_get_write_limit(session_data->bev));
   }
@@ -1566,22 +1570,22 @@ static SSL_CTX* mrb_http2_create_ssl_ctx(mrb_state *mrb,
         mrb_str_new_cstr(mrb, ERR_error_string(ERR_get_error(), NULL)));
   }
   SSL_CTX_set_options(ssl_ctx, SSL_OP_ALL | SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3);
-  //SSL_CTX_set_options(ssl_ctx, SSL_OP_NO_COMPRESSION);
-  //SSL_CTX_set_options(ssl_ctx, SSL_OP_NO_SESSION_RESUMPTION_ON_RENEGOTIATION);
-  //SSL_CTX_set_options(ssl_ctx, SSL_OP_SINGLE_ECDH_USE);
-  //SSL_CTX_set_options(ssl_ctx, SSL_OP_NO_TICKET);
-  //SSL_CTX_set_options(ssl_ctx, SSL_OP_CIPHER_SERVER_PREFERENCE);
+  SSL_CTX_set_options(ssl_ctx, SSL_OP_NO_COMPRESSION);
+  SSL_CTX_set_options(ssl_ctx, SSL_OP_NO_SESSION_RESUMPTION_ON_RENEGOTIATION);
+  SSL_CTX_set_options(ssl_ctx, SSL_OP_SINGLE_ECDH_USE);
+  SSL_CTX_set_options(ssl_ctx, SSL_OP_NO_TICKET);
+  SSL_CTX_set_options(ssl_ctx, SSL_OP_CIPHER_SERVER_PREFERENCE);
 
   // in reference to nghttp2
   if (SSL_CTX_set_cipher_list(ssl_ctx, DEFAULT_CIPHER_LIST) == 0) {
     mrb_raisef(mrb, E_RUNTIME_ERROR, "SSL_CTX_set_cipher_list failed: %S",
          mrb_str_new_cstr(mrb, ERR_error_string(ERR_get_error(), NULL)));
   }
-  //SSL_CTX_set_mode(ssl_ctx, SSL_MODE_AUTO_RETRY);
-  //SSL_CTX_set_mode(ssl_ctx, SSL_MODE_RELEASE_BUFFERS);
-  //const unsigned char sid_ctx[] = "mruby-http2";
-  //SSL_CTX_set_session_id_context(ssl_ctx, sid_ctx, sizeof(sid_ctx) - 1);
-  //SSL_CTX_set_session_cache_mode(ssl_ctx, SSL_SESS_CACHE_SERVER);
+  SSL_CTX_set_mode(ssl_ctx, SSL_MODE_AUTO_RETRY);
+  SSL_CTX_set_mode(ssl_ctx, SSL_MODE_RELEASE_BUFFERS);
+  const unsigned char sid_ctx[] = "mruby-http2";
+  SSL_CTX_set_session_id_context(ssl_ctx, sid_ctx, sizeof(sid_ctx) - 1);
+  SSL_CTX_set_session_cache_mode(ssl_ctx, SSL_SESS_CACHE_SERVER);
 
   ecdh = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
   if(!ecdh) {
