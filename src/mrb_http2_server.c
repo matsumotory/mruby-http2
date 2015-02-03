@@ -199,10 +199,35 @@ static int session_send(http2_session_data *session_data)
 
 static int tls_session_send(http2_session_data *session_data)
 {
-  int rv;
+  SSL *ssl = bufferevent_openssl_get_ssl(session_data->bev);
 
   TRACER;
   while(1) {
+    size_t n_write;
+    unsigned char *data;
+    size_t datalen = nghttp2_session_mem_send(session_data->session, &data);
+    if (datalen < 0) {
+      fprintf(stderr, "Fatal error: %s", nghttp2_strerror(datalen));
+      return -1;
+    }
+    if (datalen == 0) {
+      return 0;
+    }
+    n_write = SSL_write(ssl, data, datalen);
+    if (n_write < 0) {
+      fprintf(stderr, "SSL_write error: %d", n_write);
+      return -1;
+    }
+  }
+}
+
+static int tls_session_send2(http2_session_data *session_data)
+{
+  SSL *ssl = bufferevent_openssl_get_ssl(session_data->bev);
+
+  TRACER;
+  while(1) {
+    size_t n_write;
     size_t writeleft;
     unsigned char *data;
     size_t datalen = nghttp2_session_mem_send(session_data->session, &data);
@@ -223,10 +248,16 @@ static int tls_session_send(http2_session_data *session_data)
       }
 
       writeleft -= writelen;
+
+      //bufferevent_write(session_data->bev, data, writelen);
+      n_write = SSL_write(ssl, data, writelen);
       if (session_data->app_ctx->server->config->debug) {
-        fprintf(stderr, "%s: writelen = %d writeleft=%d/%d\n", __func__, writelen, writeleft, datalen);
+        fprintf(stderr, "%s: n_write=%d writelen=%d writeleft=%d/%d\n", __func__, n_write, writelen, writeleft, datalen);
       }
-      bufferevent_write(session_data->bev, data, writelen);
+      if (n_write < 0) {
+        fprintf(stderr, "SSL_write error: %d", n_write);
+        return -1;
+      }
       data += writelen;
     }
   }
@@ -281,7 +312,7 @@ static int session_recv2(http2_session_data *session_data)
       return -1;
     }
     TRACER;
-    if(session_send(session_data) != 0) {
+    if(tls_session_send(session_data) != 0) {
       return -1;
     }
     TRACER;
@@ -1393,11 +1424,11 @@ static http2_session_data* create_http2_session_data(mrb_state *mrb,
     session_data->bev = bufferevent_socket_new(app_ctx->evbase, fd,
         BEV_OPT_DEFER_CALLBACKS | BEV_OPT_CLOSE_ON_FREE);
   } else {
-    BIO *bio;
-    struct timeval cfg_tick = { 0, 500*1000 };
-    size_t cfg_size = 1400;
-    struct ev_token_bucket_cfg *cfg = ev_token_bucket_cfg_new(cfg_size, cfg_size * 4, cfg_size, cfg_size * 4, &cfg_tick);
-    struct bufferevent_rate_limit_group *cfg_group = bufferevent_rate_limit_group_new(app_ctx->evbase, cfg);
+    //BIO *bio;
+    //struct timeval cfg_tick = { 0, 500*1000 };
+    //size_t cfg_size = 4096;
+    //struct ev_token_bucket_cfg *cfg = ev_token_bucket_cfg_new(cfg_size, cfg_size * 4, cfg_size, cfg_size * 4, &cfg_tick);
+    //struct bufferevent_rate_limit_group *cfg_group = bufferevent_rate_limit_group_new(app_ctx->evbase, cfg);
     //bufferevent_rate_limit_group_set_cfg(cfg_group, cfg);
     //bufferevent_rate_limit_group_set_min_share(cfg_group, 1400);
     //ev_token_bucket_cfg_free(cfg);
@@ -1405,11 +1436,11 @@ static http2_session_data* create_http2_session_data(mrb_state *mrb,
     session_data->bev = bufferevent_openssl_socket_new(app_ctx->evbase, fd, ssl,
         BUFFEREVENT_SSL_ACCEPTING,
         BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS);
-    bio = SSL_get_wbio(ssl);
-    BIO_set_read_buffer_size(bio, 1400);
-    BIO_set_write_buffer_size(bio, 1400);
+    //bio = SSL_get_wbio(ssl);
+    //BIO_set_read_buffer_size(bio, 1400);
+    //BIO_set_write_buffer_size(bio, 1400);
 
-    bufferevent_set_rate_limit(session_data->bev, cfg);
+    //bufferevent_set_rate_limit(session_data->bev, cfg);
 
     //fprintf(stderr, "bev defalt buf size: read=%d write=%d\n", bufferevent_get_read_limit(session_data->bev), bufferevent_get_write_limit(session_data->bev));
   }
@@ -1467,7 +1498,7 @@ static void mrb_http2_server_writecb(struct bufferevent *bev, void *ptr)
   }
   TRACER;
   if (session_data->app_ctx->server->config->tls) {
-    if(session_send(session_data) != 0) {
+    if(tls_session_send(session_data) != 0) {
       delete_http2_session_data(session_data);
       return;
     }
