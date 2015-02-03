@@ -223,7 +223,8 @@ static int tls_session_send3(http2_session_data *session_data)
         //n_write = SSL_write(ssl, pos, pending_datalen);
         n_write = bufferevent_write(session_data->bev, pos, pending_datalen);
         if (session_data->app_ctx->server->config->debug) {
-          fprintf(stderr, "%s: n_write=%d session send but don't reach TLS_PENDING_SIZE\n", __func__, n_write);
+          fprintf(stderr, "%s: n_write=%d session send but don't reach "
+              "TLS_PENDING_SIZE\n", __func__, n_write);
         }
         if (n_write < 0) {
           fprintf(stderr, "SSL_write error: %d", n_write);
@@ -237,14 +238,16 @@ static int tls_session_send3(http2_session_data *session_data)
     pending_datalen += datalen;
     *pending_data += datalen;
     if (session_data->app_ctx->server->config->debug) {
-      fprintf(stderr, "%s: pending data; datalen=%d pending_datalen=%d\n", __func__, datalen, pending_datalen);
+      fprintf(stderr, "%s: pending data; datalen=%d pending_datalen=%d\n",
+          __func__, datalen, pending_datalen);
     }
 
     if (pending_datalen > MRB_HTTP2_TLS_PENDING_SIZE) {
       //n_write = SSL_write(ssl, pos, pending_datalen);
       n_write = bufferevent_write(session_data->bev, pos, pending_datalen);
       if (session_data->app_ctx->server->config->debug) {
-        fprintf(stderr, "%s: n_write=%d sessin send since readed TLS_PENDING_SIZE\n", __func__, n_write);
+        fprintf(stderr, "%s: n_write=%d sessin send since readed "
+            "TLS_PENDING_SIZE\n", __func__, n_write);
       }
       *pending_data -= pending_datalen;
       pending_datalen = 0;
@@ -316,7 +319,8 @@ static int tls_session_send2(http2_session_data *session_data)
       //bufferevent_write(session_data->bev, data, writelen);
       n_write = SSL_write(ssl, data, writelen);
       if (session_data->app_ctx->server->config->debug) {
-        fprintf(stderr, "%s: n_write=%d writelen=%d writeleft=%d/%d\n", __func__, n_write, writelen, writeleft, datalen);
+        fprintf(stderr, "%s: n_write=%d writelen=%d writeleft=%d/%d\n",
+            __func__, n_write, writelen, writeleft, datalen);
       }
       if (n_write < 0) {
         fprintf(stderr, "SSL_write error: %d", n_write);
@@ -1033,14 +1037,16 @@ static int server_on_header_callback(nghttp2_session *session,
     }
 
     // create nv and add stream_data->nva
-    mrb_http2_create_nv(session_data->app_ctx->server->mrb, &nv, name, namelen, value, valuelen);
+    mrb_http2_create_nv(session_data->app_ctx->server->mrb, &nv, name, namelen,
+        value, valuelen);
     stream_data->nvlen = mrb_http2_add_nv(stream_data->nva,
         stream_data->nvlen, &nv);
 
     if(namelen == sizeof(PATH) - 1 && memcmp(PATH, name, namelen) == 0) {
       size_t j;
       for(j = 0; j < valuelen && value[j] != '?'; ++j);
-      stream_data->request_path = percent_decode(session_data->app_ctx->server->mrb, value, j);
+      stream_data->request_path =
+        percent_decode(session_data->app_ctx->server->mrb, value, j);
     }
     break;
   }
@@ -1059,8 +1065,8 @@ static int server_on_begin_headers_callback(nghttp2_session *session,
      frame->headers.cat != NGHTTP2_HCAT_REQUEST) {
     return 0;
   }
-  stream_data = create_http2_stream_data(session_data->app_ctx->server->mrb, session_data,
-      frame->hd.stream_id);
+  stream_data = create_http2_stream_data(session_data->app_ctx->server->mrb,
+      session_data, frame->hd.stream_id);
   nghttp2_session_set_stream_user_data(session, frame->hd.stream_id,
       stream_data);
 
@@ -1149,9 +1155,11 @@ static int server_on_request_recv(nghttp2_session *session,
   if (session_data->app_ctx->server->config->debug) {
     int i;
     for (i = 0; i < stream_data->nvlen; i++) {
-      char *name = mrb_http2_strcopy(session_data->app_ctx->server->mrb, (char *)stream_data->nva[i].name,
+      char *name = mrb_http2_strcopy(session_data->app_ctx->server->mrb,
+          (char *)stream_data->nva[i].name,
           stream_data->nva[i].namelen);
-      char *value = mrb_http2_strcopy(session_data->app_ctx->server->mrb, (char *)stream_data->nva[i].value,
+      char *value = mrb_http2_strcopy(session_data->app_ctx->server->mrb,
+          (char *)stream_data->nva[i].value,
           stream_data->nva[i].valuelen);
       fprintf(stderr, "%s: nva[%d]={name=%s, value=%s}\n", __func__, i,
           name, value);
@@ -1199,7 +1207,9 @@ static int server_on_request_recv(nghttp2_session *session,
   if (session_data->app_ctx->server->config->debug) {
     fprintf(stderr,
         "%s %s is mapped to %s document_root=%s before map_to_strage_cb\n",
-        session_data->client_addr, session_data->app_ctx->r->uri, session_data->app_ctx->r->filename, session_data->app_ctx->server->config->document_root);
+        session_data->client_addr, session_data->app_ctx->r->uri,
+        session_data->app_ctx->r->filename,
+        session_data->app_ctx->server->config->document_root);
   }
 
   //
@@ -1487,25 +1497,8 @@ static http2_session_data* create_http2_session_data(mrb_state *mrb,
     session_data->bev = bufferevent_socket_new(app_ctx->evbase, fd,
         BEV_OPT_DEFER_CALLBACKS | BEV_OPT_CLOSE_ON_FREE);
   } else {
-    //BIO *bio = BIO_new_socket(fd, 0);
-    //BIO_set_write_buffer_size(bio, 4096);
-    //SSL_set_bio(ssl, bio, bio);
-
-    //struct timeval cfg_tick = { 0, 500 * 1000 };
-    //size_t cfg_size = 4096;
-
-    //struct ev_token_bucket_cfg *cfg = ev_token_bucket_cfg_new(
-    //    // read_limit, read_burst,
-    //    cfg_size, cfg_size * 4,
-    //    // write_limit, write_burst,
-    //    cfg_size, cfg_size * 4,
-    //    &cfg_tick);
-
-    //struct bufferevent_rate_limit_group *cfg_group = bufferevent_rate_limit_group_new(app_ctx->evbase, cfg);
-    //fprintf(stderr, "bufferevent_rate_limit_group_set_cfg return: %d\n", bufferevent_rate_limit_group_set_cfg(cfg_group, cfg));
-    //fprintf(stderr, "bufferevent_rate_limit_group_set_min_share return: %d\n", bufferevent_rate_limit_group_set_min_share(cfg_group, 512));
-    //ev_token_bucket_cfg_free(cfg);
     TRACER;
+    // TODO: implement options
 //#ifdef TCP_CORK
 //    setsockopt(fd, IPPROTO_TCP, TCP_CORK, (char *)&val, sizeof(val));
 //#endif
@@ -1516,10 +1509,6 @@ static http2_session_data* create_http2_session_data(mrb_state *mrb,
     session_data->bev = bufferevent_openssl_socket_new(app_ctx->evbase, fd, ssl,
         BUFFEREVENT_SSL_ACCEPTING,
         BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS);
-
-    //bufferevent_set_rate_limit(session_data->bev, cfg);
-
-    //fprintf(stderr, "bev defalt buf size: write_limit=%d write_max=%d\n", bufferevent_get_write_limit(session_data->bev), bufferevent_get_max_to_write(session_data->bev));
   }
 
   rv = getnameinfo(addr, addrlen, host, sizeof(host), NULL, 0, NI_NUMERICHOST);
@@ -1753,11 +1742,12 @@ static void mrb_start_listen(struct event_base *evbase,
     struct evconnlistener *listener;
     if (config->worker > 0) {
       evutil_socket_t fd;
+      int on = 1;
       fd = socket(rp->ai_family, SOCK_STREAM, IPPROTO_TCP);
-      setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (void *)(int[]) {1}, sizeof(int));
-      setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (void *)(int[]) {1}, sizeof(int));
+      setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char *)&on, sizeof(on));
+      setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (char *)&on, sizeof(on));
 #if defined(__linux__) && defined(SO_REUSEPORT)
-      setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, (void *)(int[]) {1}, sizeof(int));
+      setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, (char *)&on, sizeof(on));
 #endif
       evutil_make_socket_nonblocking(fd);
 
