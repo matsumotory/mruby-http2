@@ -258,7 +258,7 @@ static int tls_session_send3(http2_session_data *session_data)
 
 static int tls_session_send(http2_session_data *session_data)
 {
-  //SSL *ssl = bufferevent_openssl_get_ssl(session_data->bev);
+  SSL *ssl = bufferevent_openssl_get_ssl(session_data->bev);
 
   TRACER;
   while(1) {
@@ -273,8 +273,8 @@ static int tls_session_send(http2_session_data *session_data)
       bufferevent_flush(session_data->bev, EV_WRITE, BEV_FLUSH);
       return 0;
     }
-    //n_write = SSL_write(ssl, data, datalen);
-    n_write = bufferevent_write(session_data->bev, data, datalen);
+    n_write = SSL_write(ssl, data, datalen);
+    //n_write = bufferevent_write(session_data->bev, data, datalen);
     if (session_data->app_ctx->server->config->debug) {
       fprintf(stderr, "%s: n_write=%d\n", __func__, n_write);
     }
@@ -1492,15 +1492,15 @@ static http2_session_data* create_http2_session_data(mrb_state *mrb,
     //BIO_set_write_buffer_size(bio, 4096);
     //SSL_set_bio(ssl, bio, bio);
 
-    struct timeval cfg_tick = { 0, 500 * 1000 };
-    size_t cfg_size = 4096 * 4;
+    //struct timeval cfg_tick = { 0, 500 * 1000 };
+    //size_t cfg_size = 4096;
 
-    struct ev_token_bucket_cfg *cfg = ev_token_bucket_cfg_new(
-        // read_limit, read_burst,
-        cfg_size, cfg_size * 4,
-        // write_limit, write_burst,
-        cfg_size, cfg_size * 4,
-        &cfg_tick);
+    //struct ev_token_bucket_cfg *cfg = ev_token_bucket_cfg_new(
+    //    // read_limit, read_burst,
+    //    cfg_size, cfg_size * 4,
+    //    // write_limit, write_burst,
+    //    cfg_size, cfg_size * 4,
+    //    &cfg_tick);
 
     //struct bufferevent_rate_limit_group *cfg_group = bufferevent_rate_limit_group_new(app_ctx->evbase, cfg);
     //fprintf(stderr, "bufferevent_rate_limit_group_set_cfg return: %d\n", bufferevent_rate_limit_group_set_cfg(cfg_group, cfg));
@@ -1511,9 +1511,9 @@ static http2_session_data* create_http2_session_data(mrb_state *mrb,
         BUFFEREVENT_SSL_ACCEPTING,
         BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS);
 
-    bufferevent_set_rate_limit(session_data->bev, cfg);
+    //bufferevent_set_rate_limit(session_data->bev, cfg);
 
-    fprintf(stderr, "bev defalt buf size: write_limit=%d write_max=%d\n", bufferevent_get_write_limit(session_data->bev), bufferevent_get_max_to_write(session_data->bev));
+    //fprintf(stderr, "bev defalt buf size: write_limit=%d write_max=%d\n", bufferevent_get_write_limit(session_data->bev), bufferevent_get_max_to_write(session_data->bev));
   }
 
   rv = getnameinfo(addr, addrlen, host, sizeof(host), NULL, 0, NI_NUMERICHOST);
@@ -1540,7 +1540,7 @@ static void mrb_http2_server_readcb(struct bufferevent *bev, void *ptr)
   TRACER;
   if (session_data->app_ctx->server->config->tls) {
     // if tls, use session_recv2 and tls_session_send
-    if (session_recv(session_data) != 0) {
+    if (session_recv2(session_data) != 0) {
       delete_http2_session_data(session_data);
       return;
     }
@@ -1569,7 +1569,7 @@ static void mrb_http2_server_writecb(struct bufferevent *bev, void *ptr)
   }
   TRACER;
   if (session_data->app_ctx->server->config->tls) {
-    if(session_send(session_data) != 0) {
+    if(tls_session_send(session_data) != 0) {
       delete_http2_session_data(session_data);
       return;
     }
