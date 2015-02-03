@@ -1749,6 +1749,7 @@ static void mrb_start_listen(struct event_base *evbase,
       evutil_socket_t fd;
       fd = socket(rp->ai_family, SOCK_STREAM, IPPROTO_TCP);
       setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (void *)(int[]) {1}, sizeof(int));
+      setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (void *)(int[]) {1}, sizeof(int));
 #if defined(__linux__) && defined(SO_REUSEPORT)
       setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, (void *)(int[]) {1}, sizeof(int));
 #endif
