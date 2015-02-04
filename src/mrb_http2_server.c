@@ -1510,7 +1510,7 @@ static http2_session_data* create_http2_session_data(mrb_state *mrb,
   if (ssl) {
     TRACER;
 
-    bufferevent_setwatermark(session_data->bev, EV_WRITE, 1000, 1400);
+    bufferevent_setwatermark(session_data->bev, EV_WRITE, 0, 1400);
     evbuffer_expand(session_data->bev->input, 4096);
     evbuffer_expand(session_data->bev->output, 4096);
 
