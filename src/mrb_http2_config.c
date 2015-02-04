@@ -143,6 +143,8 @@ void mrb_http2_config_define_cstr(mrb_state *mrb, mrb_value args,
   } else {
     if (!mrb_nil_p(val) && mrb_type(val) == MRB_TT_STRING) {
       *config_cstr = mrb_str_to_cstr(mrb, val);
+    } else if (*config_cstr != NULL) {
+      // already exists default value
     } else {
       *config_cstr = NULL;
     }
