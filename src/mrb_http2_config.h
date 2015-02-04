@@ -13,6 +13,7 @@
 
 typedef unsigned int mrb_http2_config_flag;
 typedef const char mrb_http2_config_cstr;
+typedef mrb_int mrb_http2_config_fixnum;
 
 // callback block symbol literal list
 typedef struct {
@@ -35,6 +36,7 @@ typedef struct {
   mrb_http2_config_flag debug;
   mrb_http2_config_flag tls;
   mrb_http2_config_flag callback;
+  mrb_http2_config_flag tcp_nopush;
 
   // connection record option
   // default enabled and can use connection methods
@@ -55,6 +57,11 @@ typedef struct {
 
   // the number of worker process, need SO_REUSEPORT linux kernel 3.9 or later
   unsigned int worker;
+
+  mrb_http2_config_cstr *run_user;
+  uid_t run_uid;
+
+  mrb_http2_config_fixnum rlimit_nofile;
 
 } mrb_http2_config_t;
 

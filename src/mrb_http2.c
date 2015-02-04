@@ -26,6 +26,7 @@
 */
 
 #include "mrb_http2.h"
+#include <pwd.h>
 
 static const char *MONTH[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul",
   "Aug", "Sep", "Oct", "Nov", "Dec"};
@@ -36,6 +37,22 @@ static const char *DAY_OF_WEEK[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri",
 void mrb_http2_client_class_init(mrb_state *mrb, struct RClass *http2);
 void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2);
 void mrb_http2_request_class_init(mrb_state *mrb, struct RClass *http2);
+
+uid_t mrb_http2_get_uid(mrb_state *mrb, const char *user)
+{
+  struct passwd *pw;
+
+  if (user == NULL) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "Not found 'run_user' value");
+  }
+
+  pw = getpwnam(user);
+
+  if (pw == NULL) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "getpwnam failed");
+  }
+  return pw->pw_uid;
+}
 
 static char *dig_memcpy(char *buf, int n, size_t len) {
   char *p;
@@ -152,14 +169,14 @@ char *strcopy(const char *s, size_t len)
 
 mrb_value mrb_http2_class_obj(mrb_state *mrb, mrb_value self,
     char *obj_id, char *class_name)
-{ 
+{
   mrb_value obj;
   struct RClass *target, *http2;
 
   obj = mrb_iv_get(mrb, self, mrb_intern_cstr(mrb, obj_id));
   if (mrb_nil_p(obj)) {
     http2 = mrb_module_get(mrb, "HTTP2");
-    target = (struct RClass *)mrb_class_ptr(mrb_const_get(mrb, 
+    target = (struct RClass *)mrb_class_ptr(mrb_const_get(mrb,
           mrb_obj_value(http2), mrb_intern_cstr(mrb, class_name)));
     obj = mrb_obj_new(mrb, target, 0, NULL);
     mrb_iv_set(mrb, self, mrb_intern_cstr(mrb, obj_id), obj);

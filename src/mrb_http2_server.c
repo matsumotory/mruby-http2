@@ -1490,6 +1490,16 @@ static http2_session_data* create_http2_session_data(mrb_state *mrb,
   // return NULL when connection_record option diabled
   session_data->conn = mrb_http2_conn_rec_init(mrb, config);
 
+  if (config->tcp_nopush) {
+#ifdef TCP_CORK
+    setsockopt(fd, IPPROTO_TCP, TCP_CORK, (char *)&val, sizeof(val));
+#endif
+
+#ifdef TCP_NOPUSH
+    setsockopt(fd, IPPROTO_TCP, TCP_NOPUSH, (char *)&val, sizeof(val));
+#endif
+  }
+
   // ssl is NULL when config->tls is disabled
   if (ssl == NULL) {
     TRACER;
@@ -1498,14 +1508,6 @@ static http2_session_data* create_http2_session_data(mrb_state *mrb,
         BEV_OPT_DEFER_CALLBACKS | BEV_OPT_CLOSE_ON_FREE);
   } else {
     TRACER;
-    // TODO: implement options
-//#ifdef TCP_CORK
-//    setsockopt(fd, IPPROTO_TCP, TCP_CORK, (char *)&val, sizeof(val));
-//#endif
-//
-//#ifdef TCP_NOPUSH
-//    setsockopt(fd, IPPROTO_TCP, TCP_NOPUSH, (char *)&val, sizeof(val));
-//#endif
     session_data->bev = bufferevent_openssl_socket_new(app_ctx->evbase, fd, ssl,
         BUFFEREVENT_SSL_ACCEPTING,
         BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS);
@@ -1716,6 +1718,40 @@ static void init_app_context(app_context *actx, SSL_CTX *ssl_ctx,
   actx->evbase = evbase;
 }
 
+static void set_run_user(mrb_state *mrb, mrb_http2_config_t *config)
+{
+  uid_t cur_uid = getuid();
+
+  if (config->run_user == NULL && cur_uid != 0) {
+    mrb_warn(mrb, "don't set run_user, so run with uid=%S\n",
+        mrb_fixnum_value(cur_uid));
+    return;
+  } else if (config->run_user == NULL && cur_uid == 0) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "Could not run with root,"
+       " Set 'run_user => user_name' instead of root in config");
+  }
+
+  config->run_uid = mrb_http2_get_uid(mrb, config->run_user);
+
+  if (config->run_uid == 0) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "Could not run with root,"
+       " Set 'run_user => user_name' instead of root in config");
+  }
+
+  if (setuid(config->run_uid)) {
+    mrb_raisef(mrb, E_RUNTIME_ERROR, "Could not set user: %S"
+        " If running server with specific user, "
+        "run server with root at first",
+        mrb_str_new_cstr(mrb, config->run_user));
+  }
+
+  // TODO: add config->run_gid
+  //if (setgid(config->run_uid)) {
+  //  mrb_raisef(mrb, E_RUNTIME_ERROR, "Could not set gid: %S",
+  //      mrb_fixnum_value(config->run_uid));
+  //}
+}
+
 static void mrb_start_listen(struct event_base *evbase,
     mrb_http2_config_t *config, app_context *app_ctx)
 {
@@ -1765,6 +1801,7 @@ static void mrb_start_listen(struct event_base *evbase,
 
     if (listener) {
       freeaddrinfo(res);
+      set_run_user(mrb, config);
       return;
     }
   }
@@ -1872,15 +1909,35 @@ static mrb_value mrb_http2_server_set_logging_cb(mrb_state *mrb,
   return b;
 }
 
-static void tune_rlimit(mrb_state *mrb)
+static void tune_rlimit(mrb_state *mrb, mrb_http2_config_t *config)
 {
-  struct rlimit r_cfg = {65536, 65536};
+  struct rlimit r_cfg;
+
+  if (config->rlimit_nofile == 0) {
+    return;
+  }
+
+  if (config->rlimit_nofile < 0) {
+    fprintf(stderr, "don't tune rlmit, rlimit_nofile=%d need positive fixnum\n",
+        config->rlimit_nofile);
+    return;
+  }
+
+  if (getuid() != 0) {
+    fprintf(stderr, "don't tune rlmit, run with root at first. then change"
+        " privilege to 'run_user' value was set in config\n");
+    return;
+  }
+
+  r_cfg.rlim_cur = config->rlimit_nofile;
+  r_cfg.rlim_max = config->rlimit_nofile;
+
   if (setrlimit(RLIMIT_NOFILE, &r_cfg) != 0) {
     int err = errno;
     mrb_raisef(mrb, E_RUNTIME_ERROR, "tune_rlimit failed: %S",
         mrb_str_new_cstr(mrb, strerror(err)));
   }
-  fprintf(stderr, "tune RLIMIT_NOFILE to 65536\n");
+  fprintf(stderr, "tune RLIMIT_NOFILE to %d\n", config->rlimit_nofile);
 }
 
 static mrb_value mrb_http2_server_init(mrb_state *mrb, mrb_value self)
@@ -1910,7 +1967,7 @@ static mrb_value mrb_http2_server_init(mrb_state *mrb, mrb_value self)
   data->s = server;
   data->r = mrb_http2_request_rec_init(mrb);
 
-  //tune_rlimit(mrb);
+  tune_rlimit(mrb, server->config);
 
   DATA_TYPE(self) = &mrb_http2_server_type;
   DATA_PTR(self) = data;

@@ -143,8 +143,20 @@ void mrb_http2_config_define_cstr(mrb_state *mrb, mrb_value args,
   } else {
     if (!mrb_nil_p(val) && mrb_type(val) == MRB_TT_STRING) {
       *config_cstr = mrb_str_to_cstr(mrb, val);
-    } else {
-      *config_cstr = NULL;
+    }
+  }
+}
+
+void mrb_http2_config_define_fixnum(mrb_state *mrb, mrb_value args,
+    mrb_http2_config_fixnum *config_fixnum, void (*func_ptr)(), const char *key)
+{
+  mrb_value val = mrb_http2_config_get_obj_cstr(mrb, args, key);
+
+  if (func_ptr != NULL) {
+    (*func_ptr)(mrb, args, *config_fixnum, val);
+  } else {
+    if (!mrb_nil_p(val) && mrb_type(val) == MRB_TT_FIXNUM) {
+      *config_fixnum = mrb_fixnum(val);
     }
   }
 }
@@ -171,9 +183,14 @@ static void config_defualt_value(mrb_state *mrb, mrb_http2_config_t *config)
   config->debug = MRB_HTTP2_CONFIG_DISABLED;
   config->tls = MRB_HTTP2_CONFIG_ENABLED;
   config->connection_record = MRB_HTTP2_CONFIG_ENABLED;
+  config->tcp_nopush = MRB_HTTP2_CONFIG_DISABLED;
+
   config->server_host = MRB_HTTP2_CONFIG_LIT(mrb, "0.0.0.0");
   config->server_name = MRB_HTTP2_CONFIG_LIT(mrb, MRUBY_HTTP2_SERVER);
   config->document_root = MRB_HTTP2_CONFIG_LIT(mrb, "./");
+  config->run_user = NULL;
+
+  config->rlimit_nofile = 0;
 }
 
 mrb_http2_config_t *mrb_http2_s_config_init(mrb_state *mrb,
@@ -190,10 +207,14 @@ mrb_http2_config_t *mrb_http2_s_config_init(mrb_state *mrb,
   mrb_http2_config_define_flag(mrb, args, &config->debug, NULL, "debug");
   mrb_http2_config_define_flag(mrb, args, &config->tls, NULL, "tls");
   mrb_http2_config_define_flag(mrb, args, &config->connection_record, NULL, "connection_record");
+  mrb_http2_config_define_flag(mrb, args, &config->tcp_nopush, NULL, "tcp_nopush");
 
   mrb_http2_config_define_cstr(mrb, args, &config->server_host,  NULL, "server_host");
   mrb_http2_config_define_cstr(mrb, args, &config->server_name,  NULL, "server_name");
   mrb_http2_config_define_cstr(mrb, args, &config->document_root,  NULL, "document_root");
+  mrb_http2_config_define_cstr(mrb, args, &config->run_user, NULL, "run_user");
+
+  mrb_http2_config_define_fixnum(mrb, args, &config->rlimit_nofile, NULL, "rlimit_nofile");
 
   mrb_http2_config_define(mrb, args, config, set_config_port, "port");
   mrb_http2_config_define(mrb, args, config, set_config_worker, "worker");
