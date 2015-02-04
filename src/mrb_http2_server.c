@@ -446,6 +446,7 @@ static ssize_t server_send_callback(nghttp2_session *session,
   if (session_data->app_ctx->server->config->debug) {
     fprintf(stderr, "%s: datalen = %d\n", __func__, length);
   }
+
   bufferevent_write(session_data->bev, data, length);
   TRACER;
   return length;
@@ -1500,18 +1501,24 @@ static http2_session_data* create_http2_session_data(mrb_state *mrb,
 #endif
   }
 
-  // ssl is NULL when config->tls is disabled
-  if (ssl == NULL) {
+  setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char *)&val, sizeof(val));
+
+  TRACER;
+  session_data->bev = bufferevent_socket_new(app_ctx->evbase, fd,
+     BEV_OPT_DEFER_CALLBACKS | BEV_OPT_CLOSE_ON_FREE);
+
+  bufferevent_setwatermark(session_data->bev, EV_WRITE, 1400, 4096);
+  evbuffer_expand(session_data->bev->input, 1400);
+  evbuffer_expand(session_data->bev->output, 1400);
+
+  if (ssl) {
     TRACER;
-    setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char *)&val, sizeof(val));
-    session_data->bev = bufferevent_socket_new(app_ctx->evbase, fd,
-        BEV_OPT_DEFER_CALLBACKS | BEV_OPT_CLOSE_ON_FREE);
-  } else {
-    TRACER;
-    session_data->bev = bufferevent_openssl_socket_new(app_ctx->evbase, fd, ssl,
+    session_data->bev = bufferevent_openssl_filter_new(app_ctx->evbase, session_data->bev, ssl,
         BUFFEREVENT_SSL_ACCEPTING,
         BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS);
   }
+
+  bufferevent_enable(session_data->bev, EV_READ | EV_WRITE);
 
   rv = getnameinfo(addr, addrlen, host, sizeof(host), NULL, 0, NI_NUMERICHOST);
   if(rv != 0) {
@@ -1537,7 +1544,7 @@ static void mrb_http2_server_readcb(struct bufferevent *bev, void *ptr)
   TRACER;
   if (session_data->app_ctx->server->config->tls) {
     // if tls, use session_recv2 and tls_session_send
-    if (session_recv2(session_data) != 0) {
+    if (session_recv(session_data) != 0) {
       delete_http2_session_data(session_data);
       return;
     }
@@ -1566,7 +1573,7 @@ static void mrb_http2_server_writecb(struct bufferevent *bev, void *ptr)
   }
   TRACER;
   if (session_data->app_ctx->server->config->tls) {
-    if(tls_session_send(session_data) != 0) {
+    if(session_send(session_data) != 0) {
       delete_http2_session_data(session_data);
       return;
     }
@@ -1592,7 +1599,6 @@ static void mrb_http2_server_eventcb(struct bufferevent *bev, short events,
       fprintf(stderr, "%s connected\n", session_data->client_addr);
     }
     if (config->tls) {
-      bufferevent_enable(session_data->bev, EV_READ | EV_WRITE);
       mrb_http2_server_session_init(session_data);
       if(send_server_connection_header(session_data) != 0) {
         delete_http2_session_data(session_data);
