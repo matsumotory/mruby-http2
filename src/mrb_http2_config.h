@@ -13,6 +13,7 @@
 
 typedef unsigned int mrb_http2_config_flag;
 typedef const char mrb_http2_config_cstr;
+typedef mrb_int mrb_http2_config_fixnum;
 
 // callback block symbol literal list
 typedef struct {
