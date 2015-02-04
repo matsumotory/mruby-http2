@@ -1769,7 +1769,8 @@ static void mrb_start_listen(struct event_base *evbase,
       freeaddrinfo(res);
       config->run_uid = mrb_http2_get_uid(mrb, config->run_user);
       if (setuid(config->run_uid)) {
-        mrb_raisef(mrb, E_RUNTIME_ERROR, "Could not set uid: %S",
+        mrb_raisef(mrb, E_RUNTIME_ERROR, "Could not set uid: %S"
+            " If running server with specific user, run server with root",
             mrb_fixnum_value(config->run_uid));
       }
       // TODO: add config->run_gid
