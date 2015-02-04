@@ -1490,6 +1490,16 @@ static http2_session_data* create_http2_session_data(mrb_state *mrb,
   // return NULL when connection_record option diabled
   session_data->conn = mrb_http2_conn_rec_init(mrb, config);
 
+  if (config->tcp_nopush) {
+#ifdef TCP_CORK
+    setsockopt(fd, IPPROTO_TCP, TCP_CORK, (char *)&val, sizeof(val));
+#endif
+
+#ifdef TCP_NOPUSH
+    setsockopt(fd, IPPROTO_TCP, TCP_NOPUSH, (char *)&val, sizeof(val));
+#endif
+  }
+
   // ssl is NULL when config->tls is disabled
   if (ssl == NULL) {
     TRACER;
@@ -1498,14 +1508,6 @@ static http2_session_data* create_http2_session_data(mrb_state *mrb,
         BEV_OPT_DEFER_CALLBACKS | BEV_OPT_CLOSE_ON_FREE);
   } else {
     TRACER;
-    // TODO: implement options
-//#ifdef TCP_CORK
-//    setsockopt(fd, IPPROTO_TCP, TCP_CORK, (char *)&val, sizeof(val));
-//#endif
-//
-//#ifdef TCP_NOPUSH
-//    setsockopt(fd, IPPROTO_TCP, TCP_NOPUSH, (char *)&val, sizeof(val));
-//#endif
     session_data->bev = bufferevent_openssl_socket_new(app_ctx->evbase, fd, ssl,
         BUFFEREVENT_SSL_ACCEPTING,
         BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS);

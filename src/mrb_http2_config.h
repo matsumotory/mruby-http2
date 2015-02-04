@@ -35,6 +35,7 @@ typedef struct {
   mrb_http2_config_flag debug;
   mrb_http2_config_flag tls;
   mrb_http2_config_flag callback;
+  mrb_http2_config_flag tcp_nopush;
 
   // connection record option
   // default enabled and can use connection methods
