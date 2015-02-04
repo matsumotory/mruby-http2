@@ -261,7 +261,7 @@ static int tls_session_send3(http2_session_data *session_data)
 
 static int tls_session_send(http2_session_data *session_data)
 {
-  SSL *ssl = bufferevent_openssl_get_ssl(session_data->bev);
+  //SSL *ssl = bufferevent_openssl_get_ssl(session_data->bev);
 
   TRACER;
   while(1) {
@@ -273,14 +273,14 @@ static int tls_session_send(http2_session_data *session_data)
       return -1;
     }
     if (datalen == 0) {
-      bufferevent_flush(session_data->bev, EV_WRITE, BEV_FLUSH);
+      //bufferevent_flush(session_data->bev, EV_WRITE, BEV_FLUSH);
       return 0;
     }
-    n_write = SSL_write(ssl, data, datalen);
-    //n_write = bufferevent_write(session_data->bev, data, datalen);
-    if (session_data->app_ctx->server->config->debug) {
-      fprintf(stderr, "%s: n_write=%d\n", __func__, n_write);
-    }
+    //n_write = SSL_write(ssl, data, datalen);
+    n_write = bufferevent_write(session_data->bev, data, datalen);
+    //if (session_data->app_ctx->server->config->debug) {
+    //  fprintf(stderr, "%s: n_write=%d\n", __func__, n_write);
+    //}
     if (n_write < 0) {
       fprintf(stderr, "SSL_write error: %d", n_write);
       return -1;
