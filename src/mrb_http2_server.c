@@ -1767,6 +1767,16 @@ static void mrb_start_listen(struct event_base *evbase,
 
     if (listener) {
       freeaddrinfo(res);
+      config->run_uid = mrb_http2_get_uid(mrb, config->run_user);
+      if (setuid(config->run_uid)) {
+        mrb_raisef(mrb, E_RUNTIME_ERROR, "Could not set uid: %S",
+            mrb_fixnum_value(config->run_uid));
+      }
+      // TODO: add config->run_gid
+      if (setgid(config->run_uid)) {
+        mrb_raisef(mrb, E_RUNTIME_ERROR, "Could not set gid: %S",
+            mrb_fixnum_value(config->run_uid));
+      }
       return;
     }
   }

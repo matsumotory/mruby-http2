@@ -176,6 +176,7 @@ static void config_defualt_value(mrb_state *mrb, mrb_http2_config_t *config)
   config->server_host = MRB_HTTP2_CONFIG_LIT(mrb, "0.0.0.0");
   config->server_name = MRB_HTTP2_CONFIG_LIT(mrb, MRUBY_HTTP2_SERVER);
   config->document_root = MRB_HTTP2_CONFIG_LIT(mrb, "./");
+  config->run_user = MRB_HTTP2_CONFIG_LIT(mrb, "daemon");
 }
 
 mrb_http2_config_t *mrb_http2_s_config_init(mrb_state *mrb,
@@ -197,6 +198,7 @@ mrb_http2_config_t *mrb_http2_s_config_init(mrb_state *mrb,
   mrb_http2_config_define_cstr(mrb, args, &config->server_host,  NULL, "server_host");
   mrb_http2_config_define_cstr(mrb, args, &config->server_name,  NULL, "server_name");
   mrb_http2_config_define_cstr(mrb, args, &config->document_root,  NULL, "document_root");
+  mrb_http2_config_define_cstr(mrb, args, &config->run_user, NULL, "run_user");
 
   mrb_http2_config_define(mrb, args, config, set_config_port, "port");
   mrb_http2_config_define(mrb, args, config, set_config_worker, "worker");

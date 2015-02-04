@@ -57,6 +57,9 @@ typedef struct {
   // the number of worker process, need SO_REUSEPORT linux kernel 3.9 or later
   unsigned int worker;
 
+  mrb_http2_config_cstr *run_user;
+  uid_t run_uid;
+
 } mrb_http2_config_t;
 
 mrb_http2_config_t *mrb_http2_s_config_init(mrb_state *mrb, mrb_value args);
