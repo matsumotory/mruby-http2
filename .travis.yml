@@ -25,8 +25,8 @@ before_script:
   - cd -
 script:
   - rake
-  - sudo ./bin/mruby ../mruby-http2/example/http2_server.rb
-  - sudo ./bin/mruby ../mruby-http2/example/http2_server_tls.rb
+  - ./bin/mruby ../mruby-http2/example/http2_server.rb
+  - ./bin/mruby ../mruby-http2/example/http2_server_tls.rb
   - ./build/host/mrbgems/mruby-http2/nghttp2/src/nghttp -v http://127.0.0.1:8080/index.html
   - ./build/host/mrbgems/mruby-http2/nghttp2/src/nghttp -v http://127.0.0.1:8080/index.html | grep -q "hello trusterd world"
   - ./build/host/mrbgems/mruby-http2/nghttp2/src/h2load -c 500 -m 100 -n 2000000 http://127.0.0.1:8080/index.html
