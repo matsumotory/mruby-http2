@@ -61,6 +61,8 @@ typedef struct {
   mrb_http2_config_cstr *run_user;
   uid_t run_uid;
 
+  mrb_http2_config_fixnum rlimit_nofile;
+
 } mrb_http2_config_t;
 
 mrb_http2_config_t *mrb_http2_s_config_init(mrb_state *mrb, mrb_value args);

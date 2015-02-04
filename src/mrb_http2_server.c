@@ -1909,15 +1909,35 @@ static mrb_value mrb_http2_server_set_logging_cb(mrb_state *mrb,
   return b;
 }
 
-static void tune_rlimit(mrb_state *mrb)
+static void tune_rlimit(mrb_state *mrb, mrb_http2_config_t *config)
 {
-  struct rlimit r_cfg = {65536, 65536};
+  struct rlimit r_cfg;
+
+  if (config->rlimit_nofile == 0) {
+    return;
+  }
+
+  if (config->rlimit_nofile < 0) {
+    fprintf(stderr, "don't tune rlmit, rlimit_nofile=%d need positive fixnum\n",
+        config->rlimit_nofile);
+    return;
+  }
+
+  if (getuid() != 0) {
+    fprintf(stderr, "don't tune rlmit, run with root at first. then change"
+        " privilege to 'run_user' value was set in config\n");
+    return;
+  }
+
+  r_cfg.rlim_cur = config->rlimit_nofile;
+  r_cfg.rlim_max = config->rlimit_nofile;
+
   if (setrlimit(RLIMIT_NOFILE, &r_cfg) != 0) {
     int err = errno;
     mrb_raisef(mrb, E_RUNTIME_ERROR, "tune_rlimit failed: %S",
         mrb_str_new_cstr(mrb, strerror(err)));
   }
-  fprintf(stderr, "tune RLIMIT_NOFILE to 65536\n");
+  fprintf(stderr, "tune RLIMIT_NOFILE to %d\n", config->rlimit_nofile);
 }
 
 static mrb_value mrb_http2_server_init(mrb_state *mrb, mrb_value self)
@@ -1947,7 +1967,7 @@ static mrb_value mrb_http2_server_init(mrb_state *mrb, mrb_value self)
   data->s = server;
   data->r = mrb_http2_request_rec_init(mrb);
 
-  //tune_rlimit(mrb);
+  tune_rlimit(mrb, server->config);
 
   DATA_TYPE(self) = &mrb_http2_server_type;
   DATA_PTR(self) = data;
