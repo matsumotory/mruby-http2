@@ -1,6 +1,8 @@
-# HTTP2 Module for mruby  [![Build Status](https://travis-ci.org/trusterd/mruby-http2.svg?branch=master)](https://travis-ci.org/trusterd/mruby-http2)
+# HTTP2 Module for mruby 
 
+[![Build Status](https://travis-ci.org/trusterd/mruby-http2.svg?branch=master)](https://travis-ci.org/trusterd/mruby-http2)
 [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/trusterd/mruby-http2?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
 HTTP2 module for mruby using [nghttp2](https://github.com/tatsuhiro-t/nghttp2). You can access Web site using HTTP/2 protocol from mruby applications or devices with mruby, and run HTTP/2 Web server easily.
 
 - [HTTP/2 Web Server by mruby-http2](https://github.com/trusterdmruby-http2/blob/master/README.md#http2server)
