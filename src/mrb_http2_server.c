@@ -1718,6 +1718,40 @@ static void init_app_context(app_context *actx, SSL_CTX *ssl_ctx,
   actx->evbase = evbase;
 }
 
+static void set_run_user(mrb_state *mrb, mrb_http2_config_t *config)
+{
+  uid_t cur_uid = getuid();
+
+  if (config->run_user == NULL && cur_uid != 0) {
+    mrb_warn(mrb, "don't set run_user, so run with uid=%S\n",
+        mrb_fixnum_value(cur_uid));
+    return;
+  } else if (config->run_user == NULL && cur_uid == 0) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "Could not run with root,"
+       " Set 'run_user => user_name' instead of root in config");
+  }
+
+  config->run_uid = mrb_http2_get_uid(mrb, config->run_user);
+
+  if (config->run_uid == 0) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "Could not run with root,"
+       " Set 'run_user => user_name' instead of root in config");
+  }
+
+  if (setuid(config->run_uid)) {
+    mrb_raisef(mrb, E_RUNTIME_ERROR, "Could not set user: %S"
+        " If running server with specific user, "
+        "run server with root at first",
+        mrb_str_new_cstr(mrb, config->run_user));
+  }
+
+  // TODO: add config->run_gid
+  //if (setgid(config->run_uid)) {
+  //  mrb_raisef(mrb, E_RUNTIME_ERROR, "Could not set gid: %S",
+  //      mrb_fixnum_value(config->run_uid));
+  //}
+}
+
 static void mrb_start_listen(struct event_base *evbase,
     mrb_http2_config_t *config, app_context *app_ctx)
 {
@@ -1767,17 +1801,7 @@ static void mrb_start_listen(struct event_base *evbase,
 
     if (listener) {
       freeaddrinfo(res);
-      config->run_uid = mrb_http2_get_uid(mrb, config->run_user);
-      if (setuid(config->run_uid)) {
-        mrb_raisef(mrb, E_RUNTIME_ERROR, "Could not set uid: %S"
-            " If running server with specific user, run server with root",
-            mrb_fixnum_value(config->run_uid));
-      }
-      // TODO: add config->run_gid
-      //if (setgid(config->run_uid)) {
-      //  mrb_raisef(mrb, E_RUNTIME_ERROR, "Could not set gid: %S",
-      //      mrb_fixnum_value(config->run_uid));
-      //}
+      set_run_user(mrb, config);
       return;
     }
   }

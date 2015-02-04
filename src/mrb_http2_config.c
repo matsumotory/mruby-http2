@@ -178,7 +178,7 @@ static void config_defualt_value(mrb_state *mrb, mrb_http2_config_t *config)
   config->server_host = MRB_HTTP2_CONFIG_LIT(mrb, "0.0.0.0");
   config->server_name = MRB_HTTP2_CONFIG_LIT(mrb, MRUBY_HTTP2_SERVER);
   config->document_root = MRB_HTTP2_CONFIG_LIT(mrb, "./");
-  config->run_user = MRB_HTTP2_CONFIG_LIT(mrb, "daemon");
+  config->run_user = NULL;
 }
 
 mrb_http2_config_t *mrb_http2_s_config_init(mrb_state *mrb,

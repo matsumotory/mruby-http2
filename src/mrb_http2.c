@@ -41,10 +41,9 @@ void mrb_http2_request_class_init(mrb_state *mrb, struct RClass *http2);
 uid_t mrb_http2_get_uid(mrb_state *mrb, const char *user)
 {
   struct passwd *pw;
-  const char default_user[] = "daemon";
 
   if (user == NULL) {
-    user = default_user;
+    mrb_raise(mrb, E_RUNTIME_ERROR, "Not found 'run_user' value");
   }
 
   pw = getpwnam(user);
