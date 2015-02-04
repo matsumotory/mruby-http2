@@ -1507,12 +1507,13 @@ static http2_session_data* create_http2_session_data(mrb_state *mrb,
   session_data->bev = bufferevent_socket_new(app_ctx->evbase, fd,
      BEV_OPT_DEFER_CALLBACKS | BEV_OPT_CLOSE_ON_FREE);
 
-  bufferevent_setwatermark(session_data->bev, EV_WRITE, 1400, 4096);
-  evbuffer_expand(session_data->bev->input, 1400);
-  evbuffer_expand(session_data->bev->output, 1400);
-
   if (ssl) {
     TRACER;
+
+    bufferevent_setwatermark(session_data->bev, EV_WRITE, 1400, 4096);
+    evbuffer_expand(session_data->bev->input, 1400);
+    evbuffer_expand(session_data->bev->output, 1400);
+
     session_data->bev = bufferevent_openssl_filter_new(app_ctx->evbase, session_data->bev, ssl,
         BUFFEREVENT_SSL_ACCEPTING,
         BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS);
