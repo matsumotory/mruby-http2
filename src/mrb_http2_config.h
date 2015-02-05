@@ -63,6 +63,10 @@ typedef struct {
 
   mrb_http2_config_fixnum rlimit_nofile;
 
+  // control packet size, useful to connect tls
+  mrb_http2_config_fixnum write_packet_buffer_expand_size;
+  mrb_http2_config_fixnum write_packet_buffer_limit_size;
+
 } mrb_http2_config_t;
 
 mrb_http2_config_t *mrb_http2_s_config_init(mrb_state *mrb, mrb_value args);

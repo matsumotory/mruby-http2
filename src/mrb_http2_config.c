@@ -191,6 +191,8 @@ static void config_defualt_value(mrb_state *mrb, mrb_http2_config_t *config)
   config->run_user = NULL;
 
   config->rlimit_nofile = 0;
+  config->write_packet_buffer_expand_size = 0;
+  config->write_packet_buffer_limit_size = 0;
 }
 
 mrb_http2_config_t *mrb_http2_s_config_init(mrb_state *mrb,
@@ -215,6 +217,8 @@ mrb_http2_config_t *mrb_http2_s_config_init(mrb_state *mrb,
   mrb_http2_config_define_cstr(mrb, args, &config->run_user, NULL, "run_user");
 
   mrb_http2_config_define_fixnum(mrb, args, &config->rlimit_nofile, NULL, "rlimit_nofile");
+  mrb_http2_config_define_fixnum(mrb, args, &config->write_packet_buffer_expand_size, NULL, "write_packet_buffer_expand_size");
+  mrb_http2_config_define_fixnum(mrb, args, &config->write_packet_buffer_limit_size, NULL, "write_packet_buffer_limit_size");
 
   mrb_http2_config_define(mrb, args, config, set_config_port, "port");
   mrb_http2_config_define(mrb, args, config, set_config_worker, "worker");
