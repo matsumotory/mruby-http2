@@ -24,16 +24,16 @@ before_script:
   - sudo sh -c 'yes "" | openssl req -new -days 365 -x509 -nodes -keyout server.key -out server.crt'
   - cd -
 script:
+  - rake all test
   - rake
   - ./bin/mruby ../mruby-http2/example/http2_server.rb
   - ./bin/mruby ../mruby-http2/example/http2_server_tls.rb
   - ./build/host/mrbgems/mruby-http2/nghttp2/src/nghttp -v http://127.0.0.1:8080/index.html
   - ./build/host/mrbgems/mruby-http2/nghttp2/src/nghttp -v http://127.0.0.1:8080/index.html | grep -q "hello trusterd world"
-  - ./build/host/mrbgems/mruby-http2/nghttp2/src/h2load -c 500 -m 100 -n 2000000 http://127.0.0.1:8080/index.html
+  - ./build/host/mrbgems/mruby-http2/nghttp2/src/h2load -c 100 -m 100 -n 200000 http://127.0.0.1:8080/index.html
   - ./build/host/mrbgems/mruby-http2/nghttp2/src/nghttp -v https://127.0.0.1:8081/index.html
   - ./build/host/mrbgems/mruby-http2/nghttp2/src/nghttp -v https://127.0.0.1:8081/index.html | grep -q "hello trusterd world"
-  - ./build/host/mrbgems/mruby-http2/nghttp2/src/h2load -c 500 -m 100 -n 1000000 https://127.0.0.1:8081/index.html
-    #- rake clean && rake all test
+  - ./build/host/mrbgems/mruby-http2/nghttp2/src/h2load -c 100 -m 100 -n 100000 https://127.0.0.1:8081/index.html
 notifications:
   webhooks:
     - secure: "fAUM6YafzwYRwGDOXkdLuQo351nj5dPkGyPFV00D9mrYkiJG2iogrEsNHZvWlE0EvtqcxmTNHUfpS21a4sW4CguviP+zeupNB9tkQz7ckgFGYjLI1fMchEgRMziAOFUjNNn9BOrrrY/6jRVdPMw3noLEeMwzIURT/s544aFvdjQ="
