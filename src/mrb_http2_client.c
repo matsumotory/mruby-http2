@@ -826,7 +826,7 @@ static mrb_value mrb_http2_get_uri(mrb_state *mrb, mrb_http2_context_t *ctx)
         mrb_fixnum_value(rv));
   }
 
-  nghttp2_submit_settings(conn.session, NGHTTP2_FLAG_NONE, NULL, 0);
+  nghttp2_submit_settings(ctx->conn->session, NGHTTP2_FLAG_NONE, NULL, 0);
 
   mrb_http2_submit_request(mrb, ctx->conn, ctx->req);
 
