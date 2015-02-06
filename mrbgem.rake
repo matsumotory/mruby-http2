@@ -3,7 +3,7 @@ MRuby::Gem::Specification.new('mruby-http2') do |spec|
   spec.authors = 'MATSUMOTO Ryosuke'
   spec.version = '0.0.1'
   spec.summary = 'HTTP/2 Client and Server Module'
-  spec.linker.libraries << ['ssl', 'crypto', 'z', 'event', 'event_openssl', 'curl']
+  spec.linker.libraries << ['ssl', 'crypto', 'z', 'event', 'event_openssl', 'curl', "nghttp2"]
   spec.add_dependency('mruby-simplehttp')
 
   require 'open3'
@@ -53,6 +53,8 @@ MRuby::Gem::Specification.new('mruby-http2') do |spec|
     end
   end
 
-  spec.linker.flags_before_libraries << libnghttp2a
-  spec.cc.flags << "-I#{nghttp2_dir}/lib/includes"
+  spec.cc.include_paths << nghttp2_lib
+  spec.linker.library_paths << "#{nghttp2_dir}/lib/includes"
+
 end
+
