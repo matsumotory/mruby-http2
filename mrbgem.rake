@@ -54,7 +54,7 @@ MRuby::Gem::Specification.new('mruby-http2') do |spec|
   end
 
   spec.cc.include_paths << "#{nghttp2_dir}/lib/includes"
-  spec.linker.library_paths << nghttp2_lib
+  spec.linker.library_paths << libnghttp2a
 
 end
 
