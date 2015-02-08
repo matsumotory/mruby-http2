@@ -142,7 +142,7 @@ void mrb_http2_config_define_cstr(mrb_state *mrb, mrb_value args,
     (*func_ptr)(mrb, args, *config_cstr, val);
   } else {
     if (!mrb_nil_p(val) && mrb_type(val) == MRB_TT_STRING) {
-      *config_cstr = mrb_str_to_cstr(mrb, val);
+      *config_cstr = strdup(mrb_str_to_cstr(mrb, val));
     }
   }
 }
