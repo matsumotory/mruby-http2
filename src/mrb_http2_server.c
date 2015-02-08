@@ -77,14 +77,26 @@ static unsigned char next_proto_list[256];
 static size_t next_proto_list_len;
 
 static void callback_ruby_block(mrb_state *mrb, mrb_value self,
-    unsigned int flag, const char *cbid)
+    unsigned int flag, const char *cbid, mruby_cb_list *list)
 {
-  if (!flag) {
+  mrb_value b;
+  mrb_sym s;
+
+  if (!flag || !cbid) {
     return;
   }
-  if (cbid) {
-    mrb_yield_argv(mrb, mrb_iv_get(mrb, self, mrb_intern_cstr(mrb, cbid)),
-        0, NULL);
+
+  s = mrb_intern_cstr(mrb, cbid);
+  b = mrb_iv_get(mrb, self, s);
+  TRACER;
+  if (!mrb_nil_p(b)) {
+    mrb_yield_argv(mrb, b, 0, NULL);
+  TRACER;
+    if (strcmp(cbid, "content_cb") == 0) {
+  TRACER;
+      mrb_iv_set(mrb, self, s, mrb_nil_value());
+      list->content_cb = NULL;
+    }
   }
 }
 
@@ -576,7 +588,7 @@ static int send_response(app_context *app_ctx, nghttp2_session *session,
   //
   r->phase = MRB_HTTP2_SERVER_LOGGING;
   callback_ruby_block(mrb, app_ctx->self, app_ctx->server->config->callback,
-      app_ctx->server->config->cb_list->logging_cb);
+      app_ctx->server->config->cb_list->logging_cb, app_ctx->server->config->cb_list);
 
   mrb_http2_request_rec_free(mrb, r);
   TRACER;
@@ -859,7 +871,7 @@ static int content_cb_reply(app_context *app_ctx, nghttp2_session *session,
   //
   r->phase = MRB_HTTP2_SERVER_CONTENT;
   callback_ruby_block(mrb, app_ctx->self, config->callback,
-      config->cb_list->content_cb);
+      config->cb_list->content_cb, config->cb_list);
 
   // create headers for HTTP/2
   MRB_HTTP2_CREATE_NV_CS(mrb, &nva[nvlen], ":status", r->status_line);
@@ -1220,7 +1232,8 @@ static int server_on_request_recv(nghttp2_session *session,
   callback_ruby_block(session_data->app_ctx->server->mrb,
       session_data->app_ctx->self,
       session_data->app_ctx->server->config->callback,
-      session_data->app_ctx->server->config->cb_list->map_to_strage_cb);
+      session_data->app_ctx->server->config->cb_list->map_to_strage_cb,
+      session_data->app_ctx->server->config->cb_list);
 
   if (session_data->app_ctx->r->status
       && session_data->app_ctx->r->status != HTTP_OK) {
@@ -1906,9 +1919,10 @@ static mrb_value mrb_http2_server_set_content_cb(mrb_state *mrb,
   const char *cbid = "content_cb";
 
   mrb_get_args(mrb, "&", &b);
-  mrb_gc_protect(mrb, b);
+  //mrb_gc_protect(mrb, b);
   mrb_iv_set(mrb, self, mrb_intern_cstr(mrb, cbid), b);
   list->content_cb = cbid;
+  TRACER;
 
   return b;
 }
