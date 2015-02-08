@@ -47,7 +47,7 @@ MRuby::Gem::Specification.new('mruby-http2') do |spec|
       if RUBY_PLATFORM =~ /darwin/i
         run_command e, './configure --disable-threads --enable-shared=no'
       else
-        run_command e, './configure --enable-shared=no'
+        run_command e, './configure --enable-shared=no CFLAGS="-g O2 -fPIC'
       end
       run_command e, 'make'
     end
