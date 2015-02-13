@@ -21,6 +21,9 @@ typedef struct {
   // callback block at a phase of mapping uri to filename
   const char *map_to_strage_cb;
 
+  // callback block at a phase of access checker
+  const char *access_checker_cb;
+
   // callback block at a phase of creating content
   const char *content_cb;
 

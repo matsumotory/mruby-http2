@@ -1257,15 +1257,6 @@ static int server_on_request_recv(nghttp2_session *session,
       session_data->app_ctx->server->config->cb_list->map_to_strage_cb,
       session_data->app_ctx->server->config->cb_list);
 
-  if (session_data->app_ctx->r->status
-      && session_data->app_ctx->r->status != HTTP_OK) {
-    if(error_reply(session_data->app_ctx, session, stream_data) != 0) {
-      return NGHTTP2_ERR_CALLBACK_FAILURE;
-    }
-    return 0;
-  }
-
-
   if (session_data->app_ctx->server->config->debug) {
     fprintf(stderr, "%s %s is mapped to %s\n", session_data->client_addr,
         session_data->app_ctx->r->uri, session_data->app_ctx->r->filename);
@@ -1294,6 +1285,25 @@ static int server_on_request_recv(nghttp2_session *session,
   //  }
   //  return 0;
   //}
+
+  //
+  // "set_access_checker" callback ruby block
+  //
+  session_data->app_ctx->r->phase = MRB_HTTP2_SERVER_ACCESS_CHECKER;
+  callback_ruby_block(session_data->app_ctx->server->mrb,
+      session_data->app_ctx->self,
+      session_data->app_ctx->server->config->callback,
+      session_data->app_ctx->server->config->cb_list->access_checker_cb,
+      session_data->app_ctx->server->config->cb_list);
+
+  // check whether set status or not on access_checker callback
+  if (session_data->app_ctx->r->status
+      && session_data->app_ctx->r->status != HTTP_OK) {
+    if(error_reply(session_data->app_ctx, session, stream_data) != 0) {
+      return NGHTTP2_ERR_CALLBACK_FAILURE;
+    }
+    return 0;
+  }
 
   // run mruby script
   if (session_data->app_ctx->r->mruby
@@ -1958,6 +1968,22 @@ static mrb_value mrb_http2_server_set_map_to_strage_cb(mrb_state *mrb,
   return b;
 }
 
+static mrb_value mrb_http2_server_set_access_checker_cb(mrb_state *mrb,
+    mrb_value self)
+{
+  mrb_http2_data_t *data = DATA_PTR(self);
+  mruby_cb_list *list = data->s->config->cb_list;
+  mrb_value b;
+  const char *cbid = "access_checker_cb";
+
+  mrb_get_args(mrb, "&", &b);
+  mrb_gc_protect(mrb, b);
+  mrb_iv_set(mrb, self, mrb_intern_cstr(mrb, cbid), b);
+  list->access_checker_cb = cbid;
+
+  return b;
+}
+
 static mrb_value mrb_http2_server_set_content_cb(mrb_state *mrb,
     mrb_value self)
 {
@@ -2323,6 +2349,7 @@ void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
   mrb_define_method(mrb, server, "r", mrb_http2_req_obj, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "conn", mrb_http2_conn_obj, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "set_map_to_strage_cb", mrb_http2_server_set_map_to_strage_cb, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, server, "set_access_checker_cb", mrb_http2_server_set_access_checker_cb, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, server, "set_content_cb", mrb_http2_server_set_content_cb, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, server, "set_logging_cb", mrb_http2_server_set_logging_cb, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, server, "filename", mrb_http2_server_filename, MRB_ARGS_NONE());
