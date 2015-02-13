@@ -615,6 +615,7 @@ static int error_reply(app_context *app_ctx, nghttp2_session *session,
     http2_stream_data *stream_data)
 {
   mrb_http2_request_rec *r = app_ctx->r;
+  mrb_http2_config_t *config = app_ctx->server->config;
   mrb_state *mrb = app_ctx->server->mrb;
   int rv;
   int pipefd[2];
@@ -628,7 +629,9 @@ static int error_reply(app_context *app_ctx, nghttp2_session *session,
   nvlen += 1;
   MRB_HTTP2_CREATE_NV_CS(mrb, &nva[nvlen], "date", r->date);
   nvlen += 1;
-  MRB_HTTP2_CREATE_NV_CS(mrb, &nva[nvlen], "content-type", "text/plain; charset=utf-8");
+  MRB_HTTP2_CREATE_NV_CS(mrb, &nva[nvlen], "server", config->server_name);
+  nvlen += 1;
+  MRB_HTTP2_CREATE_NV_CS(mrb, &nva[nvlen], "content-type", "text/html; charset=utf-8");
   nvlen += 1;
 
   TRACER;
