@@ -8,6 +8,7 @@
 #include "mrb_http2_request.h"
 #include "mrb_http2_data.h"
 #include "mrb_http2_ssl.h"
+#include "mrb_http2_error.h"
 
 #include <event.h>
 #include <event2/event.h>
@@ -604,21 +605,6 @@ static int send_response(app_context *app_ctx, nghttp2_session *session,
   return 0;
 }
 
-const char ERROR_100_HTML[] = "<html><head><title>100</title></head>"
-  "<body><h1>100 Continue</h1></body></html>";
-
-const char ERROR_300_HTML[] = "<html><head><title>300</title></head>"
-  "<body><h1>300 Moved Permanently</h1></body></html>";
-
-const char ERROR_404_HTML[] = "<html><head><title>404</title></head>"
-  "<body><h1>404 Not Found</h1></body></html>";
-
-const char ERROR_503_HTML[] = "<html><head><title>503</title></head>"
-  "<body><h1>503 Service Unavailable</h1></body></html>";
-
-const char ERROR_500_HTML[] = "<html><head><title>500</title></head>"
-  "<body><h1>500 Internal Server Error</h1></body></html>";
-
 static void set_status_record(mrb_http2_request_rec *r, int status)
 {
   r->status = status;
@@ -635,11 +621,14 @@ static int error_reply(app_context *app_ctx, nghttp2_session *session,
   int64_t size;
   nghttp2_nv nva[MRB_HTTP2_HEADER_MAX];
   size_t nvlen = 0;
+  const char *msg;
 
   // create headers for HTTP/2
   MRB_HTTP2_CREATE_NV_CS(mrb, &nva[nvlen], ":status", r->status_line);
   nvlen += 1;
   MRB_HTTP2_CREATE_NV_CS(mrb, &nva[nvlen], "date", r->date);
+  nvlen += 1;
+  MRB_HTTP2_CREATE_NV_CS(mrb, &nva[nvlen], "content-type", "text/plain; charset=utf-8");
   nvlen += 1;
 
   TRACER;
@@ -655,13 +644,9 @@ static int error_reply(app_context *app_ctx, nghttp2_session *session,
     return 0;
   }
 
-  if (r->status == HTTP_SERVICE_UNAVAILABLE) {
-    size = sizeof(ERROR_503_HTML) - 1;
-    rv = write(pipefd[1], ERROR_503_HTML, size);
-  } else {
-    size = sizeof(ERROR_404_HTML) - 1;
-    rv = write(pipefd[1], ERROR_404_HTML, size);
-  }
+  msg = mrb_http2_error_message(r->status);
+  size = strlen(msg);
+  rv = write(pipefd[1], msg, size);
 
   close(pipefd[1]);
   stream_data->fd = pipefd[0];
@@ -898,26 +883,12 @@ static int content_cb_reply(app_context *app_ctx, nghttp2_session *session,
   MRB_HTTP2_CREATE_NV_CS(mrb, &nva[nvlen], "date", r->date);
   nvlen += 1;
 
-  if (r->status >= 100 && r->status < 200) {
-    size = sizeof(ERROR_100_HTML) - 1;
-    rv = write(pipefd[1], ERROR_100_HTML, size);
-  } else if (r->status >= 200 && r->status < 300) {
+  if (r->status >= 200 && r->status < 300) {
     size = r->write_size;
-  } else if (r->status >= 300 && r->status < 400) {
-    size = sizeof(ERROR_300_HTML) - 1;
-    rv = write(pipefd[1], ERROR_300_HTML, size);
-  } else if (r->status >= 400 && r->status < 500) {
-    size = sizeof(ERROR_404_HTML) - 1;
-    rv = write(pipefd[1], ERROR_404_HTML, size);
-  } else if (r->status == HTTP_INTERNAL_SERVER_ERROR) {
-    size = sizeof(ERROR_500_HTML) - 1;
-    rv = write(pipefd[1], ERROR_500_HTML, size);
-  } else if (r->status > HTTP_INTERNAL_SERVER_ERROR) {
-    size = sizeof(ERROR_503_HTML) - 1;
-    rv = write(pipefd[1], ERROR_503_HTML, size);
   } else {
-    size = sizeof(ERROR_500_HTML) - 1;
-    rv = write(pipefd[1], ERROR_500_HTML, size);
+    const char *msg = mrb_http2_error_message(r->status);
+    size = strlen(msg);
+    rv = write(pipefd[1], msg, size);
   }
 
   close(pipefd[1]);
@@ -1012,26 +983,12 @@ static int mruby_reply(app_context *app_ctx, nghttp2_session *session,
   MRB_HTTP2_CREATE_NV_CS(mrb, &nva[nvlen], "last-modified", r->last_modified);
   nvlen += 1;
 
-  if (r->status >= 100 && r->status < 200) {
-    size = sizeof(ERROR_100_HTML) - 1;
-    rv = write(pipefd[1], ERROR_100_HTML, size);
-  } else if (r->status >= 200 && r->status < 300) {
+  if (r->status >= 200 && r->status < 300) {
     size = r->write_size;
-  } else if (r->status >= 300 && r->status < 400) {
-    size = sizeof(ERROR_300_HTML) - 1;
-    rv = write(pipefd[1], ERROR_300_HTML, size);
-  } else if (r->status >= 400 && r->status < 500) {
-    size = sizeof(ERROR_404_HTML) - 1;
-    rv = write(pipefd[1], ERROR_404_HTML, size);
-  } else if (r->status == HTTP_INTERNAL_SERVER_ERROR) {
-    size = sizeof(ERROR_500_HTML) - 1;
-    rv = write(pipefd[1], ERROR_500_HTML, size);
-  } else if (r->status > HTTP_INTERNAL_SERVER_ERROR) {
-    size = sizeof(ERROR_503_HTML) - 1;
-    rv = write(pipefd[1], ERROR_503_HTML, size);
   } else {
-    size = sizeof(ERROR_500_HTML) - 1;
-    rv = write(pipefd[1], ERROR_500_HTML, size);
+    const char *msg = mrb_http2_error_message(r->status);
+    size = strlen(msg);
+    rv = write(pipefd[1], msg, size);
   }
 
   close(pipefd[1]);
