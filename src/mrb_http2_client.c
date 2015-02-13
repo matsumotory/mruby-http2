@@ -47,10 +47,10 @@ typedef struct {
   struct mrb_http2_uri_t *uri;
 } mrb_http2_context_t;
 
-static char CONTENT_LENGTH[] = "content-encoding";
-static size_t CONTENT_LENGTH_LEN = sizeof(CONTENT_LENGTH) - 1;
+//static char CONTENT_LENGTH[] = "content-encoding";
+//static size_t CONTENT_LENGTH_LEN = sizeof(CONTENT_LENGTH) - 1;
 static char GZIP[] = "gzip";
-static size_t GZIP_LEN = sizeof(GZIP) - 1;
+//static size_t GZIP_LEN = sizeof(GZIP) - 1;
 
 static void mrb_http2_request_free(mrb_state *mrb,
     struct mrb_http2_request_t *req)
@@ -152,6 +152,7 @@ static int parse_uri(struct mrb_http2_uri_t *res, const char *uri)
   return 0;
 }
 
+/*
 static void mrb_http2_check_gzip(mrb_state *mrb,
     struct mrb_http2_request_t *req, nghttp2_nv *nva, size_t nvlen)
 {
@@ -173,6 +174,7 @@ static void mrb_http2_check_gzip(mrb_state *mrb,
     }
   }
 }
+*/
 
 static ssize_t send_callback(nghttp2_session *session,
     const uint8_t *data, size_t length, int flags, void *user_data)

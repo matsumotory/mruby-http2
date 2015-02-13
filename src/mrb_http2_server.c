@@ -73,9 +73,6 @@ static const struct mrb_data_type mrb_http2_server_type = {
 //
 //
 
-static unsigned char next_proto_list[256];
-static size_t next_proto_list_len;
-
 static void callback_ruby_block(mrb_state *mrb, mrb_value self,
     unsigned int flag, const char *cbid, mruby_cb_list *list)
 {
@@ -211,6 +208,7 @@ static int session_send(http2_session_data *session_data)
 
 #define MRB_HTTP2_TLS_PENDING_SIZE 1300
 
+/*
 static int tls_session_send3(http2_session_data *session_data)
 {
   //SSL *ssl = bufferevent_openssl_get_ssl(session_data->bev);
@@ -222,8 +220,8 @@ static int tls_session_send3(http2_session_data *session_data)
   pos = pending_data;
   while(1) {
     size_t n_write;
-    unsigned char *data;
-    size_t datalen = nghttp2_session_mem_send(session_data->session, &data);
+    const uint8_t *data;
+    ssize_t datalen = nghttp2_session_mem_send(session_data->session, &data);
 
     if (datalen < 0) {
       fprintf(stderr, "Fatal error: %s", nghttp2_strerror(datalen));
@@ -235,11 +233,11 @@ static int tls_session_send3(http2_session_data *session_data)
         //n_write = SSL_write(ssl, pos, pending_datalen);
         n_write = bufferevent_write(session_data->bev, pos, pending_datalen);
         if (session_data->app_ctx->server->config->debug) {
-          fprintf(stderr, "%s: n_write=%d session send but don't reach "
+          fprintf(stderr, "%s: n_write=%ld session send but don't reach "
               "TLS_PENDING_SIZE\n", __func__, n_write);
         }
         if (n_write < 0) {
-          fprintf(stderr, "SSL_write error: %d", n_write);
+          fprintf(stderr, "SSL_write error: %ld", n_write);
           return -1;
         }
       }
@@ -250,7 +248,7 @@ static int tls_session_send3(http2_session_data *session_data)
     pending_datalen += datalen;
     *pending_data += datalen;
     if (session_data->app_ctx->server->config->debug) {
-      fprintf(stderr, "%s: pending data; datalen=%d pending_datalen=%d\n",
+      fprintf(stderr, "%s: pending data; datalen=%ld pending_datalen=%ld\n",
           __func__, datalen, pending_datalen);
     }
 
@@ -258,19 +256,21 @@ static int tls_session_send3(http2_session_data *session_data)
       //n_write = SSL_write(ssl, pos, pending_datalen);
       n_write = bufferevent_write(session_data->bev, pos, pending_datalen);
       if (session_data->app_ctx->server->config->debug) {
-        fprintf(stderr, "%s: n_write=%d sessin send since readed "
+        fprintf(stderr, "%s: n_write=%ld sessin send since readed "
             "TLS_PENDING_SIZE\n", __func__, n_write);
       }
       *pending_data -= pending_datalen;
       pending_datalen = 0;
       if (n_write < 0) {
-        fprintf(stderr, "SSL_write error: %d", n_write);
+        fprintf(stderr, "SSL_write error: %ld", n_write);
         return -1;
       }
     }
   }
 }
+*/
 
+/*
 static int tls_session_send(http2_session_data *session_data)
 {
   //SSL *ssl = bufferevent_openssl_get_ssl(session_data->bev);
@@ -278,8 +278,8 @@ static int tls_session_send(http2_session_data *session_data)
   TRACER;
   while(1) {
     size_t n_write;
-    unsigned char *data;
-    size_t datalen = nghttp2_session_mem_send(session_data->session, &data);
+    const uint8_t *data;
+    ssize_t datalen = nghttp2_session_mem_send(session_data->session, &data);
     if (datalen < 0) {
       fprintf(stderr, "Fatal error: %s", nghttp2_strerror(datalen));
       return -1;
@@ -294,12 +294,14 @@ static int tls_session_send(http2_session_data *session_data)
     //  fprintf(stderr, "%s: n_write=%d\n", __func__, n_write);
     //}
     if (n_write < 0) {
-      fprintf(stderr, "SSL_write error: %d", n_write);
+      fprintf(stderr, "SSL_write error: %ld", n_write);
       return -1;
     }
   }
 }
+*/
 
+/*
 static int tls_session_send2(http2_session_data *session_data)
 {
   SSL *ssl = bufferevent_openssl_get_ssl(session_data->bev);
@@ -308,8 +310,8 @@ static int tls_session_send2(http2_session_data *session_data)
   while(1) {
     size_t n_write;
     size_t writeleft;
-    unsigned char *data;
-    size_t datalen = nghttp2_session_mem_send(session_data->session, &data);
+    const uint8_t *data;
+    ssize_t datalen = nghttp2_session_mem_send(session_data->session, &data);
     if (datalen < 0) {
       fprintf(stderr, "Fatal error: %s", nghttp2_strerror(datalen));
       return -1;
@@ -331,17 +333,18 @@ static int tls_session_send2(http2_session_data *session_data)
       //bufferevent_write(session_data->bev, data, writelen);
       n_write = SSL_write(ssl, data, writelen);
       if (session_data->app_ctx->server->config->debug) {
-        fprintf(stderr, "%s: n_write=%d writelen=%d writeleft=%d/%d\n",
+        fprintf(stderr, "%s: n_write=%ld writelen=%ld writeleft=%ld/%ld\n",
             __func__, n_write, writelen, writeleft, datalen);
       }
       if (n_write < 0) {
-        fprintf(stderr, "SSL_write error: %d", n_write);
+        fprintf(stderr, "SSL_write error: %ld", n_write);
         return -1;
       }
       data += writelen;
     }
   }
 }
+*/
 
 /* Read the data in the bufferevent and feed them into nghttp2 library
    function. Invocation of nghttp2_session_mem_recv() may make
@@ -356,7 +359,7 @@ static int session_recv(http2_session_data *session_data)
 
   TRACER;
   if (session_data->app_ctx->server->config->debug) {
-    fprintf(stderr, "%s: datalen = %d\n", __func__, datalen);
+    fprintf(stderr, "%s: datalen = %ld\n", __func__, datalen);
   }
   rv = nghttp2_session_mem_recv(session_data->session, data, datalen);
   if(rv < 0) {
@@ -372,6 +375,7 @@ static int session_recv(http2_session_data *session_data)
   return 0;
 }
 
+/*
 static int session_recv2(http2_session_data *session_data)
 {
   int rv, nread;
@@ -398,9 +402,11 @@ static int session_recv2(http2_session_data *session_data)
     TRACER;
   }
 }
+*/
 
 #define MRB_HTTP2_TLS_RECORD_SIZE 4096
 
+/*
 static int tls_session_recv(http2_session_data *session_data)
 {
   SSL *ssl = bufferevent_openssl_get_ssl(session_data->bev);
@@ -442,6 +448,7 @@ static int tls_session_recv(http2_session_data *session_data)
     }
   }
 }
+*/
 
 static ssize_t server_send_callback(nghttp2_session *session,
     const uint8_t *data, size_t length, int flags, void *user_data)
@@ -456,7 +463,7 @@ static ssize_t server_send_callback(nghttp2_session *session,
     return NGHTTP2_ERR_WOULDBLOCK;
   }
   if (session_data->app_ctx->server->config->debug) {
-    fprintf(stderr, "%s: datalen = %d\n", __func__, length);
+    fprintf(stderr, "%s: datalen = %ld\n", __func__, length);
   }
 
   bufferevent_write(session_data->bev, data, length);
@@ -465,6 +472,7 @@ static ssize_t server_send_callback(nghttp2_session *session,
 }
 
 /* Returns nonzero if the string |s| ends with the substring |sub| */
+/*
 static int ends_with(const char *s, const char *sub)
 {
   size_t slen = strlen(s);
@@ -477,6 +485,7 @@ static int ends_with(const char *s, const char *sub)
   TRACER;
   return memcmp(s + slen - sublen, sub, sublen) == 0;
 }
+*/
 
 /* Returns int value of hex string character |c| */
 static uint8_t hex_to_uint(uint8_t c)
@@ -672,6 +681,7 @@ static int error_reply(app_context *app_ctx, nghttp2_session *session,
   return 0;
 }
 
+/*
 static size_t write_upstream_data(void *ptr, size_t size, size_t nmemb,
     void *data)
 {
@@ -690,7 +700,9 @@ static size_t write_upstream_data(void *ptr, size_t size, size_t nmemb,
 
   return len;
 }
+*/
 
+/*
 static void parse_upstream_response(app_context *app_ctx)
 {
   mrb_state *mrb = app_ctx->server->mrb;
@@ -732,7 +744,9 @@ static void parse_upstream_response(app_context *app_ctx)
   }
 
 }
+*/
 
+/*
 static int read_upstream_response(app_context *app_ctx, char *server, char *uri)
 {
   CURLcode code;
@@ -769,7 +783,9 @@ static int read_upstream_response(app_context *app_ctx, char *server, char *uri)
 
   return 0;
 }
+*/
 
+/*
 static int upstream_reply(app_context *app_ctx, nghttp2_session *session,
     http2_stream_data *stream_data)
 {
@@ -838,6 +854,7 @@ static int upstream_reply(app_context *app_ctx, nghttp2_session *session,
   TRACER;
   return 0;
 }
+*/
 
 static int content_cb_reply(app_context *app_ctx, nghttp2_session *session,
     http2_stream_data *stream_data)
@@ -939,7 +956,10 @@ static int mruby_reply(app_context *app_ctx, nghttp2_session *session,
   } else if (r->mruby) {
     // when use new mrb_state
     mrb_inner = mrb_open();
+  } else {
+    mrb_inner = mrb_open();
   }
+
 
   rfp = fopen(r->filename, "r");
   if (rfp == NULL) {
@@ -1118,6 +1138,7 @@ static int mrb_http2_200_send_response(app_context *app_ctx,
   return 0;
 }
 
+/*
 static int mrb_http2_send_response(app_context *app_ctx,
     nghttp2_session *session, http2_stream_data *stream_data) {
 
@@ -1137,6 +1158,7 @@ static int mrb_http2_send_response(app_context *app_ctx,
   }
   return 0;
 }
+*/
 
 static int server_on_request_recv(nghttp2_session *session,
     http2_session_data *session_data, http2_stream_data *stream_data)
@@ -1678,6 +1700,7 @@ static void mrb_http2_acceptcb(struct evconnlistener *listener, int fd,
 static void set_dhparams(mrb_state *mrb, mrb_http2_config_t *config,
     SSL_CTX *ssl_ctx)
 {
+  DH *dh;
   BIO *bio = BIO_new_file(config->dh_params_file, "r");
 
   if (bio == NULL) {
@@ -1685,7 +1708,7 @@ static void set_dhparams(mrb_state *mrb, mrb_http2_config_t *config,
         mrb_str_new_cstr(mrb, config->dh_params_file));
   }
 
-  DH *dh = PEM_read_bio_DHparams(bio, NULL, NULL, NULL);
+  dh = PEM_read_bio_DHparams(bio, NULL, NULL, NULL);
   BIO_free(bio);
 
   if (dh == NULL) {
@@ -1710,6 +1733,7 @@ static int npn_advertise_cb(SSL *s, const unsigned char **data,
 static SSL_CTX* mrb_http2_create_ssl_ctx(mrb_state *mrb,
     mrb_http2_config_t *config, const char *key_file, const char *cert_file)
 {
+  const unsigned char sid_ctx[] = "mruby-http2";
   SSL_CTX *ssl_ctx;
   EC_KEY *ecdh;
 
@@ -1737,7 +1761,6 @@ static SSL_CTX* mrb_http2_create_ssl_ctx(mrb_state *mrb,
   }
   SSL_CTX_set_mode(ssl_ctx, SSL_MODE_AUTO_RETRY);
   SSL_CTX_set_mode(ssl_ctx, SSL_MODE_RELEASE_BUFFERS);
-  const unsigned char sid_ctx[] = "mruby-http2";
   SSL_CTX_set_session_id_context(ssl_ctx, sid_ctx, sizeof(sid_ctx) - 1);
   SSL_CTX_set_session_cache_mode(ssl_ctx, SSL_SESS_CACHE_SERVER);
 
@@ -1762,8 +1785,7 @@ static SSL_CTX* mrb_http2_create_ssl_ctx(mrb_state *mrb,
     mrb_raisef(mrb, E_RUNTIME_ERROR, "Could not read certificate file %S",
         mrb_str_new_cstr(mrb, cert_file));
   }
-
-  SSL_CTX_set_next_protos_advertised_cb(ssl_ctx, npn_advertise_cb, npn_proto);
+  SSL_CTX_set_next_protos_advertised_cb(ssl_ctx, npn_advertise_cb, (void *)npn_proto);
   TRACER;
   return ssl_ctx;
 }
