@@ -1818,18 +1818,19 @@ static void set_run_user(mrb_state *mrb, mrb_http2_config_t *config)
        " Set 'run_user => user_name' instead of root in config");
   }
 
+  // TODO: add config->run_gid
+  // setgid :run_user for now
+  if (setgid(config->run_uid)) {
+    mrb_raisef(mrb, E_RUNTIME_ERROR, "Could not set gid: %S",
+        mrb_fixnum_value(config->run_uid));
+  }
+
   if (setuid(config->run_uid)) {
     mrb_raisef(mrb, E_RUNTIME_ERROR, "Could not set user: %S"
         " If running server with specific user, "
         "run server with root at first",
         mrb_str_new_cstr(mrb, config->run_user));
   }
-
-  // TODO: add config->run_gid
-  //if (setgid(config->run_uid)) {
-  //  mrb_raisef(mrb, E_RUNTIME_ERROR, "Could not set gid: %S",
-  //      mrb_fixnum_value(config->run_uid));
-  //}
 }
 
 static void mrb_start_listen(struct event_base *evbase,
