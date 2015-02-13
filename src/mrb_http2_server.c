@@ -8,7 +8,7 @@
 #include "mrb_http2_request.h"
 #include "mrb_http2_data.h"
 #include "mrb_http2_ssl.h"
-#include "mrb_http2_error.h"
+#include "mrb_http2_error.c.h"
 
 #include <event.h>
 #include <event2/event.h>
