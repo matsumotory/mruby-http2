@@ -44,6 +44,7 @@ typedef struct {
 
   mrb_http2_config_cstr *key;
   mrb_http2_config_cstr *cert;
+  mrb_http2_config_cstr *dh_params_file;
   mrb_http2_config_cstr *service;
   mrb_http2_config_cstr *document_root;
 

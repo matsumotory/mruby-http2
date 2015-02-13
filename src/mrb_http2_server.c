@@ -1675,6 +1675,27 @@ static void mrb_http2_acceptcb(struct evconnlistener *listener, int fd,
   //bufferevent_socket_connect(session_data->bev, NULL, 0);
 }
 
+static void set_dhparams(mrb_state *mrb, mrb_http2_config_t *config,
+    SSL_CTX *ssl_ctx)
+{
+  BIO *bio = BIO_new_file(config->dh_params_file, "r");
+
+  if (bio == NULL) {
+    mrb_raisef(mrb, E_RUNTIME_ERROR, "dh_params_file open failed: %S",
+        mrb_str_new_cstr(mrb, config->dh_params_file));
+  }
+
+  DH *dh = PEM_read_bio_DHparams(bio, NULL, NULL, NULL);
+  BIO_free(bio);
+
+  if (dh == NULL) {
+    mrb_raisef(mrb, E_RUNTIME_ERROR, "dh_params_file read failed: %S",
+        mrb_str_new_cstr(mrb, config->dh_params_file));
+  }
+
+  SSL_CTX_set_tmp_dh(ssl_ctx, dh);
+  DH_free(dh);
+}
 
 const char *npn_proto = "\x05h2-16\x05h2-14";
 
@@ -1687,7 +1708,7 @@ static int npn_advertise_cb(SSL *s, const unsigned char **data,
 }
 
 static SSL_CTX* mrb_http2_create_ssl_ctx(mrb_state *mrb,
-    const char *key_file, const char *cert_file)
+    mrb_http2_config_t *config, const char *key_file, const char *cert_file)
 {
   SSL_CTX *ssl_ctx;
   EC_KEY *ecdh;
@@ -1727,6 +1748,10 @@ static SSL_CTX* mrb_http2_create_ssl_ctx(mrb_state *mrb,
   }
   SSL_CTX_set_tmp_ecdh(ssl_ctx, ecdh);
   EC_KEY_free(ecdh);
+
+  if (config->dh_params_file) {
+    set_dhparams(mrb, config, ssl_ctx);
+  }
 
   if(SSL_CTX_use_PrivateKey_file(ssl_ctx, key_file,
         SSL_FILETYPE_PEM) != 1) {
@@ -1849,7 +1874,7 @@ static void mrb_http2_worker_run(mrb_state *mrb, mrb_value self,
   struct event_base *evbase;
 
   if (server->config->tls) {
-    ssl_ctx = mrb_http2_create_ssl_ctx(mrb, server->config->key,
+    ssl_ctx = mrb_http2_create_ssl_ctx(mrb, server->config, server->config->key,
         server->config->cert);
   }
 
