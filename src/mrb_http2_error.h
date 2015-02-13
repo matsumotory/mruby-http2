@@ -68,7 +68,7 @@ const char *mrb_http2_error_message(int status)
   }
 
 not_implement:
-  return mrb_http2_5xx_error_table[0];
+  return mrb_http2_4xx_error_table[4];
 }
 
 #endif
