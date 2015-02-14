@@ -49,20 +49,20 @@ const int mrb_http2_5xx_error_table_len = (sizeof(mrb_http2_5xx_error_table) / s
 const char *mrb_http2_error_message(int status)
 {
 
-  if (status >= 100 && status < 200) {
-    if ((status - 100 + 1) > mrb_http2_1xx_error_table_len) goto not_implement;
-    return mrb_http2_1xx_error_table[status - 100];
-  } else if (status >= 200 && status < 300) {
-    goto not_implement;
-  } else if (status  >= 300 && status < 400) {
-    if ((status - 300 + 1) > mrb_http2_3xx_error_table_len) goto not_implement;
-    return mrb_http2_3xx_error_table[status - 300];
-  } else if (status >= 400 && status < 500) {
-    if ((status - 400 + 1) > mrb_http2_4xx_error_table_len) goto not_implement;
-    return mrb_http2_4xx_error_table[status - 400];
-  } else if (status >= 500 && status < 600) {
+  if (status >= 500) {
     if ((status - 500 + 1) > mrb_http2_5xx_error_table_len) goto not_implement;
     return mrb_http2_5xx_error_table[status - 500];
+  } else if (status >= 400) {
+    if ((status - 400 + 1) > mrb_http2_4xx_error_table_len) goto not_implement;
+    return mrb_http2_4xx_error_table[status - 400];
+  } else if (status  >= 300) {
+    if ((status - 300 + 1) > mrb_http2_3xx_error_table_len) goto not_implement;
+    return mrb_http2_3xx_error_table[status - 300];
+  } else if (status >= 200) {
+    goto not_implement;
+  } else if (status >= 100) {
+    if ((status - 100 + 1) > mrb_http2_1xx_error_table_len) goto not_implement;
+    return mrb_http2_1xx_error_table[status - 100];
   } else {
     return mrb_http2_5xx_error_table[0];
   }
