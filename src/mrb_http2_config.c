@@ -21,6 +21,8 @@ static mruby_cb_list *mruby_cb_list_init(mrb_state *mrb)
   memset(list, 0, sizeof(mruby_cb_list));
 
   list->map_to_strage_cb = NULL;
+  list->access_checker_cb = NULL;
+  list->fixups_cb = NULL;
   list->content_cb = NULL;
   list->logging_cb = NULL;
 

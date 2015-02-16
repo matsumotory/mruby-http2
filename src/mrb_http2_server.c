@@ -666,6 +666,13 @@ static int error_reply(app_context *app_ctx, nghttp2_session *session,
   MRB_HTTP2_CREATE_NV_CS(mrb, &r->reshdrs[r->reshdrslen], "content-length", r->content_length);
   r->reshdrslen += 1;
 
+  //
+  // "set_fixups_cb" callback ruby block
+  //
+  r->phase = MRB_HTTP2_SERVER_FIXUPS;
+  callback_ruby_block(mrb, app_ctx->self, config->callback,
+      config->cb_list->fixups_cb, config->cb_list);
+
   TRACER;
   if(send_response(app_ctx, session, r->reshdrs, r->reshdrslen, stream_data) != 0) {
     close(pipefd[0]);
@@ -902,6 +909,14 @@ static int content_cb_reply(app_context *app_ctx, nghttp2_session *session,
   stream_data->fd = pipefd[0];
   stream_data->readleft = size;
   TRACER;
+
+  //
+  // "set_fixups_cb" callback ruby block
+  //
+  r->phase = MRB_HTTP2_SERVER_FIXUPS;
+  callback_ruby_block(mrb, app_ctx->self, config->callback,
+      config->cb_list->fixups_cb, config->cb_list);
+
   if(send_response(app_ctx, session, r->reshdrs, r->reshdrslen, stream_data) != 0) {
     close(pipefd[0]);
     return -1;
@@ -1000,6 +1015,14 @@ static int mruby_reply(app_context *app_ctx, nghttp2_session *session,
   stream_data->fd = pipefd[0];
   stream_data->readleft = size;
   TRACER;
+
+  //
+  // "set_fixups_cb" callback ruby block
+  //
+  r->phase = MRB_HTTP2_SERVER_FIXUPS;
+  callback_ruby_block(mrb, app_ctx->self, config->callback,
+      config->cb_list->fixups_cb, config->cb_list);
+
   if(send_response(app_ctx, session, r->reshdrs, r->reshdrslen, stream_data) != 0) {
     close(pipefd[0]);
     return -1;
@@ -1116,6 +1139,7 @@ static int mrb_http2_send_custom_response(app_context *app_ctx,
     nghttp2_session *session, http2_stream_data *stream_data) {
 
   mrb_http2_request_rec *r = app_ctx->r;
+  mrb_http2_config_t *config = app_ctx->server->config;
   mrb_state *mrb = app_ctx->server->mrb;
 
   if (r->status == 0) {
@@ -1132,6 +1156,13 @@ static int mrb_http2_send_custom_response(app_context *app_ctx,
   r->reshdrslen += 1;
   MRB_HTTP2_CREATE_NV_CS(mrb, &r->reshdrs[r->reshdrslen], "last-modified", r->last_modified);
   r->reshdrslen += 1;
+
+  //
+  // "set_fixups_cb" callback ruby block
+  //
+  r->phase = MRB_HTTP2_SERVER_FIXUPS;
+  callback_ruby_block(mrb, app_ctx->self, config->callback,
+      config->cb_list->fixups_cb, config->cb_list);
 
   if(send_response(app_ctx, session, r->reshdrs, r->reshdrslen, stream_data) != 0) {
     close(stream_data->fd);
@@ -2018,6 +2049,22 @@ static mrb_value mrb_http2_server_set_access_checker_cb(mrb_state *mrb,
   return b;
 }
 
+static mrb_value mrb_http2_server_set_fixups_cb(mrb_state *mrb,
+    mrb_value self)
+{
+  mrb_http2_data_t *data = DATA_PTR(self);
+  mruby_cb_list *list = data->s->config->cb_list;
+  mrb_value b;
+  const char *cbid = "fixups_cb";
+
+  mrb_get_args(mrb, "&", &b);
+  mrb_gc_protect(mrb, b);
+  mrb_iv_set(mrb, self, mrb_intern_cstr(mrb, cbid), b);
+  list->fixups_cb = cbid;
+
+  return b;
+}
+
 static mrb_value mrb_http2_server_set_content_cb(mrb_state *mrb,
     mrb_value self)
 {
@@ -2500,10 +2547,6 @@ void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
   mrb_define_method(mrb, server, "request", mrb_http2_req_obj, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "r", mrb_http2_req_obj, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "conn", mrb_http2_conn_obj, MRB_ARGS_NONE());
-  mrb_define_method(mrb, server, "set_map_to_strage_cb", mrb_http2_server_set_map_to_strage_cb, MRB_ARGS_REQ(1));
-  mrb_define_method(mrb, server, "set_access_checker_cb", mrb_http2_server_set_access_checker_cb, MRB_ARGS_REQ(1));
-  mrb_define_method(mrb, server, "set_content_cb", mrb_http2_server_set_content_cb, MRB_ARGS_REQ(1));
-  mrb_define_method(mrb, server, "set_logging_cb", mrb_http2_server_set_logging_cb, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, server, "filename", mrb_http2_server_filename, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "filename=", mrb_http2_server_set_filename, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, server, "uri", mrb_http2_server_uri, MRB_ARGS_NONE());
@@ -2515,6 +2558,13 @@ void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
   mrb_define_method(mrb, server, "status", mrb_http2_server_status, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "date", mrb_http2_server_date, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "content_length", mrb_http2_server_content_length, MRB_ARGS_NONE());
+
+  // callbacks
+  mrb_define_method(mrb, server, "set_map_to_strage_cb", mrb_http2_server_set_map_to_strage_cb, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, server, "set_access_checker_cb", mrb_http2_server_set_access_checker_cb, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, server, "set_fixups_cb", mrb_http2_server_set_fixups_cb, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, server, "set_content_cb", mrb_http2_server_set_content_cb, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, server, "set_logging_cb", mrb_http2_server_set_logging_cb, MRB_ARGS_REQ(1));
 
   // upstream methods
   mrb_define_method(mrb, server, "upstream", mrb_http2_server_upstream, MRB_ARGS_NONE());
