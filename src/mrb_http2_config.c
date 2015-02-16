@@ -31,7 +31,7 @@ static mruby_cb_list *mruby_cb_list_init(mrb_state *mrb)
 
 static unsigned int mrb_http2_config_get_worker(mrb_state *mrb, mrb_value args, mrb_value w)
 {
-  unsigned int worker;
+  int worker;
 
   // worker => fixnum or "auto"
   if (!mrb_nil_p(w)) {
