@@ -1175,7 +1175,8 @@ static int mrb_http2_send_200_response(app_context *app_ctx,
     nghttp2_session *session, http2_stream_data *stream_data) {
 
   mrb_http2_request_rec *r = app_ctx->r;
-
+  mrb_http2_config_t *config = app_ctx->server->config;
+  mrb_state *mrb = app_ctx->server->mrb;
   nghttp2_nv hdrs[] = {
     MAKE_NV(":status", "200"),
     MAKE_NV_CS("server", app_ctx->server->config->server_name),
@@ -1185,7 +1186,21 @@ static int mrb_http2_send_200_response(app_context *app_ctx,
   };
 
   r->status = 200;
-  if(send_response(app_ctx, session, hdrs, ARRLEN(hdrs), stream_data) != 0) {
+  r->reshdrslen = ARRLEN(hdrs);
+  r->reshdrs[0] = hdrs[0];
+  r->reshdrs[1] = hdrs[1];
+  r->reshdrs[2] = hdrs[2];
+  r->reshdrs[3] = hdrs[3];
+  r->reshdrs[4] = hdrs[4];
+
+  //
+  // "set_fixups_cb" callback ruby block
+  //
+  r->phase = MRB_HTTP2_SERVER_FIXUPS;
+  callback_ruby_block(mrb, app_ctx->self, config->callback,
+      config->cb_list->fixups_cb, config->cb_list);
+
+  if(send_response(app_ctx, session, r->reshdrs, r->reshdrslen, stream_data) != 0) {
     close(stream_data->fd);
     return NGHTTP2_ERR_CALLBACK_FAILURE;
   }
