@@ -2411,6 +2411,33 @@ static mrb_value mrb_http2_headers_out_obj(mrb_state *mrb, mrb_value self)
   return mrb_http2_get_class_obj(mrb, self, "headers_out_obj", "Headers_out");
 }
 
+static mrb_value mrb_http2_headers_in_obj(mrb_state *mrb, mrb_value self)
+{
+  return mrb_http2_get_class_obj(mrb, self, "headers_in_obj", "Headers_in");
+}
+
+static mrb_value mrb_http2_get_reqhdrs(mrb_state *mrb,
+    mrb_value self)
+{
+  mrb_http2_data_t *data = DATA_PTR(self);
+  mrb_http2_request_rec *r = data->r;
+  int i;
+  char *key;
+
+  if (!data->r->reqhdr) {
+    return mrb_nil_value();
+  }
+
+  mrb_get_args(mrb, "z", &key);
+
+  i = mrb_http2_get_nv_id(r->reqhdr, r->reqhdrlen, key);
+  if (i == MRB_HTTP2_HEADER_NOT_FOUND) {
+    return mrb_nil_value();
+  }
+
+  return mrb_str_new(mrb, (char *)r->reqhdr[i].value, r->reqhdr[i].valuelen);
+}
+
 static mrb_value mrb_http2_get_reshdrs(mrb_state *mrb,
     mrb_value self)
 {
@@ -2450,14 +2477,20 @@ static mrb_value mrb_http2_set_reshdrs(mrb_state *mrb,
 
 void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
 {
-  struct RClass *server, *hin;
+  struct RClass *server, *hin, *hout;
 
   server = mrb_define_class_under(mrb, http2, "Server", mrb->object_class);
   MRB_SET_INSTANCE_TT(server, MRB_TT_DATA);
 
-  hin = mrb_define_class_under(mrb, server, "Headers_out", mrb->object_class);
-  mrb_define_method(mrb, hin, "[]=", mrb_http2_set_reshdrs, ARGS_ANY());
-  mrb_define_method(mrb, hin, "[]", mrb_http2_get_reshdrs, ARGS_ANY());
+  hin = mrb_define_class_under(mrb, server, "Headers_in", mrb->object_class);
+  mrb_define_method(mrb, hin, "[]", mrb_http2_get_reqhdrs, ARGS_ANY());
+
+  mrb_define_method(mrb, server, "headers_in", mrb_http2_headers_in_obj, ARGS_NONE());
+  mrb_define_method(mrb, server, "request_headers", mrb_http2_headers_in_obj, ARGS_NONE());
+
+  hout = mrb_define_class_under(mrb, server, "Headers_out", mrb->object_class);
+  mrb_define_method(mrb, hout, "[]=", mrb_http2_set_reshdrs, ARGS_ANY());
+  mrb_define_method(mrb, hout, "[]", mrb_http2_get_reshdrs, ARGS_ANY());
 
   mrb_define_method(mrb, server, "headers_out", mrb_http2_headers_out_obj, ARGS_NONE());
   mrb_define_method(mrb, server, "response_headers", mrb_http2_headers_out_obj, ARGS_NONE());
