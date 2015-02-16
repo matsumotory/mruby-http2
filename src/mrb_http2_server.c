@@ -1065,7 +1065,7 @@ static int server_on_header_callback(nghttp2_session *session,
       stream_data->unparsed_uri =
         percent_decode(session_data->app_ctx->server->mrb, value, valuelen);
       for(j = 0; j < valuelen && value[j] != '?'; ++j);
-      if (j + 1 == valuelen) {
+      if (j == valuelen) {
         stream_data->request_args = NULL;
         stream_data->request_path = stream_data->unparsed_uri;
       } else {
