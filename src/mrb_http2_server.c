@@ -158,9 +158,11 @@ static void delete_http2_stream_data(mrb_state *mrb,
   if(stream_data->fd != -1) {
     close(stream_data->fd);
   }
-  mrb_free(mrb, stream_data->request_path);
-  mrb_free(mrb, stream_data->request_args);
   mrb_free(mrb, stream_data->unparsed_uri);
+  if (stream_data->request_args != NULL) {
+    mrb_free(mrb, stream_data->request_path);
+    mrb_free(mrb, stream_data->request_args);
+  }
   mrb_free(mrb, stream_data);
 }
 
@@ -1044,10 +1046,15 @@ static int server_on_header_callback(nghttp2_session *session,
       stream_data->unparsed_uri =
         percent_decode(session_data->app_ctx->server->mrb, value, valuelen);
       for(j = 0; j < valuelen && value[j] != '?'; ++j);
-      stream_data->request_path =
-        percent_decode(session_data->app_ctx->server->mrb, value, j);
-      stream_data->request_args =
-        percent_decode(session_data->app_ctx->server->mrb, value + j, valuelen - j);
+      if (j + 1 == valuelen) {
+        stream_data->request_args = NULL;
+        stream_data->request_path = stream_data->unparsed_uri;
+      } else {
+        stream_data->request_path =
+          percent_decode(session_data->app_ctx->server->mrb, value, j);
+        stream_data->request_args =
+          percent_decode(session_data->app_ctx->server->mrb, value + j, valuelen - j);
+      }
     }
     break;
   }
