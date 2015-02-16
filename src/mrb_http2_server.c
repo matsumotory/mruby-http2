@@ -910,6 +910,11 @@ static int content_cb_reply(app_context *app_ctx, nghttp2_session *session,
   stream_data->readleft = size;
   TRACER;
 
+  // set content-length: max 10^64
+  snprintf(r->content_length, 64, "%ld", size);
+  MRB_HTTP2_CREATE_NV_CS(mrb, &r->reshdrs[r->reshdrslen], "content-length", r->content_length);
+  r->reshdrslen += 1;
+
   //
   // "set_fixups_cb" callback ruby block
   //
@@ -1015,6 +1020,11 @@ static int mruby_reply(app_context *app_ctx, nghttp2_session *session,
   stream_data->fd = pipefd[0];
   stream_data->readleft = size;
   TRACER;
+
+  // set content-length: max 10^64
+  snprintf(r->content_length, 64, "%ld", size);
+  MRB_HTTP2_CREATE_NV_CS(mrb, &r->reshdrs[r->reshdrslen], "content-length", r->content_length);
+  r->reshdrslen += 1;
 
   //
   // "set_fixups_cb" callback ruby block
