@@ -2107,6 +2107,22 @@ static mrb_value mrb_http2_server_uri(mrb_state *mrb, mrb_value self)
   return mrb_str_new_cstr(mrb, r->uri);
 }
 
+static mrb_value mrb_http2_server_unparsed_uri(mrb_state *mrb, mrb_value self)
+{
+  mrb_http2_data_t *data = DATA_PTR(self);
+  mrb_http2_request_rec *r = data->r;
+
+  return mrb_str_new_cstr(mrb, r->unparsed_uri);
+}
+
+static mrb_value mrb_http2_server_args(mrb_state *mrb, mrb_value self)
+{
+  mrb_http2_data_t *data = DATA_PTR(self);
+  mrb_http2_request_rec *r = data->r;
+
+  return mrb_str_new_cstr(mrb, r->args);
+}
+
 static mrb_value mrb_http2_server_document_root(mrb_state *mrb, mrb_value self)
 {
   mrb_http2_data_t *data = DATA_PTR(self);
@@ -2329,7 +2345,8 @@ void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
   mrb_define_method(mrb, server, "filename", mrb_http2_server_filename, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "filename=", mrb_http2_server_set_filename, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, server, "uri", mrb_http2_server_uri, MRB_ARGS_NONE());
-  mrb_define_method(mrb, server, "url", mrb_http2_server_uri, MRB_ARGS_NONE());
+  mrb_define_method(mrb, server, "unparsed_uri", mrb_http2_server_unparsed_uri, MRB_ARGS_NONE());
+  mrb_define_method(mrb, server, "args", mrb_http2_server_args, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "document_root", mrb_http2_server_document_root, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "client_ip", mrb_http2_server_client_ip, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "user_agent", mrb_http2_server_user_agent, MRB_ARGS_NONE());
