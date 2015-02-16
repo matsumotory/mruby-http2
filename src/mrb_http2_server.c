@@ -2299,7 +2299,7 @@ static mrb_value mrb_http2_server_content_length(mrb_state *mrb, mrb_value self)
 {
   mrb_http2_data_t *data = DATA_PTR(self);
 
-  return mrb_fixnum_value(data->r->finfo->st_size);
+  return mrb_fixnum_value(atoi(data->r->content_length));
 }
 
 static void mrb_http2_upstream_init(mrb_state *mrb, mrb_value self)
