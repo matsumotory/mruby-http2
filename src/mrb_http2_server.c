@@ -2528,11 +2528,17 @@ static mrb_value mrb_http2_set_reshdrs(mrb_state *mrb,
   mrb_http2_data_t *data = DATA_PTR(self);
   mrb_http2_request_rec *r = data->r;
   mrb_value key, val;
+  int i;
 
   mrb_get_args(mrb, "oo", &key, &val);
 
-  MRB_HTTP2_CREATE_NV_OBJ(mrb, &r->reshdrs[r->reshdrslen], key, val);
-  r->reshdrslen += 1;
+  i = mrb_http2_get_nv_id(r->reshdrs, r->reshdrslen, mrb_str_to_cstr(mrb, key));
+  if (i == MRB_HTTP2_HEADER_NOT_FOUND) {
+    MRB_HTTP2_CREATE_NV_OBJ(mrb, &r->reshdrs[r->reshdrslen], key, val);
+    r->reshdrslen += 1;
+  } else {
+    MRB_HTTP2_CREATE_NV_OBJ(mrb, &r->reshdrs[i], key, val);
+  }
 
   return mrb_fixnum_value(r->reshdrslen);
 }
