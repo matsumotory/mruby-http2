@@ -1174,6 +1174,7 @@ static int mrb_http2_send_custom_response(app_context *app_ctx,
 static int mrb_http2_send_200_response(app_context *app_ctx,
     nghttp2_session *session, http2_stream_data *stream_data) {
 
+  int i;
   mrb_http2_request_rec *r = app_ctx->r;
   mrb_http2_config_t *config = app_ctx->server->config;
   mrb_state *mrb = app_ctx->server->mrb;
@@ -1185,13 +1186,11 @@ static int mrb_http2_send_200_response(app_context *app_ctx,
     MAKE_NV_CS("last-modified", r->last_modified)
   };
 
-  r->status = 200;
   r->reshdrslen = ARRLEN(hdrs);
-  r->reshdrs[0] = hdrs[0];
-  r->reshdrs[1] = hdrs[1];
-  r->reshdrs[2] = hdrs[2];
-  r->reshdrs[3] = hdrs[3];
-  r->reshdrs[4] = hdrs[4];
+  for (i = 0; i < r->reshdrslen; i++) {
+    r->reshdrs[i] = hdrs[i];
+  }
+  r->status = 200;
 
   //
   // "set_fixups_cb" callback ruby block
