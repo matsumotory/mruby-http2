@@ -96,6 +96,12 @@ typedef struct {
   // request uri
   char *uri;
 
+  // request unparsed uri
+  char *unparsed_uri;
+
+  // request args
+  char *args;
+
   // filename is mapped from uri
   char *filename;
 

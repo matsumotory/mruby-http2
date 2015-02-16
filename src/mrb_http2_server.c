@@ -38,6 +38,8 @@ typedef struct {
 typedef struct http2_stream_data {
   struct http2_stream_data *prev, *next;
   char *request_path;
+  char *request_args;
+  char *unparsed_uri;
   int32_t stream_id;
   int fd;
   int64_t readleft;
@@ -157,6 +159,8 @@ static void delete_http2_stream_data(mrb_state *mrb,
     close(stream_data->fd);
   }
   mrb_free(mrb, stream_data->request_path);
+  mrb_free(mrb, stream_data->request_args);
+  mrb_free(mrb, stream_data->unparsed_uri);
   mrb_free(mrb, stream_data);
 }
 
@@ -1037,9 +1041,13 @@ static int server_on_header_callback(nghttp2_session *session,
 
     if(namelen == sizeof(PATH) - 1 && memcmp(PATH, name, namelen) == 0) {
       size_t j;
+      stream_data->unparsed_uri =
+        percent_decode(session_data->app_ctx->server->mrb, value, valuelen);
       for(j = 0; j < valuelen && value[j] != '?'; ++j);
       stream_data->request_path =
         percent_decode(session_data->app_ctx->server->mrb, value, j);
+      stream_data->request_args =
+        percent_decode(session_data->app_ctx->server->mrb, value + j, valuelen - j);
     }
     break;
   }
@@ -1199,10 +1207,16 @@ static int server_on_request_recv(nghttp2_session *session,
       session_data->app_ctx->server->mrb,
       stream_data->request_path, uri_len);
 
+  session_data->app_ctx->r->unparsed_uri = stream_data->unparsed_uri;
+  session_data->app_ctx->r->args = stream_data->request_args;
+
   if (session_data->app_ctx->server->config->debug) {
     fprintf(stderr,
-        "%s %s is mapped to %s document_root=%s before map_to_strage_cb\n",
-        session_data->client_addr, session_data->app_ctx->r->uri,
+        "%s %s (%s + %s) is mapped to %s document_root=%s before map_to_strage_cb\n",
+        session_data->client_addr,
+        session_data->app_ctx->r->unparsed_uri,
+        session_data->app_ctx->r->uri,
+        session_data->app_ctx->r->args,
         session_data->app_ctx->r->filename,
         session_data->app_ctx->server->config->document_root);
   }
