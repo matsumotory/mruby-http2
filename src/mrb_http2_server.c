@@ -76,6 +76,8 @@ static const struct mrb_data_type mrb_http2_server_type = {
 //
 //
 
+static void fixup_status_header(mrb_state *mrb, mrb_http2_request_rec *r);
+
 static void callback_ruby_block(mrb_state *mrb, mrb_value self,
     unsigned int flag, const char *cbid, mruby_cb_list *list)
 {
@@ -626,19 +628,17 @@ static int error_reply(app_context *app_ctx, nghttp2_session *session,
   int rv;
   int pipefd[2];
   int64_t size;
-  nghttp2_nv nva[MRB_HTTP2_HEADER_MAX];
-  size_t nvlen = 0;
   const char *msg;
 
+  fixup_status_header(mrb, r);
+
   // create headers for HTTP/2
-  MRB_HTTP2_CREATE_NV_CS(mrb, &nva[nvlen], ":status", r->status_line);
-  nvlen += 1;
-  MRB_HTTP2_CREATE_NV_CS(mrb, &nva[nvlen], "date", r->date);
-  nvlen += 1;
-  MRB_HTTP2_CREATE_NV_CS(mrb, &nva[nvlen], "server", config->server_name);
-  nvlen += 1;
-  MRB_HTTP2_CREATE_NV_CS(mrb, &nva[nvlen], "content-type", "text/html; charset=utf-8");
-  nvlen += 1;
+  MRB_HTTP2_CREATE_NV_CS(mrb, &r->reshdrs[r->reshdrslen], "date", r->date);
+  r->reshdrslen += 1;
+  MRB_HTTP2_CREATE_NV_CS(mrb, &r->reshdrs[r->reshdrslen], "server", config->server_name);
+  r->reshdrslen += 1;
+  MRB_HTTP2_CREATE_NV_CS(mrb, &r->reshdrs[r->reshdrslen], "content-type", "text/html; charset=utf-8");
+  r->reshdrslen += 1;
 
   TRACER;
   rv = pipe(pipefd);
@@ -663,11 +663,11 @@ static int error_reply(app_context *app_ctx, nghttp2_session *session,
 
   // set content-length: max 10^64
   snprintf(r->content_length, 64, "%ld", size);
-  MRB_HTTP2_CREATE_NV_CS(mrb, &nva[nvlen], "content-length", r->content_length);
-  nvlen += 1;
+  MRB_HTTP2_CREATE_NV_CS(mrb, &r->reshdrs[r->reshdrslen], "content-length", r->content_length);
+  r->reshdrslen += 1;
 
   TRACER;
-  if(send_response(app_ctx, session, nva, nvlen, stream_data) != 0) {
+  if(send_response(app_ctx, session, r->reshdrs, r->reshdrslen, stream_data) != 0) {
     close(pipefd[0]);
     return -1;
   }
@@ -859,8 +859,6 @@ static int content_cb_reply(app_context *app_ctx, nghttp2_session *session,
 
   int rv;
   int pipefd[2];
-  nghttp2_nv nva[MRB_HTTP2_HEADER_MAX];
-  size_t nvlen = 0;
   int64_t size;
 
   TRACER;
@@ -884,13 +882,13 @@ static int content_cb_reply(app_context *app_ctx, nghttp2_session *session,
   callback_ruby_block(mrb, app_ctx->self, config->callback,
       config->cb_list->content_cb, config->cb_list);
 
+  fixup_status_header(mrb, r);
+
   // create headers for HTTP/2
-  MRB_HTTP2_CREATE_NV_CS(mrb, &nva[nvlen], ":status", r->status_line);
-  nvlen += 1;
-  MRB_HTTP2_CREATE_NV_CS(mrb, &nva[nvlen], "server", config->server_name);
-  nvlen += 1;
-  MRB_HTTP2_CREATE_NV_CS(mrb, &nva[nvlen], "date", r->date);
-  nvlen += 1;
+  MRB_HTTP2_CREATE_NV_CS(mrb, &r->reshdrs[r->reshdrslen], "server", config->server_name);
+  r->reshdrslen += 1;
+  MRB_HTTP2_CREATE_NV_CS(mrb, &r->reshdrs[r->reshdrslen], "date", r->date);
+  r->reshdrslen += 1;
 
   if (r->status >= 200 && r->status < 300) {
     size = r->write_size;
@@ -904,7 +902,7 @@ static int content_cb_reply(app_context *app_ctx, nghttp2_session *session,
   stream_data->fd = pipefd[0];
   stream_data->readleft = size;
   TRACER;
-  if(send_response(app_ctx, session, nva, nvlen, stream_data) != 0) {
+  if(send_response(app_ctx, session, r->reshdrs, r->reshdrslen, stream_data) != 0) {
     close(pipefd[0]);
     return -1;
   }
@@ -921,8 +919,6 @@ static int mruby_reply(app_context *app_ctx, nghttp2_session *session,
 
   int rv;
   int pipefd[2];
-  nghttp2_nv nva[MRB_HTTP2_HEADER_MAX];
-  size_t nvlen = 0;
   mrb_state *mrb_inner;
   struct mrb_parser_state* p = NULL;
   struct RProc *proc = NULL;
@@ -982,15 +978,15 @@ static int mruby_reply(app_context *app_ctx, nghttp2_session *session,
     mrb_close(mrb_inner);
   }
 
+  fixup_status_header(mrb, r);
+
   // create headers for HTTP/2
-  MRB_HTTP2_CREATE_NV_CS(mrb, &nva[nvlen], ":status", r->status_line);
-  nvlen += 1;
-  MRB_HTTP2_CREATE_NV_CS(mrb, &nva[nvlen], "server", config->server_name);
-  nvlen += 1;
-  MRB_HTTP2_CREATE_NV_CS(mrb, &nva[nvlen], "date", r->date);
-  nvlen += 1;
-  MRB_HTTP2_CREATE_NV_CS(mrb, &nva[nvlen], "last-modified", r->last_modified);
-  nvlen += 1;
+  MRB_HTTP2_CREATE_NV_CS(mrb, &r->reshdrs[r->reshdrslen], "server", config->server_name);
+  r->reshdrslen += 1;
+  MRB_HTTP2_CREATE_NV_CS(mrb, &r->reshdrs[r->reshdrslen], "date", r->date);
+  r->reshdrslen += 1;
+  MRB_HTTP2_CREATE_NV_CS(mrb, &r->reshdrs[r->reshdrslen], "last-modified", r->last_modified);
+  r->reshdrslen += 1;
 
   if (r->status >= 200 && r->status < 300) {
     size = r->write_size;
@@ -1004,7 +1000,7 @@ static int mruby_reply(app_context *app_ctx, nghttp2_session *session,
   stream_data->fd = pipefd[0];
   stream_data->readleft = size;
   TRACER;
-  if(send_response(app_ctx, session, nva, nvlen, stream_data) != 0) {
+  if(send_response(app_ctx, session, r->reshdrs, r->reshdrslen, stream_data) != 0) {
     close(pipefd[0]);
     return -1;
   }
@@ -1090,6 +1086,58 @@ static int check_path(const char *path) {
          strstr(path, "/../") == NULL && strstr(path, "/./") == NULL &&
          (len < 3 || memcmp(path + len - 3, "/..", 3) != 0) &&
          (len < 2 || memcmp(path + len - 2, "/.", 2) != 0);
+}
+
+static void fixup_status_header(mrb_state *mrb, mrb_http2_request_rec *r)
+{
+  int i = mrb_http2_get_nv_id(r->reshdrs, r->reshdrslen, ":status");
+
+  if (r->reshdrslen == 0) {
+    MRB_HTTP2_CREATE_NV_CS(mrb, &r->reshdrs[r->reshdrslen], ":status", r->status_line);
+    r->reshdrslen += 1;
+    return;
+  }
+
+  if (i == MRB_HTTP2_HEADER_NOT_FOUND && r->reshdrslen > 0) {
+    mrb_http2_create_nv(mrb, &r->reshdrs[r->reshdrslen], r->reshdrs[0].name,
+        r->reshdrs[0].namelen, r->reshdrs[0].value, r->reshdrs[0].valuelen);
+    r->reshdrslen += 1;
+    MRB_HTTP2_CREATE_NV_CS(mrb, &r->reshdrs[0], ":status", r->status_line);
+  } else if (i > 0) {
+    mrb_http2_create_nv(mrb, &r->reshdrs[r->reshdrslen], r->reshdrs[0].name,
+        r->reshdrs[0].namelen, r->reshdrs[0].value, r->reshdrs[0].valuelen);
+    r->reshdrslen += 1;
+    mrb_http2_create_nv(mrb, &r->reshdrs[0], r->reshdrs[i].name,
+        r->reshdrs[i].namelen, r->reshdrs[i].value, r->reshdrs[i].valuelen);
+  }
+}
+
+static int mrb_http2_send_custom_response(app_context *app_ctx,
+    nghttp2_session *session, http2_stream_data *stream_data) {
+
+  mrb_http2_request_rec *r = app_ctx->r;
+  mrb_state *mrb = app_ctx->server->mrb;
+
+  if (r->status == 0) {
+    set_status_record(r, HTTP_OK);
+  }
+
+  fixup_status_header(mrb, r);
+
+  MRB_HTTP2_CREATE_NV_CS(mrb, &r->reshdrs[r->reshdrslen], "server", app_ctx->server->config->server_name);
+  r->reshdrslen += 1;
+  MRB_HTTP2_CREATE_NV_CS(mrb, &r->reshdrs[r->reshdrslen], "date", r->date);
+  r->reshdrslen += 1;
+  MRB_HTTP2_CREATE_NV_CS(mrb, &r->reshdrs[r->reshdrslen], "content-length", r->content_length);
+  r->reshdrslen += 1;
+  MRB_HTTP2_CREATE_NV_CS(mrb, &r->reshdrs[r->reshdrslen], "last-modified", r->last_modified);
+  r->reshdrslen += 1;
+
+  if(send_response(app_ctx, session, r->reshdrs, r->reshdrslen, stream_data) != 0) {
+    close(stream_data->fd);
+    return NGHTTP2_ERR_CALLBACK_FAILURE;
+  }
+  return 0;
 }
 
 static int mrb_http2_200_send_response(app_context *app_ctx,
@@ -1346,8 +1394,13 @@ static int server_on_request_recv(nghttp2_session *session,
   stream_data->readleft = session_data->app_ctx->r->finfo->st_size;
 
   TRACER;
-  return mrb_http2_200_send_response(session_data->app_ctx, session,
+  if (session_data->app_ctx->r->reshdrslen > 0) {
+    return mrb_http2_send_custom_response(session_data->app_ctx, session,
       stream_data);
+  } else {
+    return mrb_http2_200_send_response(session_data->app_ctx, session,
+        stream_data);
+  }
 }
 
 static int server_on_frame_recv_callback(nghttp2_session *session,
@@ -2333,12 +2386,81 @@ static mrb_value mrb_http2_server_set_status(mrb_state *mrb, mrb_value self)
   return mrb_fixnum_value(status);
 }
 
+static mrb_value mrb_http2_get_class_obj(mrb_state *mrb, mrb_value self,
+    char *obj_id, char *class_name)
+{
+  mrb_value obj;
+  struct RClass *obj_class, *http2_class;
+
+  obj = mrb_iv_get(mrb, self, mrb_intern_cstr(mrb, obj_id));
+  if (mrb_nil_p(obj)) {
+    http2_class = mrb_class_get_under(mrb, mrb_module_get(mrb, "HTTP2"), "Server");
+    obj_class = (struct RClass*)mrb_class_ptr(
+        mrb_const_get(mrb, mrb_obj_value(http2_class),
+          mrb_intern_cstr(mrb, class_name)));
+    obj = mrb_obj_new(mrb, obj_class, 0, NULL);
+    DATA_TYPE(obj) = &mrb_http2_server_type;
+    DATA_PTR(obj) = DATA_PTR(self);
+    mrb_iv_set(mrb, self, mrb_intern_cstr(mrb, obj_id), obj);
+  }
+  return obj;
+}
+
+static mrb_value mrb_http2_headers_out_obj(mrb_state *mrb, mrb_value self)
+{
+  return mrb_http2_get_class_obj(mrb, self, "headers_out_obj", "Headers_out");
+}
+
+static mrb_value mrb_http2_get_reshdrs(mrb_state *mrb,
+    mrb_value self)
+{
+  mrb_http2_data_t *data = DATA_PTR(self);
+  mrb_http2_request_rec *r = data->r;
+  int i;
+  char *key;
+
+  if (!data->r->reshdrs) {
+    return mrb_nil_value();
+  }
+
+  mrb_get_args(mrb, "z", &key);
+
+  i = mrb_http2_get_nv_id(r->reshdrs, r->reshdrslen, key);
+  if (i == MRB_HTTP2_HEADER_NOT_FOUND) {
+    return mrb_nil_value();
+  }
+
+  return mrb_str_new(mrb, (char *)r->reshdrs[i].value, r->reshdrs[i].valuelen);
+}
+
+static mrb_value mrb_http2_set_reshdrs(mrb_state *mrb,
+    mrb_value self)
+{
+  mrb_http2_data_t *data = DATA_PTR(self);
+  mrb_http2_request_rec *r = data->r;
+  mrb_value key, val;
+
+  mrb_get_args(mrb, "oo", &key, &val);
+
+  MRB_HTTP2_CREATE_NV_OBJ(mrb, &r->reshdrs[r->reshdrslen], key, val);
+  r->reshdrslen += 1;
+
+  return mrb_fixnum_value(r->reshdrslen);
+}
+
 void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
 {
-  struct RClass *server;
+  struct RClass *server, *hin;
 
   server = mrb_define_class_under(mrb, http2, "Server", mrb->object_class);
   MRB_SET_INSTANCE_TT(server, MRB_TT_DATA);
+
+  hin = mrb_define_class_under(mrb, server, "Headers_out", mrb->object_class);
+  mrb_define_method(mrb, hin, "[]=", mrb_http2_set_reshdrs, ARGS_ANY());
+  mrb_define_method(mrb, hin, "[]", mrb_http2_get_reshdrs, ARGS_ANY());
+
+  mrb_define_method(mrb, server, "headers_out", mrb_http2_headers_out_obj, ARGS_NONE());
+  mrb_define_method(mrb, server, "response_headers", mrb_http2_headers_out_obj, ARGS_NONE());
 
   mrb_define_method(mrb, server, "initialize", mrb_http2_server_init, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, server, "run", mrb_http2_server_run, MRB_ARGS_NONE());

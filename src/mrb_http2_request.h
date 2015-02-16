@@ -130,6 +130,12 @@ typedef struct {
   // the number of request header
   size_t reqhdrlen;
 
+  // response header table
+  nghttp2_nv reshdrs[MRB_HTTP2_HEADER_MAX];
+
+  // the number of response header
+  size_t reshdrslen;
+
   // upstream information when using proxy
   mrb_http2_upstream *upstream;
 

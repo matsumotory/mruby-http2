@@ -36,10 +36,9 @@ void mrb_http2_request_rec_free(mrb_state *mrb, mrb_http2_request_rec *r)
   if (r->reqhdr != NULL) {
     r->reqhdr = NULL;
   }
-  if (r->reqhdrlen != 0) {
-    r->reqhdrlen = 0;
-  }
 
+  r->reqhdrlen = 0;
+  r->reshdrslen = 0;
   r->status = 0;
 }
 
@@ -56,6 +55,7 @@ mrb_http2_request_rec *mrb_http2_request_rec_init(mrb_state *mrb)
   r->prev_last_modified = 0;
   r->reqhdr = NULL;
   r->reqhdrlen = 0;
+  r->reshdrslen = 0;
   r->upstream = NULL;
   r->mruby = 0;
   r->shared_mruby = 0;
