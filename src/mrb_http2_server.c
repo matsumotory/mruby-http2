@@ -1140,7 +1140,7 @@ static int mrb_http2_send_custom_response(app_context *app_ctx,
   return 0;
 }
 
-static int mrb_http2_200_send_response(app_context *app_ctx,
+static int mrb_http2_send_200_response(app_context *app_ctx,
     nghttp2_session *session, http2_stream_data *stream_data) {
 
   mrb_http2_request_rec *r = app_ctx->r;
@@ -1398,7 +1398,7 @@ static int server_on_request_recv(nghttp2_session *session,
     return mrb_http2_send_custom_response(session_data->app_ctx, session,
       stream_data);
   } else {
-    return mrb_http2_200_send_response(session_data->app_ctx, session,
+    return mrb_http2_send_200_response(session_data->app_ctx, session,
         stream_data);
   }
 }
