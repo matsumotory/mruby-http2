@@ -2301,7 +2301,11 @@ static mrb_value mrb_http2_server_body(mrb_state *mrb, mrb_value self)
   mrb_http2_data_t *data = DATA_PTR(self);
   mrb_http2_request_rec *r = data->r;
 
-  return mrb_str_new_cstr(mrb, r->request_body);
+  if (r->request_body == NULL) {
+    return mrb_nil_value();
+  } else {
+    return mrb_str_new_cstr(mrb, r->request_body);
+  }
 }
 
 static mrb_value mrb_http2_server_document_root(mrb_state *mrb, mrb_value self)
