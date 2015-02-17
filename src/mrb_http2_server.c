@@ -1516,13 +1516,13 @@ static int server_on_data_chunk_recv_callback(nghttp2_session *session,
     return 0;
   }
   if (len > MRB_HTTP2_MAX_POST_DATA_SIZE) {
-    fprintf(stderr, "post data length(%d) exceed "
+    fprintf(stderr, "post data length(%ld) exceed "
         "MRB_HTTP2_MAX_POST_DATA_SIZE(%d)\n", len,
         MRB_HTTP2_MAX_POST_DATA_SIZE);
-    stream_data->request_body = mrb_http2_strcopy(mrb, data,
+    stream_data->request_body = mrb_http2_strcopy(mrb, (const char *)data,
         MRB_HTTP2_MAX_POST_DATA_SIZE);
   } else {
-    stream_data->request_body = mrb_http2_strcopy(mrb, data, len);
+    stream_data->request_body = mrb_http2_strcopy(mrb, (const char *)data, len);
   }
 
   return 0;
