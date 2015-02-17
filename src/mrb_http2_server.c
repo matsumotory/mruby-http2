@@ -1246,7 +1246,7 @@ static int mrb_http2_send_response(app_context *app_ctx,
 }
 */
 
-static int server_on_request_recv(nghttp2_session *session,
+static int mrb_http2_process_request(nghttp2_session *session,
     http2_session_data *session_data, http2_stream_data *stream_data)
 {
   int fd;
@@ -1488,7 +1488,7 @@ static int server_on_frame_recv_callback(nghttp2_session *session,
         return 0;
       }
 
-      return server_on_request_recv(session, session_data, stream_data);
+      return mrb_http2_process_request(session, session_data, stream_data);
     }
     break;
   default:
