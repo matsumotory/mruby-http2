@@ -39,6 +39,7 @@ typedef struct http2_stream_data {
   struct http2_stream_data *prev, *next;
   char *request_path;
   char *request_args;
+  char *request_body;
   char *unparsed_uri;
   int32_t stream_id;
   int fd;
@@ -148,6 +149,10 @@ static http2_stream_data* create_http2_stream_data(mrb_state *mrb,
   stream_data->fd = -1;
   stream_data->readleft = 0;
   stream_data->nvlen = 0;
+  stream_data->request_body = NULL;
+  stream_data->request_args = NULL;
+  stream_data->request_path = NULL;
+  stream_data->unparsed_uri = NULL;
 
   add_stream(session_data, stream_data);
   return stream_data;
@@ -164,6 +169,9 @@ static void delete_http2_stream_data(mrb_state *mrb,
   if (stream_data->request_args != NULL) {
     mrb_free(mrb, stream_data->request_path);
     mrb_free(mrb, stream_data->request_args);
+  }
+  if (stream_data->request_body != NULL) {
+    mrb_free(mrb, stream_data->request_body);
   }
   mrb_free(mrb, stream_data);
 }
@@ -1318,17 +1326,19 @@ static int server_on_request_recv(nghttp2_session *session,
       stream_data->request_path, uri_len);
 
   session_data->app_ctx->r->unparsed_uri = stream_data->unparsed_uri;
+  session_data->app_ctx->r->request_body = stream_data->request_body;
   session_data->app_ctx->r->args = stream_data->request_args;
 
   if (session_data->app_ctx->server->config->debug) {
     fprintf(stderr,
-        "%s %s (%s + %s) is mapped to %s document_root=%s before map_to_strage_cb\n",
+        "%s %s (%s + %s) is mapped to %s document_root=%s before map_to_strage_cb request_body=(%s)\n",
         session_data->client_addr,
         session_data->app_ctx->r->unparsed_uri,
         session_data->app_ctx->r->uri,
         session_data->app_ctx->r->args,
         session_data->app_ctx->r->filename,
-        session_data->app_ctx->server->config->document_root);
+        session_data->app_ctx->server->config->document_root,
+        session_data->app_ctx->r->request_body);
   }
 
   //
@@ -1488,6 +1498,36 @@ static int server_on_frame_recv_callback(nghttp2_session *session,
   return 0;
 }
 
+#define MRB_HTTP2_MAX_POST_DATA_SIZE 1 << 16
+
+static int server_on_data_chunk_recv_callback(nghttp2_session *session,
+    uint8_t flags, int32_t stream_id, const uint8_t *data, size_t len,
+    void *user_data)
+{
+  http2_session_data *session_data = (http2_session_data *)user_data;
+  http2_stream_data *stream_data = nghttp2_session_get_stream_user_data(session,
+      stream_id);
+  mrb_state *mrb = session_data->app_ctx->server->mrb;
+
+  // TODO: buffering and stored file or memory, currently store len byte
+  // when callback only once
+  if (stream_data->request_body != NULL) {
+    fprintf(stderr, "request_body was already storead, now stored only once");
+    return 0;
+  }
+  if (len > MRB_HTTP2_MAX_POST_DATA_SIZE) {
+    fprintf(stderr, "post data length(%d) exceed "
+        "MRB_HTTP2_MAX_POST_DATA_SIZE(%d)\n", len,
+        MRB_HTTP2_MAX_POST_DATA_SIZE);
+    stream_data->request_body = mrb_http2_strcopy(mrb, data,
+        MRB_HTTP2_MAX_POST_DATA_SIZE);
+  } else {
+    stream_data->request_body = mrb_http2_strcopy(mrb, data, len);
+  }
+
+  return 0;
+}
+
 static int server_on_stream_close_callback(nghttp2_session *session,
     int32_t stream_id, nghttp2_error_code error_code, void *user_data)
 {
@@ -1528,6 +1568,8 @@ static void mrb_http2_server_session_init(http2_session_data *session_data)
   nghttp2_session_callbacks_set_send_callback(callbacks, server_send_callback);
   nghttp2_session_callbacks_set_on_frame_recv_callback(callbacks,
       server_on_frame_recv_callback);
+  nghttp2_session_callbacks_set_on_data_chunk_recv_callback(callbacks,
+      server_on_data_chunk_recv_callback);
   nghttp2_session_callbacks_set_on_stream_close_callback(callbacks,
       server_on_stream_close_callback);
   nghttp2_session_callbacks_set_on_header_callback(callbacks,
@@ -2254,6 +2296,14 @@ static mrb_value mrb_http2_server_args(mrb_state *mrb, mrb_value self)
   return mrb_str_new_cstr(mrb, r->args);
 }
 
+static mrb_value mrb_http2_server_body(mrb_state *mrb, mrb_value self)
+{
+  mrb_http2_data_t *data = DATA_PTR(self);
+  mrb_http2_request_rec *r = data->r;
+
+  return mrb_str_new_cstr(mrb, r->request_body);
+}
+
 static mrb_value mrb_http2_server_document_root(mrb_state *mrb, mrb_value self)
 {
   mrb_http2_data_t *data = DATA_PTR(self);
@@ -2582,6 +2632,7 @@ void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
   mrb_define_method(mrb, server, "uri", mrb_http2_server_uri, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "unparsed_uri", mrb_http2_server_unparsed_uri, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "args", mrb_http2_server_args, MRB_ARGS_NONE());
+  mrb_define_method(mrb, server, "body", mrb_http2_server_body, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "document_root", mrb_http2_server_document_root, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "client_ip", mrb_http2_server_client_ip, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "user_agent", mrb_http2_server_user_agent, MRB_ARGS_NONE());
