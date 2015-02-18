@@ -41,8 +41,8 @@ typedef struct http2_stream_data {
   char *request_args;
   char *request_body;
   char *unparsed_uri;
-  char *method;
-  char *scheme;
+  char method[16];
+  char scheme[8];
   int32_t stream_id;
   int fd;
   int64_t readleft;
@@ -155,8 +155,8 @@ static http2_stream_data* create_http2_stream_data(mrb_state *mrb,
   stream_data->request_args = NULL;
   stream_data->request_path = NULL;
   stream_data->unparsed_uri = NULL;
-  stream_data->method = NULL;
-  stream_data->scheme = NULL;
+  stream_data->method[0] = '\0';
+  stream_data->scheme[0] = '\0';
 
   add_stream(session_data, stream_data);
   return stream_data;
@@ -169,8 +169,6 @@ static void delete_http2_stream_data(mrb_state *mrb,
   if(stream_data->fd != -1) {
     close(stream_data->fd);
   }
-  mrb_free(mrb, stream_data->method);
-  mrb_free(mrb, stream_data->scheme);
   mrb_free(mrb, stream_data->unparsed_uri);
   if (stream_data->request_args != NULL) {
     mrb_free(mrb, stream_data->request_path);
@@ -1064,6 +1062,7 @@ static int server_on_header_callback(nghttp2_session *session,
 
   http2_stream_data *stream_data;
   const char PATH[] = ":path";
+  int i;
 
   TRACER;
   switch(frame->hd.type) {
@@ -1085,11 +1084,17 @@ static int server_on_header_callback(nghttp2_session *session,
         stream_data->nvlen, &nv);
 
     if(namelen == sizeof(":method") - 1 && memcmp(":m", name, 2) == 0) {
-      stream_data->method = mrb_http2_strcopy(mrb, (char *)name, namelen);
+        for (i = 0; i < valuelen; i++) {
+          stream_data->method[i] = value[i];
+        }
+        stream_data->method[valuelen] = '\0';
     }
 
     if(namelen == sizeof(":scheme") - 1 && memcmp(":s", name, 2) == 0) {
-      stream_data->scheme = mrb_http2_strcopy(mrb, (char *)name, namelen);
+      for (i = 0; i < valuelen; i++) {
+        stream_data->scheme[i] = value[i];
+      }
+      stream_data->scheme[valuelen] = '\0';
     }
 
     if(namelen == sizeof(PATH) - 1 && memcmp(":p", name, 2) == 0) {
