@@ -103,6 +103,12 @@ typedef struct {
   // request args
   char *args;
 
+  // request method
+  char *method;
+
+  // request scheme
+  char *scheme;
+
   // request body
   char *request_body;
 
