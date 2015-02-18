@@ -41,6 +41,8 @@ typedef struct http2_stream_data {
   char *request_args;
   char *request_body;
   char *unparsed_uri;
+  char *method;
+  char *scheme;
   int32_t stream_id;
   int fd;
   int64_t readleft;
@@ -153,6 +155,8 @@ static http2_stream_data* create_http2_stream_data(mrb_state *mrb,
   stream_data->request_args = NULL;
   stream_data->request_path = NULL;
   stream_data->unparsed_uri = NULL;
+  stream_data->method = NULL;
+  stream_data->scheme = NULL;
 
   add_stream(session_data, stream_data);
   return stream_data;
@@ -165,6 +169,8 @@ static void delete_http2_stream_data(mrb_state *mrb,
   if(stream_data->fd != -1) {
     close(stream_data->fd);
   }
+  mrb_free(mrb, stream_data->method);
+  mrb_free(mrb, stream_data->scheme);
   mrb_free(mrb, stream_data->unparsed_uri);
   if (stream_data->request_args != NULL) {
     mrb_free(mrb, stream_data->request_path);
@@ -1054,6 +1060,7 @@ static int server_on_header_callback(nghttp2_session *session,
     const uint8_t *value, size_t valuelen, uint8_t flags, void *user_data)
 {
   http2_session_data *session_data = (http2_session_data *)user_data;
+  mrb_state *mrb = session_data->app_ctx->server->mrb;
 
   http2_stream_data *stream_data;
   const char PATH[] = ":path";
@@ -1073,24 +1080,28 @@ static int server_on_header_callback(nghttp2_session *session,
     }
 
     // create nv and add stream_data->nva
-    mrb_http2_create_nv(session_data->app_ctx->server->mrb, &nv, name, namelen,
-        value, valuelen);
+    mrb_http2_create_nv(mrb, &nv, name, namelen, value, valuelen);
     stream_data->nvlen = mrb_http2_add_nv(stream_data->nva,
         stream_data->nvlen, &nv);
 
-    if(namelen == sizeof(PATH) - 1 && memcmp(PATH, name, namelen) == 0) {
+    if(namelen == sizeof(":method") - 1 && memcmp(":m", name, 2) == 0) {
+      stream_data->method = mrb_http2_strcopy(mrb, (char *)name, namelen);
+    }
+
+    if(namelen == sizeof(":scheme") - 1 && memcmp(":s", name, 2) == 0) {
+      stream_data->scheme = mrb_http2_strcopy(mrb, (char *)name, namelen);
+    }
+
+    if(namelen == sizeof(PATH) - 1 && memcmp(":p", name, 2) == 0) {
       size_t j;
-      stream_data->unparsed_uri =
-        percent_decode(session_data->app_ctx->server->mrb, value, valuelen);
+      stream_data->unparsed_uri = percent_decode(mrb, value, valuelen);
       for(j = 0; j < valuelen && value[j] != '?'; ++j);
       if (j == valuelen) {
         stream_data->request_args = NULL;
         stream_data->request_path = stream_data->unparsed_uri;
       } else {
-        stream_data->request_path =
-          percent_decode(session_data->app_ctx->server->mrb, value, j);
-        stream_data->request_args =
-          percent_decode(session_data->app_ctx->server->mrb, value + j, valuelen - j);
+        stream_data->request_path = percent_decode(mrb, value, j);
+        stream_data->request_args = percent_decode(mrb, value + j, valuelen - j);
       }
     }
     break;
@@ -1325,6 +1336,8 @@ static int mrb_http2_process_request(nghttp2_session *session,
       session_data->app_ctx->server->mrb,
       stream_data->request_path, uri_len);
 
+  session_data->app_ctx->r->scheme = stream_data->scheme;
+  session_data->app_ctx->r->method = stream_data->method;
   session_data->app_ctx->r->unparsed_uri = stream_data->unparsed_uri;
   session_data->app_ctx->r->request_body = stream_data->request_body;
   session_data->app_ctx->r->args = stream_data->request_args;
@@ -2296,6 +2309,22 @@ static mrb_value mrb_http2_server_args(mrb_state *mrb, mrb_value self)
   return mrb_str_new_cstr(mrb, r->args);
 }
 
+static mrb_value mrb_http2_server_method(mrb_state *mrb, mrb_value self)
+{
+  mrb_http2_data_t *data = DATA_PTR(self);
+  mrb_http2_request_rec *r = data->r;
+
+  return mrb_str_new_cstr(mrb, r->method);
+}
+
+static mrb_value mrb_http2_server_scheme(mrb_state *mrb, mrb_value self)
+{
+  mrb_http2_data_t *data = DATA_PTR(self);
+  mrb_http2_request_rec *r = data->r;
+
+  return mrb_str_new_cstr(mrb, r->scheme);
+}
+
 static mrb_value mrb_http2_server_body(mrb_state *mrb, mrb_value self)
 {
   mrb_http2_data_t *data = DATA_PTR(self);
@@ -2636,6 +2665,8 @@ void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
   mrb_define_method(mrb, server, "uri", mrb_http2_server_uri, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "unparsed_uri", mrb_http2_server_unparsed_uri, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "args", mrb_http2_server_args, MRB_ARGS_NONE());
+  mrb_define_method(mrb, server, "method", mrb_http2_server_method, MRB_ARGS_NONE());
+  mrb_define_method(mrb, server, "scheme", mrb_http2_server_scheme, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "body", mrb_http2_server_body, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "document_root", mrb_http2_server_document_root, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "client_ip", mrb_http2_server_client_ip, MRB_ARGS_NONE());
