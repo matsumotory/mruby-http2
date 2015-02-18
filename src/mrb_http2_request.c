@@ -8,10 +8,7 @@ void mrb_http2_request_rec_free(mrb_state *mrb, mrb_http2_request_rec *r)
     mrb_free(mrb, r->filename);
     r->filename = NULL;
   }
-  if (r->uri != NULL) {
-    mrb_free(mrb, r->uri);
-    r->uri = NULL;
-  }
+
   if (r->upstream != NULL) {
     if (r->upstream->res->data != NULL) {
       mrb_free(mrb, r->upstream->res->data);

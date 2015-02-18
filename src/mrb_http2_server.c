@@ -1336,14 +1336,10 @@ static int mrb_http2_process_request(nghttp2_session *session,
       session_data->app_ctx->server->config->document_root,
       stream_data->request_path);
 
-  uri_len = strlen(stream_data->request_path);
-  session_data->app_ctx->r->uri = mrb_http2_strcopy(
-      session_data->app_ctx->server->mrb,
-      stream_data->request_path, uri_len);
-
   session_data->app_ctx->r->scheme = stream_data->scheme;
   session_data->app_ctx->r->method = stream_data->method;
   session_data->app_ctx->r->unparsed_uri = stream_data->unparsed_uri;
+  session_data->app_ctx->r->uri = stream_data->request_path;
   session_data->app_ctx->r->request_body = stream_data->request_body;
   session_data->app_ctx->r->args = stream_data->request_args;
 
