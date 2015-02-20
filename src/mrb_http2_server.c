@@ -195,7 +195,7 @@ static void delete_http2_stream_data(mrb_state *mrb,
     mrb_free(mrb, stream_data->request_body);
   }
   if (stream_data->upstream_req != NULL) {
-    evhttp_request_free(stream_data->upstream_req);
+    //evhttp_request_free(stream_data->upstream_req);
     //event_base_free(stream_data->upstream_base);
   }
   mrb_free(mrb, stream_data);
@@ -833,7 +833,7 @@ void http_request_done(struct evhttp_request *req, void *user_data)
   c->stream_data->upstream_req = req;
 
   mrb_free(mrb, r->upstream->unparsed_host);
-  evhttp_connection_free(c->conn);
+  //evhttp_connection_free(c->conn);
 
   TRACER;
 }
@@ -2479,11 +2479,13 @@ static mrb_value mrb_http2_server_set_upstream_host(mrb_state *mrb, mrb_value se
   mrb_http2_request_rec *r = data->r;
   char *host;
 
-  mrb_get_args(mrb, "z", &host);
   if (!r->upstream) {
     mrb_http2_upstream_init(mrb, self);
   }
-  r->upstream->host = host;
+
+  mrb_get_args(mrb, "z", &host);
+  //r->upstream->host = mrb_http2_strcopy(mrb, host, len);
+  r->upstream->host = strdup(host);
 
   return self;
 }

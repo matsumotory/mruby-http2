@@ -10,6 +10,7 @@ void mrb_http2_request_rec_free(mrb_state *mrb, mrb_http2_request_rec *r)
   }
 
   if (r->upstream != NULL) {
+    free(r->upstream->host);
     mrb_free(mrb, r->upstream);
     r->upstream = NULL;
   }
