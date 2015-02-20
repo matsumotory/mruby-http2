@@ -15,6 +15,12 @@
 #include <event2/bufferevent.h>
 #include <event2/bufferevent_ssl.h>
 #include <event2/listener.h>
+#include <event2/keyvalq_struct.h>
+#include <event2/util.h>
+#include <event2/http.h>
+#include <event2/http_compat.h>
+#include <event2/http_struct.h>
+
 
 // support upstream
 #include <curl/curl.h>
@@ -25,6 +31,7 @@
 
 #include <sys/wait.h>
 #include <sys/resource.h>
+#include <sys/queue.h>
 #include <unistd.h>
 
 typedef struct {
@@ -48,7 +55,16 @@ typedef struct http2_stream_data {
   int64_t readleft;
   nghttp2_nv nva[MRB_HTTP2_HEADER_MAX];
   size_t nvlen;
+  struct evhttp_request *upstream_req;
+  struct event_base *upstream_base;
 } http2_stream_data;
+
+struct mrb_http2_upstream_client {
+  http2_stream_data *stream_data;
+  nghttp2_session *session;
+  app_context *app_ctx;
+  struct evhttp_connection *conn;
+};
 
 typedef struct http2_session_data {
   http2_stream_data root;
@@ -157,6 +173,7 @@ static http2_stream_data* create_http2_stream_data(mrb_state *mrb,
   stream_data->unparsed_uri = NULL;
   stream_data->method[0] = '\0';
   stream_data->scheme[0] = '\0';
+  stream_data->upstream_req = NULL;
 
   add_stream(session_data, stream_data);
   return stream_data;
@@ -176,6 +193,10 @@ static void delete_http2_stream_data(mrb_state *mrb,
   }
   if (stream_data->request_body != NULL) {
     mrb_free(mrb, stream_data->request_body);
+  }
+  if (stream_data->upstream_req != NULL) {
+    evhttp_request_free(stream_data->upstream_req);
+    //event_base_free(stream_data->upstream_base);
   }
   mrb_free(mrb, stream_data);
 }
@@ -555,6 +576,76 @@ static char* percent_decode(mrb_state *mrb, const uint8_t *value,
   return res;
 }
 
+static ssize_t upstream_read_callback(nghttp2_session *session,
+    int32_t stream_id, uint8_t *buf, size_t length, uint32_t *data_flags,
+    nghttp2_data_source *source, void *user_data)
+{
+  ssize_t nread;
+  http2_stream_data *stream_data = source->ptr;
+  struct evbuffer* upstream_buf = evhttp_request_get_input_buffer(stream_data->upstream_req);
+  nread = evbuffer_remove(upstream_buf, buf, length);
+  TRACER;
+
+  if(nread == -1) {
+    return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
+  }
+
+  stream_data->readleft -= nread;
+  if(nread == 0 || stream_data->readleft == 0) {
+    if (stream_data->readleft != 0) {
+      return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
+    }
+    *data_flags |= NGHTTP2_DATA_FLAG_EOF;
+  }
+  TRACER;
+  return nread;
+}
+
+static int send_upstream_response(app_context *app_ctx, nghttp2_session *session,
+    nghttp2_nv *nva, size_t nvlen, http2_stream_data *stream_data)
+{
+  int rv;
+  mrb_state *mrb = app_ctx->server->mrb;
+  mrb_http2_request_rec *r = app_ctx->r;
+  int i;
+
+  nghttp2_data_provider data_prd;
+  data_prd.source.ptr = stream_data;
+  data_prd.read_callback = upstream_read_callback;
+
+  if (app_ctx->server->config->debug) {
+    for (i = 0; i < nvlen; i++) {
+      char *name = mrb_http2_strcopy(mrb, (char *)nva[i].name,
+          nva[i].namelen);
+      char *value = mrb_http2_strcopy(mrb, (char *)nva[i].value,
+          nva[i].valuelen);
+      fprintf(stderr, "%s: nva[%d]={name=%s, value=%s}\n", __func__,
+          i, name, value);
+      mrb_free(mrb, name);
+      mrb_free(mrb, value);
+    }
+  }
+
+  TRACER;
+  rv = nghttp2_submit_response(session, stream_data->stream_id, nva, nvlen,
+      &data_prd);
+  if(rv != 0) {
+    fprintf(stderr, "Fatal error: %s", nghttp2_strerror(rv));
+    mrb_http2_request_rec_free(mrb, r);
+    return -1;
+  }
+  //
+  // "set_logging_cb" callback ruby block
+  //
+  r->phase = MRB_HTTP2_SERVER_LOGGING;
+  callback_ruby_block(mrb, app_ctx->self, app_ctx->server->config->callback,
+      app_ctx->server->config->cb_list->logging_cb, app_ctx->server->config->cb_list);
+
+  mrb_http2_request_rec_free(mrb, r);
+  TRACER;
+  return 0;
+}
+
 static ssize_t file_read_callback(nghttp2_session *session,
     int32_t stream_id, uint8_t *buf, size_t length, uint32_t *data_flags,
     nghttp2_data_source *source, void *user_data)
@@ -694,180 +785,121 @@ static int error_reply(app_context *app_ctx, nghttp2_session *session,
   return 0;
 }
 
-/*
-static size_t write_upstream_data(void *ptr, size_t size, size_t nmemb,
-    void *data)
-{
-  size_t len = size * nmemb;
-  app_context *app_ctx = (app_context *)data;
-  mrb_http2_request_rec *r = app_ctx->r;
-  mrb_state *mrb = app_ctx->server->mrb;
-
-  r->upstream->res->data = (char *)mrb_realloc(mrb, r->upstream->res->data,
-      r->upstream->res->len + len + 1);
-
-  if (r->upstream->res->data) {
-    memcpy(r->upstream->res->data + r->upstream->res->len, ptr, len);
-    r->upstream->res->len += len;
-  }
-
-  return len;
-}
-*/
-
-/*
-static void parse_upstream_response(app_context *app_ctx)
-{
-  mrb_state *mrb = app_ctx->server->mrb;
-  struct RClass *http_class, *http_parser_class;
-  mrb_value args[1], parser;
-  mrb_http2_upstream *upstream = app_ctx->r->upstream;
-  mrb_http2_config_t *config = app_ctx->server->config;
-
-  // paser response from upstream using mruby-simplehttp
-  http_class = mrb_class_get(mrb, "SimpleHttp");
-  http_parser_class = mrb_class_get_under(mrb, http_class,
-      "SimpleHttpResponse");
-  args[0] = mrb_str_new(mrb, upstream->res->data, upstream->res->len);
-  if (config->debug) {
-    mrb_p(mrb, args[0]);
-  }
-  parser = mrb_obj_new(mrb, http_parser_class, 1, args);
-
-  // get reponse headers object
-  upstream->res->headers = mrb_funcall(mrb, parser, "headers", 0, NULL);
-
-  // get reponse body object
-  upstream->res->body = mrb_funcall(mrb, parser, "body", 0, NULL);
-
-  // set header fileds in advance that are used a lot
-  upstream->res->status_code = mrb_fixnum(mrb_funcall(mrb, parser, "code", 0,
-        NULL));
-  upstream->res->content_length = (uint64_t)mrb_str_to_dbl(mrb,
-      mrb_funcall(mrb, parser, "content_length", 0, NULL), FALSE);
-
-  if (config->debug) {
-    mrb_p(mrb, parser);
-    mrb_p(mrb, upstream->res->body);
-    mrb_p(mrb, upstream->res->headers);
-    fprintf(stderr, "%s:%d: status_code=%d\n", __func__, __LINE__,
-        upstream->res->status_code);
-    fprintf(stderr, "%s:%d: content_length=%"PRIu64"\n", __func__, __LINE__,
-        upstream->res->content_length);
-  }
-
-}
-*/
-
-/*
-static int read_upstream_response(app_context *app_ctx, char *server, char *uri)
-{
-  CURLcode code;
-  CURL* curl = curl_easy_init();
-  char error[CURL_ERROR_SIZE] = {0};
-  mrb_state *mrb = app_ctx->server->mrb;
-  char *proxy_url = mrb_http2_strcat(mrb, server, uri);
-
-  if (!curl) {
-    return 1;
-  }
-
-  // TODO: tranparent request/response headers from/to a client and support
-  // HTTP/2. For now, create new HTTP/1 connection to upstream server
-  curl_easy_setopt(curl, CURLOPT_URL, proxy_url);
-  curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1);
-  curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
-  curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0);
-  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_upstream_data);
-  curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)app_ctx);
-  curl_easy_setopt(curl, CURLOPT_HEADERDATA, (void *)app_ctx);
-  curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, error);
-
-  code = curl_easy_perform(curl);
-  if (code) {
-    fprintf(stderr, "Fatal error of libcurl: %s", error);
-    mrb_free(mrb, proxy_url);
-    return -1;
-  }
-
-  curl_easy_cleanup(curl);
-  mrb_free(mrb, proxy_url);
-  parse_upstream_response(app_ctx);
-
-  return 0;
-}
-*/
-
-/*
 static int upstream_reply(app_context *app_ctx, nghttp2_session *session,
     http2_stream_data *stream_data)
 {
   mrb_http2_request_rec *r = app_ctx->r;
+  mrb_http2_config_t *config = app_ctx->server->config;
   mrb_state *mrb = app_ctx->server->mrb;
-  int rv;
-  int pipefd[2];
-  nghttp2_nv nva[MRB_HTTP2_HEADER_MAX];
-  size_t nvlen = 0;
-
-  // create headers for HTTP/2
-  MRB_HTTP2_CREATE_NV_CS(mrb, &nva[nvlen], ":status", r->status_line);
-  nvlen += 1;
-
-  if (!mrb_nil_p(r->upstream->res->headers)) {
-    int i;
-    mrb_value keys = mrb_hash_keys(mrb, r->upstream->res->headers);
-    int hash_size = RARRAY_LEN(keys);
-    for (i = 0; i < hash_size; i++) {
-      mrb_value key = mrb_ary_entry(keys, i);
-      mrb_value val = mrb_hash_get(mrb, r->upstream->res->headers, key);
-      MRB_HTTP2_CREATE_NV_OBJ(mrb, &nva[nvlen], key, val);
-      nvlen += 1;
-    }
-  }
 
   TRACER;
-  rv = pipe(pipefd);
-  if(rv != 0) {
-    rv = nghttp2_submit_rst_stream(session, NGHTTP2_FLAG_NONE,
-        stream_data->stream_id, NGHTTP2_INTERNAL_ERROR);
-    if(rv != 0) {
-      fprintf(stderr, "Fatal error: %s", nghttp2_strerror(rv));
-      return -1;
-    }
-    return 0;
-  }
+  //
+  // "set_fixups_cb" callback ruby block
+  //
+  r->phase = MRB_HTTP2_SERVER_FIXUPS;
+  callback_ruby_block(mrb, app_ctx->self, config->callback,
+      config->cb_list->fixups_cb, config->cb_list);
 
-  if (r->status >= 100 && r->status < 200) {
-    rv = write(pipefd[1], ERROR_100_HTML, sizeof(ERROR_100_HTML) - 1);
-  } else if (r->status >= 200 && r->status < 300) {
-    if (!mrb_nil_p(r->upstream->res->body)) {
-      rv = write(pipefd[1], RSTRING_PTR(r->upstream->res->body),
-          RSTRING_LEN(r->upstream->res->body));
-    }
-  } else if (r->status >= 300 && r->status < 400) {
-    rv = write(pipefd[1], ERROR_300_HTML, sizeof(ERROR_300_HTML) - 1);
-  } else if (r->status >= 400 && r->status < 500) {
-    rv = write(pipefd[1], ERROR_404_HTML, sizeof(ERROR_404_HTML) - 1);
-  } else if (r->status == HTTP_INTERNAL_SERVER_ERROR) {
-    rv = write(pipefd[1], ERROR_500_HTML, sizeof(ERROR_500_HTML) - 1);
-  } else if (r->status > HTTP_INTERNAL_SERVER_ERROR) {
-    rv = write(pipefd[1], ERROR_503_HTML, sizeof(ERROR_503_HTML) - 1);
-  } else {
-    rv = write(pipefd[1], ERROR_500_HTML, sizeof(ERROR_500_HTML) - 1);
-  }
-
-
-  close(pipefd[1]);
-  stream_data->fd = pipefd[0];
-  TRACER;
-  if(send_response(app_ctx, session, nva, nvlen, stream_data) != 0) {
-    close(pipefd[0]);
-    return -1;
+  if(send_upstream_response(app_ctx, session, r->reshdrs, r->reshdrslen, stream_data) != 0) {
+    close(stream_data->fd);
+    return NGHTTP2_ERR_CALLBACK_FAILURE;
   }
   TRACER;
   return 0;
 }
-*/
+
+void http_request_done(struct evhttp_request *req, void *user_data)
+{
+  struct mrb_http2_upstream_client *c = user_data;
+  mrb_state *mrb = c->app_ctx->server->mrb;
+  mrb_http2_request_rec *r = c->app_ctx->r;
+
+  struct evkeyval *header;
+  struct evkeyvalq *input_headers = evhttp_request_get_input_headers(req);
+
+  TRACER;
+  set_status_record(r, req->response_code);
+  fixup_status_header(mrb, r);
+
+  TAILQ_FOREACH(header, input_headers, next)
+  {
+     MRB_HTTP2_CREATE_NV_CSCS(mrb, &r->reshdrs[r->reshdrslen], header->key,
+         header->value);
+     r->reshdrslen += 1;
+  }
+
+  c->stream_data->readleft =
+    evbuffer_get_length(evhttp_request_get_input_buffer(req));
+  c->stream_data->upstream_req = req;
+
+  mrb_free(mrb, r->upstream->unparsed_host);
+  evhttp_connection_free(c->conn);
+
+  TRACER;
+}
+
+static int read_upstream_response(app_context *app_ctx, nghttp2_session *session,
+    http2_stream_data *stream_data)
+{
+  struct event_base *base;
+  struct evhttp_connection *conn;
+  struct evhttp_request *req;
+  struct mrb_http2_upstream_client *c;
+  mrb_http2_request_rec *r = app_ctx->r;
+  mrb_state *mrb = app_ctx->server->mrb;
+  size_t len;
+
+  TRACER;
+  base = event_base_new();
+  conn = evhttp_connection_base_new(base, NULL, r->upstream->host, r->upstream->port);
+  if (conn == NULL) {
+    event_base_free(base);
+    fprintf(stderr, "evhttp_connection_base_new failed");
+    return -1;
+  }
+
+  c = (struct mrb_http2_upstream_client *)mrb_malloc(app_ctx->server->mrb,
+      sizeof(struct mrb_http2_upstream_client));
+  c->app_ctx = app_ctx;
+  c->stream_data = stream_data;
+  c->session = session;
+  c->conn = conn;
+
+  req = evhttp_request_new(http_request_done, c);
+  if (req == NULL) {
+    event_base_free(base);
+    fprintf(stderr, "evhttp_request_new failed");
+    return -1;
+  }
+  evhttp_request_own(req);
+
+  len = strlen(r->upstream->host) + sizeof(":65525");
+  r->upstream->unparsed_host = mrb_malloc(mrb, len);
+  snprintf(r->upstream->unparsed_host, len, "%s:%ld", r->upstream->host, r->upstream->port);
+  r->upstream->unparsed_host[len] = '\0';
+
+  evhttp_add_header(req->output_headers, "Host", r->upstream->unparsed_host);
+  evhttp_add_header(req->output_headers, "Connection", "close");
+
+  if (evhttp_make_request(conn, req, EVHTTP_REQ_GET, r->upstream->uri) == -1) {
+    mrb_free(mrb, r->upstream->unparsed_host);
+    evhttp_connection_free(conn);
+    evhttp_request_free(req);
+    event_base_free(base);
+    fprintf(stderr, "evhttp_connection_base_new failed");
+    return -1;
+  }
+
+  evhttp_connection_set_timeout(req->evcon, 600);
+  c->stream_data->upstream_base = base;
+
+  event_base_dispatch(base);
+  event_base_free(base);
+
+  TRACER;
+
+  return 0;
+}
 
 static int content_cb_reply(app_context *app_ctx, nghttp2_session *session,
     http2_stream_data *stream_data)
@@ -1267,7 +1299,6 @@ static int mrb_http2_process_request(nghttp2_session *session,
 {
   int fd;
   struct stat finfo;
-  size_t uri_len;
   time_t now = time(NULL);
 
   //
@@ -1371,28 +1402,24 @@ static int mrb_http2_process_request(nghttp2_session *session,
   }
 
   // check proxy config
-  //if (session_data->app_ctx->r->upstream && session_data->app_ctx->r->upstream->server) {
-  //  if (session_data->app_ctx->server->config->debug) {
-  //    fprintf(stderr, "found upstream: server:%s uri:%s\n", session_data->app_ctx->r->upstream->server,
-  //        session_data->app_ctx->r->upstream->uri);
-  //  }
-  //  // TODO: Set response headers transparently to client.
-  //  // For now, set 200 code.
-  //  read_upstream_response(session_data->app_ctx, session_data->app_ctx->r->upstream->server,
-  //      session_data->app_ctx->r->upstream->uri);
-  //  if (session_data->app_ctx->r->upstream->res->status_code < 100) {
-  //    fprintf(stderr, "mruby-http parse fail, parsed status_code:%d\n",
-  //        session_data->app_ctx->r->upstream->res->status_code);
-  //    set_status_record(session_data->app_ctx->r, HTTP_INTERNAL_SERVER_ERROR);
-  //  } else {
-  //    set_status_record(session_data->app_ctx->r, session_data->app_ctx->r->upstream->res->status_code);
-  //  }
-  //  //set_status_record(r, 200);
-  //  if(upstream_reply(session_data->app_ctx, session, stream_data) != 0) {
-  //    return NGHTTP2_ERR_CALLBACK_FAILURE;
-  //  }
-  //  return 0;
-  //}
+  if (session_data->app_ctx->r->upstream && session_data->app_ctx->r->upstream->host) {
+    if (session_data->app_ctx->server->config->debug) {
+      fprintf(stderr, "found upstream: server:%s:%d uri:%s\n",
+          session_data->app_ctx->r->upstream->host,
+          session_data->app_ctx->r->upstream->port,
+          session_data->app_ctx->r->upstream->uri);
+    }
+    // TODO: Set response headers transparently to client.
+    // For now, set 200 code.
+    if (read_upstream_response(session_data->app_ctx, session, stream_data) != 0) {
+      return  NGHTTP2_ERR_CALLBACK_FAILURE;
+    }
+
+    if (upstream_reply(session_data->app_ctx, session, stream_data) != 0) {
+      return  NGHTTP2_ERR_CALLBACK_FAILURE;
+    }
+    return 0;
+  }
 
   //
   // "set_access_checker" callback ruby block
@@ -2405,17 +2432,12 @@ static void mrb_http2_upstream_init(mrb_state *mrb, mrb_value self)
       sizeof(mrb_http2_upstream));
   memset(r->upstream, 0, sizeof(mrb_http2_upstream));
 
-  r->upstream->res = (upstream_response *)mrb_malloc(mrb,
-      sizeof(upstream_response));
-  memset(r->upstream->res, 0, sizeof(upstream_response));
-
   r->upstream->uri = r->uri;
-  r->upstream->server = NULL;
-  r->upstream->res->data = NULL;
-  r->upstream->res->len = 0;
+  r->upstream->host = NULL;
+  r->upstream->port = 80;
 }
 
-static mrb_value mrb_http2_server_upstream(mrb_state *mrb, mrb_value self)
+static mrb_value mrb_http2_server_upstream_port(mrb_state *mrb, mrb_value self)
 {
   mrb_http2_data_t *data = DATA_PTR(self);
   mrb_http2_request_rec *r = data->r;
@@ -2423,20 +2445,45 @@ static mrb_value mrb_http2_server_upstream(mrb_state *mrb, mrb_value self)
   if (!r->upstream) {
     return mrb_nil_value();
   }
-  return mrb_str_new_cstr(mrb, r->upstream->server);
+  return mrb_fixnum_value(r->upstream->port);
 }
 
-static mrb_value mrb_http2_server_set_upstream(mrb_state *mrb, mrb_value self)
+static mrb_value mrb_http2_server_set_upstream_port(mrb_state *mrb, mrb_value self)
 {
   mrb_http2_data_t *data = DATA_PTR(self);
   mrb_http2_request_rec *r = data->r;
-  char *server;
+  mrb_int port;
 
-  mrb_get_args(mrb, "z", &server);
+  mrb_get_args(mrb, "i", &port);
   if (!r->upstream) {
     mrb_http2_upstream_init(mrb, self);
   }
-  r->upstream->server = server;
+  r->upstream->port = (int)port;
+
+  return self;
+}
+static mrb_value mrb_http2_server_upstream_host(mrb_state *mrb, mrb_value self)
+{
+  mrb_http2_data_t *data = DATA_PTR(self);
+  mrb_http2_request_rec *r = data->r;
+
+  if (!r->upstream) {
+    return mrb_nil_value();
+  }
+  return mrb_str_new_cstr(mrb, r->upstream->host);
+}
+
+static mrb_value mrb_http2_server_set_upstream_host(mrb_state *mrb, mrb_value self)
+{
+  mrb_http2_data_t *data = DATA_PTR(self);
+  mrb_http2_request_rec *r = data->r;
+  char *host;
+
+  mrb_get_args(mrb, "z", &host);
+  if (!r->upstream) {
+    mrb_http2_upstream_init(mrb, self);
+  }
+  r->upstream->host = host;
 
   return self;
 }
@@ -2684,12 +2731,12 @@ void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
   mrb_define_method(mrb, server, "set_logging_cb", mrb_http2_server_set_logging_cb, MRB_ARGS_REQ(1));
 
   // upstream methods
-  mrb_define_method(mrb, server, "upstream", mrb_http2_server_upstream, MRB_ARGS_NONE());
-  mrb_define_method(mrb, server, "upstream=", mrb_http2_server_set_upstream, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, server, "upstream_host", mrb_http2_server_upstream_host, MRB_ARGS_NONE());
+  mrb_define_method(mrb, server, "upstream_host=", mrb_http2_server_set_upstream_host, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, server, "upstream_port", mrb_http2_server_upstream_port, MRB_ARGS_NONE());
+  mrb_define_method(mrb, server, "upstream_port=", mrb_http2_server_set_upstream_port, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, server, "upstream_uri", mrb_http2_server_upstream_uri, MRB_ARGS_NONE());
-  mrb_define_method(mrb, server, "upstream_url", mrb_http2_server_upstream_uri, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "upstream_uri=", mrb_http2_server_set_upstream_uri, MRB_ARGS_REQ(1));
-  mrb_define_method(mrb, server, "upstream_url=", mrb_http2_server_set_upstream_uri, MRB_ARGS_REQ(1));
 
   // methods for mruby script
   mrb_define_method(mrb, server, "enable_mruby", mrb_http2_server_enable_mruby, MRB_ARGS_NONE());
