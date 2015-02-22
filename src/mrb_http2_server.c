@@ -864,6 +864,7 @@ static int read_upstream_response(app_context *app_ctx, nghttp2_session *session
   mrb_http2_request_rec *r = app_ctx->r;
   mrb_state *mrb = app_ctx->server->mrb;
   size_t len;
+  int i;
 
   TRACER;
   base = event_base_new();
@@ -899,16 +900,22 @@ static int read_upstream_response(app_context *app_ctx, nghttp2_session *session
   evhttp_add_header(req->output_headers, "Host", r->upstream->unparsed_host);
   evhttp_add_header(req->output_headers, "Connection", "close");
 
-  int i;
-  char keybuf[4096];
-  char valbuf[4096];
-
   for (i = 0; i < r->reqhdrlen; i++) {
     if (memcmp(":", r->reqhdr[i].name, 1) != 0) {
-      memcpy(keybuf, r->reqhdr[i].name, r->reqhdr[i].namelen);
-      keybuf[r->reqhdr[i].namelen] = '\0';
-      memcpy(valbuf, r->reqhdr[i].value, r->reqhdr[i].valuelen);
-      valbuf[r->reqhdr[i].valuelen] = '\0';
+      char keybuf[4096], valbuf[4096];
+      size_t len;
+
+      len = r->reqhdr[i].namelen;
+      if (len > 4096)
+        len = 4096;
+      memcpy(keybuf, r->reqhdr[i].name, len);
+      keybuf[len] = '\0';
+
+      len = r->reqhdr[i].valuelen;
+      if (len > 4096)
+        len = 4096;
+      memcpy(valbuf, r->reqhdr[i].value, len);
+      valbuf[len] = '\0';
       evhttp_add_header(req->output_headers, keybuf, valbuf);
     }
   }
@@ -940,7 +947,7 @@ static int read_upstream_response(app_context *app_ctx, nghttp2_session *session
   c->stream_data->upstream_base = base;
 
   event_base_dispatch(base);
-  event_base_free(base);
+  //event_base_free(base);
 
   TRACER;
 
