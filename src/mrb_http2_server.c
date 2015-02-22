@@ -21,10 +21,6 @@
 #include <event2/http_compat.h>
 #include <event2/http_struct.h>
 
-
-// support upstream
-#include <curl/curl.h>
-
 #include "mruby/value.h"
 #include "mruby/string.h"
 #include "mruby/compile.h"
@@ -256,144 +252,6 @@ static int session_send(http2_session_data *session_data)
 
 #define MRB_HTTP2_TLS_PENDING_SIZE 1300
 
-/*
-static int tls_session_send3(http2_session_data *session_data)
-{
-  //SSL *ssl = bufferevent_openssl_get_ssl(session_data->bev);
-  unsigned char pending_data[65535];
-  size_t pending_datalen = 0;
-  unsigned char *pos;
-
-  TRACER;
-  pos = pending_data;
-  while(1) {
-    size_t n_write;
-    const uint8_t *data;
-    ssize_t datalen = nghttp2_session_mem_send(session_data->session, &data);
-
-    if (datalen < 0) {
-      fprintf(stderr, "Fatal error: %s", nghttp2_strerror(datalen));
-      return -1;
-    }
-
-    if (datalen == 0) {
-      if (pending_datalen > 0) {
-        //n_write = SSL_write(ssl, pos, pending_datalen);
-        n_write = bufferevent_write(session_data->bev, pos, pending_datalen);
-        if (session_data->app_ctx->server->config->debug) {
-          fprintf(stderr, "%s: n_write=%ld session send but don't reach "
-              "TLS_PENDING_SIZE\n", __func__, n_write);
-        }
-        if (n_write < 0) {
-          fprintf(stderr, "SSL_write error: %ld", n_write);
-          return -1;
-        }
-      }
-      return 0;
-    }
-
-    memcpy(pending_data, data, datalen);
-    pending_datalen += datalen;
-    *pending_data += datalen;
-    if (session_data->app_ctx->server->config->debug) {
-      fprintf(stderr, "%s: pending data; datalen=%ld pending_datalen=%ld\n",
-          __func__, datalen, pending_datalen);
-    }
-
-    if (pending_datalen > MRB_HTTP2_TLS_PENDING_SIZE) {
-      //n_write = SSL_write(ssl, pos, pending_datalen);
-      n_write = bufferevent_write(session_data->bev, pos, pending_datalen);
-      if (session_data->app_ctx->server->config->debug) {
-        fprintf(stderr, "%s: n_write=%ld sessin send since readed "
-            "TLS_PENDING_SIZE\n", __func__, n_write);
-      }
-      *pending_data -= pending_datalen;
-      pending_datalen = 0;
-      if (n_write < 0) {
-        fprintf(stderr, "SSL_write error: %ld", n_write);
-        return -1;
-      }
-    }
-  }
-}
-*/
-
-/*
-static int tls_session_send(http2_session_data *session_data)
-{
-  //SSL *ssl = bufferevent_openssl_get_ssl(session_data->bev);
-
-  TRACER;
-  while(1) {
-    size_t n_write;
-    const uint8_t *data;
-    ssize_t datalen = nghttp2_session_mem_send(session_data->session, &data);
-    if (datalen < 0) {
-      fprintf(stderr, "Fatal error: %s", nghttp2_strerror(datalen));
-      return -1;
-    }
-    if (datalen == 0) {
-      //bufferevent_flush(session_data->bev, EV_WRITE, BEV_FLUSH);
-      return 0;
-    }
-    //n_write = SSL_write(ssl, data, datalen);
-    n_write = bufferevent_write(session_data->bev, data, datalen);
-    //if (session_data->app_ctx->server->config->debug) {
-    //  fprintf(stderr, "%s: n_write=%d\n", __func__, n_write);
-    //}
-    if (n_write < 0) {
-      fprintf(stderr, "SSL_write error: %ld", n_write);
-      return -1;
-    }
-  }
-}
-*/
-
-/*
-static int tls_session_send2(http2_session_data *session_data)
-{
-  SSL *ssl = bufferevent_openssl_get_ssl(session_data->bev);
-
-  TRACER;
-  while(1) {
-    size_t n_write;
-    size_t writeleft;
-    const uint8_t *data;
-    ssize_t datalen = nghttp2_session_mem_send(session_data->session, &data);
-    if (datalen < 0) {
-      fprintf(stderr, "Fatal error: %s", nghttp2_strerror(datalen));
-      return -1;
-    }
-    if (datalen == 0) {
-      return 0;
-    }
-    writeleft = datalen;
-    while (writeleft > 0) {
-      size_t writelen;
-      if (writeleft > 1400) {
-        writelen = 1400;
-      } else {
-        writelen = writeleft;
-      }
-
-      writeleft -= writelen;
-
-      //bufferevent_write(session_data->bev, data, writelen);
-      n_write = SSL_write(ssl, data, writelen);
-      if (session_data->app_ctx->server->config->debug) {
-        fprintf(stderr, "%s: n_write=%ld writelen=%ld writeleft=%ld/%ld\n",
-            __func__, n_write, writelen, writeleft, datalen);
-      }
-      if (n_write < 0) {
-        fprintf(stderr, "SSL_write error: %ld", n_write);
-        return -1;
-      }
-      data += writelen;
-    }
-  }
-}
-*/
-
 /* Read the data in the bufferevent and feed them into nghttp2 library
    function. Invocation of nghttp2_session_mem_recv() may make
    additional pending frames, so call session_send() at the end of the
@@ -423,80 +281,7 @@ static int session_recv(http2_session_data *session_data)
   return 0;
 }
 
-/*
-static int session_recv2(http2_session_data *session_data)
-{
-  int rv, nread;
-  unsigned char data[4096];
-
-  while (1) {
-    nread = bufferevent_read(session_data->bev, data, sizeof(data));
-    TRACER;
-    if (nread <= 0) {
-      return 0;
-    }
-    if (session_data->app_ctx->server->config->debug) {
-      fprintf(stderr, "%s: datalen = %d\n", __func__, nread);
-    }
-    rv = nghttp2_session_mem_recv(session_data->session, data, nread);
-    if(rv < 0) {
-      fprintf(stderr, "Fatal error: %s", nghttp2_strerror(rv));
-      return -1;
-    }
-    TRACER;
-    if(tls_session_send(session_data) != 0) {
-      return -1;
-    }
-    TRACER;
-  }
-}
-*/
-
 #define MRB_HTTP2_TLS_RECORD_SIZE 4096
-
-/*
-static int tls_session_recv(http2_session_data *session_data)
-{
-  SSL *ssl = bufferevent_openssl_get_ssl(session_data->bev);
-  unsigned char data[MRB_HTTP2_TLS_RECORD_SIZE];
-
-  ERR_clear_error();
-  while (1) {
-    int rv, nread;
-    nread = SSL_read(ssl, data, sizeof(data));
-    if (session_data->app_ctx->server->config->debug) {
-      fprintf(stderr, "SSL_read len: %d\n", nread);
-    }
-
-    if (nread == 0) {
-      return -1;
-    } else if (nread < 0) {
-      int err = SSL_get_error(ssl, nread);
-      switch (err) {
-      case SSL_ERROR_WANT_READ:
-        if(session_send(session_data) != 0) {
-          return -1;
-        }
-      case SSL_ERROR_WANT_WRITE:
-        return -1;
-      default:
-        return -1;
-      }
-    }
-
-    TRACER;
-    rv = nghttp2_session_mem_recv(session_data->session, data, nread);
-    if (rv < 0) {
-      fprintf(stderr, "Fatal error: %s", nghttp2_strerror(rv));
-      return -1;
-    }
-    TRACER;
-    if(session_send(session_data) != 0) {
-      return -1;
-    }
-  }
-}
-*/
 
 static ssize_t server_send_callback(nghttp2_session *session,
     const uint8_t *data, size_t length, int flags, void *user_data)
@@ -518,22 +303,6 @@ static ssize_t server_send_callback(nghttp2_session *session,
   TRACER;
   return length;
 }
-
-/* Returns nonzero if the string |s| ends with the substring |sub| */
-/*
-static int ends_with(const char *s, const char *sub)
-{
-  size_t slen = strlen(s);
-  size_t sublen = strlen(sub);
-
-  TRACER;
-  if(slen < sublen) {
-    return 0;
-  }
-  TRACER;
-  return memcmp(s + slen - sublen, sub, sublen) == 0;
-}
-*/
 
 /* Returns int value of hex string character |c| */
 static uint8_t hex_to_uint(uint8_t c)
@@ -588,7 +357,8 @@ static ssize_t upstream_read_callback(nghttp2_session *session,
 {
   ssize_t nread;
   http2_stream_data *stream_data = source->ptr;
-  struct evbuffer* upstream_buf = evhttp_request_get_input_buffer(stream_data->upstream_req);
+  struct evbuffer* upstream_buf =
+    evhttp_request_get_input_buffer(stream_data->upstream_req);
   nread = evbuffer_remove(upstream_buf, buf, length);
   TRACER;
 
@@ -602,14 +372,14 @@ static ssize_t upstream_read_callback(nghttp2_session *session,
       return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
     }
     *data_flags |= NGHTTP2_DATA_FLAG_EOF;
-    //evhttp_request_free(stream_data->upstream_req);
   }
   TRACER;
   return nread;
 }
 
-static int send_upstream_response(app_context *app_ctx, nghttp2_session *session,
-    nghttp2_nv *nva, size_t nvlen, http2_stream_data *stream_data)
+static int send_upstream_response(app_context *app_ctx,
+    nghttp2_session *session, nghttp2_nv *nva, size_t nvlen,
+    http2_stream_data *stream_data)
 {
   int rv;
   mrb_state *mrb = app_ctx->server->mrb;
@@ -646,7 +416,8 @@ static int send_upstream_response(app_context *app_ctx, nghttp2_session *session
   //
   r->phase = MRB_HTTP2_SERVER_LOGGING;
   callback_ruby_block(mrb, app_ctx->self, app_ctx->server->config->callback,
-      app_ctx->server->config->cb_list->logging_cb, app_ctx->server->config->cb_list);
+      app_ctx->server->config->cb_list->logging_cb,
+      app_ctx->server->config->cb_list);
 
   mrb_http2_request_rec_free(mrb, r);
   TRACER;
@@ -941,11 +712,7 @@ static int read_upstream_response(http2_session_data *session_data, app_context 
   }
 
   evhttp_connection_set_timeout(req->evcon, 600);
-
   event_base_dispatch(session_data->upstream_base);
-  //event_base_free(base);
-  //evhttp_connection_free(conn);
-
   TRACER;
 
   return 0;
@@ -1321,28 +1088,6 @@ static int mrb_http2_send_200_response(app_context *app_ctx,
   }
   return 0;
 }
-
-/*
-static int mrb_http2_send_response(app_context *app_ctx,
-    nghttp2_session *session, http2_stream_data *stream_data) {
-
-  mrb_http2_request_rec *r = app_ctx->r;
-
-  nghttp2_nv hdrs[] = {
-    MAKE_NV_CS(":status", r->status_line),
-    MAKE_NV_CS("server", app_ctx->server->config->server_name),
-    MAKE_NV_CS("date", r->date),
-    MAKE_NV_CS("content-length", r->content_length),
-    MAKE_NV_CS("last-modified", r->last_modified)
-  };
-
-  if(send_response(app_ctx, session, hdrs, ARRLEN(hdrs), stream_data) != 0) {
-    close(stream_data->fd);
-    return NGHTTP2_ERR_CALLBACK_FAILURE;
-  }
-  return 0;
-}
-*/
 
 static int mrb_http2_process_request(nghttp2_session *session,
     http2_session_data *session_data, http2_stream_data *stream_data)
