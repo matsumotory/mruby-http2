@@ -829,6 +829,8 @@ void http_request_done(struct evhttp_request *req, void *user_data)
           c->app_ctx->server->config->server_name);
       r->reshdrslen += 1;
       find_via = 1;
+    } else if (memcmp("Connection", header->key, sizeof("Connection") - 1) == 0) {
+      // do nothing
     } else {
       MRB_HTTP2_CREATE_NV_CSCS(mrb, &r->reshdrs[r->reshdrslen], header->key,
           header->value);
