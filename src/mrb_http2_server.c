@@ -889,13 +889,41 @@ static int read_upstream_response(app_context *app_ctx, nghttp2_session *session
 
   len = strlen(r->upstream->host) + sizeof(":65525");
   r->upstream->unparsed_host = mrb_malloc(mrb, len);
-  snprintf(r->upstream->unparsed_host, len, "%s:%ld", r->upstream->host, r->upstream->port);
+  snprintf(r->upstream->unparsed_host, len, "%s:%d", r->upstream->host, r->upstream->port);
   r->upstream->unparsed_host[len] = '\0';
 
   req->major = 1;
   req->minor = 0;
   evhttp_add_header(req->output_headers, "Host", r->upstream->unparsed_host);
   evhttp_add_header(req->output_headers, "Connection", "close");
+
+  int i;
+  char keybuf[4096];
+  char valbuf[4096];
+
+  for (i = 0; i < r->reqhdrlen; i++) {
+    if (memcmp(":", r->reqhdr[i].name, 1) != 0) {
+      memcpy(keybuf, r->reqhdr[i].name, r->reqhdr[i].namelen);
+      keybuf[r->reqhdr[i].namelen] = '\0';
+      memcpy(valbuf, r->reqhdr[i].value, r->reqhdr[i].valuelen);
+      valbuf[r->reqhdr[i].valuelen] = '\0';
+      evhttp_add_header(req->output_headers, keybuf, valbuf);
+    }
+  }
+
+  if (app_ctx->server->config->debug) {
+    int i = 0;
+    struct evkeyval *header;
+    struct evkeyvalq *output_headers = evhttp_request_get_output_headers(req);
+    fprintf(stderr, "== DBUEG: request header at proxy START\n");
+    TAILQ_FOREACH(header, output_headers, next)
+    {
+      fprintf(stderr, "%s: nva[%d]={name=%s, value=%s}\n", __func__, i,
+          header->key, header->value);
+      i++;
+    }
+    fprintf(stderr, "== DBUEG: request header at proxy END\n");
+  }
 
   if (evhttp_make_request(conn, req, EVHTTP_REQ_GET, r->upstream->uri) == -1) {
     mrb_free(mrb, r->upstream->unparsed_host);
