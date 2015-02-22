@@ -892,6 +892,8 @@ static int read_upstream_response(app_context *app_ctx, nghttp2_session *session
   snprintf(r->upstream->unparsed_host, len, "%s:%ld", r->upstream->host, r->upstream->port);
   r->upstream->unparsed_host[len] = '\0';
 
+  req->major = 1;
+  req->minor = 0;
   evhttp_add_header(req->output_headers, "Host", r->upstream->unparsed_host);
   evhttp_add_header(req->output_headers, "Connection", "close");
 
