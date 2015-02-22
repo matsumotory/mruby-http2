@@ -56,7 +56,6 @@ typedef struct http2_stream_data {
   nghttp2_nv nva[MRB_HTTP2_HEADER_MAX];
   size_t nvlen;
   struct evhttp_request *upstream_req;
-  struct event_base *upstream_base;
 } http2_stream_data;
 
 struct mrb_http2_upstream_client {
@@ -73,6 +72,8 @@ typedef struct http2_session_data {
   nghttp2_session *session;
   char *client_addr;
   mrb_http2_conn_rec *conn;
+  struct event_base *upstream_base;
+  struct evhttp_connection *upstream_conn;
 } http2_session_data;
 
 static void mrb_http2_server_free(mrb_state *mrb, void *p)
@@ -195,8 +196,7 @@ static void delete_http2_stream_data(mrb_state *mrb,
     mrb_free(mrb, stream_data->request_body);
   }
   if (stream_data->upstream_req != NULL) {
-    //evhttp_request_free(stream_data->upstream_req);
-    //event_base_free(stream_data->upstream_base);
+    evhttp_request_free(stream_data->upstream_req);
   }
   mrb_free(mrb, stream_data);
 }
@@ -226,6 +226,12 @@ static void delete_http2_session_data(http2_session_data *session_data)
     http2_stream_data *next = stream_data->next;
     delete_http2_stream_data(mrb, stream_data);
     stream_data = next;
+  }
+  if (session_data->upstream_base != NULL) {
+    event_base_free(session_data->upstream_base);
+  }
+  if (session_data->upstream_conn != NULL) {
+    evhttp_connection_free(session_data->upstream_conn);
   }
   mrb_http2_conn_rec_free(mrb, session_data->conn);
   mrb_free(mrb, session_data->client_addr);
@@ -596,6 +602,7 @@ static ssize_t upstream_read_callback(nghttp2_session *session,
       return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
     }
     *data_flags |= NGHTTP2_DATA_FLAG_EOF;
+    //evhttp_request_free(stream_data->upstream_req);
   }
   TRACER;
   return nread;
@@ -843,55 +850,48 @@ void http_request_done(struct evhttp_request *req, void *user_data)
     r->reshdrslen += 1;
   }
 
-
-  c->stream_data->readleft =
-    evbuffer_get_length(evhttp_request_get_input_buffer(req));
+  c->stream_data->readleft = req->body_size;
   c->stream_data->upstream_req = req;
-
-  mrb_free(mrb, r->upstream->unparsed_host);
-  //evhttp_connection_free(c->conn);
 
   TRACER;
 }
 
-static int read_upstream_response(app_context *app_ctx, nghttp2_session *session,
+static int read_upstream_response(http2_session_data *session_data, app_context *app_ctx, nghttp2_session *session,
     http2_stream_data *stream_data)
 {
-  struct event_base *base;
-  struct evhttp_connection *conn;
   struct evhttp_request *req;
   struct mrb_http2_upstream_client *c;
   mrb_http2_request_rec *r = app_ctx->r;
-  mrb_state *mrb = app_ctx->server->mrb;
   size_t len;
   int i;
 
   TRACER;
-  base = event_base_new();
-  conn = evhttp_connection_base_new(base, NULL, r->upstream->host, r->upstream->port);
-  if (conn == NULL) {
-    event_base_free(base);
+  if (session_data->upstream_base == NULL) {
+    session_data->upstream_base = event_base_new();
+  }
+  if (session_data->upstream_conn == NULL) {
+    session_data->upstream_conn = evhttp_connection_base_new(session_data->upstream_base, NULL, r->upstream->host, r->upstream->port);
+  }
+  if (session_data->upstream_conn == NULL) {
     fprintf(stderr, "evhttp_connection_base_new failed");
     return -1;
   }
 
-  c = (struct mrb_http2_upstream_client *)mrb_malloc(app_ctx->server->mrb,
-      sizeof(struct mrb_http2_upstream_client));
+  c = (struct mrb_http2_upstream_client *)alloca(sizeof(struct mrb_http2_upstream_client));
   c->app_ctx = app_ctx;
   c->stream_data = stream_data;
   c->session = session;
-  c->conn = conn;
+  c->conn = session_data->upstream_conn;
 
   req = evhttp_request_new(http_request_done, c);
   if (req == NULL) {
-    event_base_free(base);
     fprintf(stderr, "evhttp_request_new failed");
     return -1;
   }
   evhttp_request_own(req);
 
   len = strlen(r->upstream->host) + sizeof(":65525");
-  r->upstream->unparsed_host = mrb_malloc(mrb, len);
+  r->upstream->unparsed_host = alloca(len);
   snprintf(r->upstream->unparsed_host, len, "%s:%d", r->upstream->host, r->upstream->port);
   r->upstream->unparsed_host[len] = '\0';
 
@@ -934,20 +934,17 @@ static int read_upstream_response(app_context *app_ctx, nghttp2_session *session
     fprintf(stderr, "== DBUEG: request header at proxy END\n");
   }
 
-  if (evhttp_make_request(conn, req, EVHTTP_REQ_GET, r->upstream->uri) == -1) {
-    mrb_free(mrb, r->upstream->unparsed_host);
-    evhttp_connection_free(conn);
+  if (evhttp_make_request(session_data->upstream_conn, req, EVHTTP_REQ_GET, r->upstream->uri) == -1) {
     evhttp_request_free(req);
-    event_base_free(base);
     fprintf(stderr, "evhttp_connection_base_new failed");
     return -1;
   }
 
   evhttp_connection_set_timeout(req->evcon, 600);
-  c->stream_data->upstream_base = base;
 
-  event_base_dispatch(base);
+  event_base_dispatch(session_data->upstream_base);
   //event_base_free(base);
+  //evhttp_connection_free(conn);
 
   TRACER;
 
@@ -1464,7 +1461,7 @@ static int mrb_http2_process_request(nghttp2_session *session,
     }
     // TODO: Set response headers transparently to client.
     // For now, set 200 code.
-    if (read_upstream_response(session_data->app_ctx, session, stream_data) != 0) {
+    if (read_upstream_response(session_data, session_data->app_ctx, session, stream_data) != 0) {
       return  NGHTTP2_ERR_CALLBACK_FAILURE;
     }
 
@@ -1815,6 +1812,8 @@ static http2_session_data* create_http2_session_data(mrb_state *mrb,
     session_data->conn->client_ip = mrb_http2_strcopy(mrb,
         session_data->client_addr, strlen(session_data->client_addr));
   }
+  session_data->upstream_base = NULL;
+  session_data->upstream_conn = NULL;
 
   return session_data;
 }
