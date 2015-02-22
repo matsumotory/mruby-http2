@@ -813,6 +813,7 @@ void http_request_done(struct evhttp_request *req, void *user_data)
   struct mrb_http2_upstream_client *c = user_data;
   mrb_state *mrb = c->app_ctx->server->mrb;
   mrb_http2_request_rec *r = c->app_ctx->r;
+  int find_via = 0;
 
   struct evkeyval *header;
   struct evkeyvalq *input_headers = evhttp_request_get_input_headers(req);
@@ -823,10 +824,23 @@ void http_request_done(struct evhttp_request *req, void *user_data)
 
   TAILQ_FOREACH(header, input_headers, next)
   {
-     MRB_HTTP2_CREATE_NV_CSCS(mrb, &r->reshdrs[r->reshdrslen], header->key,
-         header->value);
-     r->reshdrslen += 1;
+    if (memcmp("Via", header->key, sizeof("Via") - 1) == 0) {
+      MRB_HTTP2_CREATE_NV_CSCS(mrb, &r->reshdrs[r->reshdrslen], header->key,
+          c->app_ctx->server->config->server_name);
+      r->reshdrslen += 1;
+      find_via = 1;
+    } else {
+      MRB_HTTP2_CREATE_NV_CSCS(mrb, &r->reshdrs[r->reshdrslen], header->key,
+          header->value);
+      r->reshdrslen += 1;
+    }
   }
+  if (!find_via) {
+    MRB_HTTP2_CREATE_NV_CS(mrb, &r->reshdrs[r->reshdrslen], "via",
+        c->app_ctx->server->config->server_name);
+    r->reshdrslen += 1;
+  }
+
 
   c->stream_data->readleft =
     evbuffer_get_length(evhttp_request_get_input_buffer(req));
