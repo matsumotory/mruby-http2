@@ -608,9 +608,15 @@ void http_request_done(struct evhttp_request *req, void *user_data)
           c->app_ctx->server->config->server_name);
       r->reshdrslen += 1;
       find_via = 1;
-    } else if (memcmp("Connection", header->key, sizeof("Connection") - 1) == 0) {
+    } else if (strlen(header->key) == sizeof("Connection") - 1 && memcmp("Connection", header->key, sizeof("Connection") - 1) == 0) {
       // do nothing
-    } else if (memcmp("Transfer-Encoding", header->key, sizeof("Transfer-Encoding") - 1) == 0) {
+    } else if (strlen(header->key) == sizeof("Transfer-Encoding") - 1 && memcmp("Transfer-Encoding", header->key, sizeof("Transfer-Encoding") - 1) == 0) {
+      // do nothing
+    } else if (strlen(header->key) == sizeof("Keep-Alive") - 1 && memcmp("Keep-Alive", header->key, sizeof("Keep-Alive") - 1) == 0) {
+      // do nothing
+    } else if (strlen(header->key) == sizeof("Proxy-Connection") - 1 && memcmp("Proxy-Connection", header->key, sizeof("Proxy-Connection") - 1) == 0) {
+      // do nothing
+    } else if (strlen(header->key) == sizeof("Upgrade") - 1 && memcmp("Upgrade", header->key, sizeof("Upgrade") - 1) == 0) {
       // do nothing
     } else {
       MRB_HTTP2_CREATE_NV_CSCS(mrb, &r->reshdrs[r->reshdrslen], header->key,
