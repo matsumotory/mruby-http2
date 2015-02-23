@@ -54,13 +54,6 @@ typedef struct http2_stream_data {
   struct evhttp_request *upstream_req;
 } http2_stream_data;
 
-struct mrb_http2_upstream_client {
-  http2_stream_data *stream_data;
-  nghttp2_session *session;
-  app_context *app_ctx;
-  struct evhttp_connection *conn;
-};
-
 typedef struct http2_session_data {
   http2_stream_data root;
   struct bufferevent *bev;
@@ -71,6 +64,14 @@ typedef struct http2_session_data {
   struct event_base *upstream_base;
   struct evhttp_connection *upstream_conn;
 } http2_session_data;
+
+struct mrb_http2_upstream_client {
+  http2_stream_data *stream_data;
+  http2_session_data *session_data;
+  nghttp2_session *session;
+  app_context *app_ctx;
+  struct evhttp_connection *conn;
+};
 
 static void mrb_http2_server_free(mrb_state *mrb, void *p)
 {
@@ -623,6 +624,7 @@ void http_request_done(struct evhttp_request *req, void *user_data)
 
   c->stream_data->readleft = req->body_size;
   c->stream_data->upstream_req = req;
+  event_base_loopexit(c->session_data->upstream_base, 0);
 
   TRACER;
 }
@@ -652,7 +654,7 @@ static int read_upstream_response(http2_session_data *session_data, app_context 
   c->app_ctx = app_ctx;
   c->stream_data = stream_data;
   c->session = session;
-  c->conn = session_data->upstream_conn;
+  c->session_data = session_data;
 
   req = evhttp_request_new(http_request_done, c);
   if (req == NULL) {
@@ -666,10 +668,10 @@ static int read_upstream_response(http2_session_data *session_data, app_context 
   snprintf(r->upstream->unparsed_host, len, "%s:%d", r->upstream->host, r->upstream->port);
   r->upstream->unparsed_host[len] = '\0';
 
-  req->major = 1;
-  req->minor = 0;
   evhttp_add_header(req->output_headers, "Host", r->upstream->unparsed_host);
-  evhttp_add_header(req->output_headers, "Connection", "close");
+  //evhttp_add_header(req->output_headers, "Connection", "close");
+  //req->major = 1;
+  //req->minor = 0;
 
   for (i = 0; i < r->reqhdrlen; i++) {
     if (memcmp(":", r->reqhdr[i].name, 1) != 0) {
