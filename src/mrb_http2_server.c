@@ -358,8 +358,12 @@ static ssize_t upstream_read_callback(nghttp2_session *session,
 {
   ssize_t nread;
   http2_stream_data *stream_data = source->ptr;
-  struct evbuffer* upstream_buf =
-    evhttp_request_get_input_buffer(stream_data->upstream_req);
+  struct evbuffer* upstream_buf;
+
+  if (stream_data->upstream_req == NULL) {
+    return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
+  }
+  upstream_buf = evhttp_request_get_input_buffer(stream_data->upstream_req);
   nread = evbuffer_remove(upstream_buf, buf, length);
   TRACER;
 
@@ -595,7 +599,15 @@ void http_request_done(struct evhttp_request *req, void *user_data)
   int find_via = 0;
 
   struct evkeyval *header;
-  struct evkeyvalq *input_headers = evhttp_request_get_input_headers(req);
+  struct evkeyvalq *input_headers;
+
+  if (req != NULL) {
+    input_headers = evhttp_request_get_input_headers(req);
+  } else {
+    c->stream_data->upstream_req = req;
+    event_base_loopexit(c->session_data->upstream_base, 0);
+    return;
+  }
 
   TRACER;
   set_status_record(r, req->response_code);
@@ -723,6 +735,9 @@ static int read_upstream_response(http2_session_data *session_data, app_context 
 
   evhttp_connection_set_timeout(req->evcon, 600);
   event_base_dispatch(session_data->upstream_base);
+  if (stream_data->upstream_req == NULL) {
+    return -1;
+  }
   TRACER;
 
   return 0;
