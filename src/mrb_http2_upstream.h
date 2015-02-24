@@ -22,8 +22,12 @@ typedef struct {
   // upstream uri like "/css/base.css"
   char *uri;
 
+  // connection timeout
   unsigned int timeout;
 
+  // upstream protocol HTTP/1.1 or HTTP/1.0
+  unsigned int proto_major;
+  unsigned int proto_minor;
 } mrb_http2_upstream;
 
 #endif
