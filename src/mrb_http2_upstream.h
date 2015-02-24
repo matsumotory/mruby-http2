@@ -9,46 +9,27 @@
 
 #include "mruby.h"
 
-typedef enum {
-  MRB_HTTP_PROXY_REVERSE,
-  MRB_HTTP_PROXY_NONE
-} upstream_type;
-
 typedef struct {
+  // 127.0.0.1
+  char *host;
 
-  // response data
-  char *data;
+  // 127.0.0.1:8080
+  char *unparsed_host;
 
-  // response length
-  size_t len;
-
-  // response header object
-  mrb_value headers;
-
-  // response body object
-  mrb_value body;
-
-  // response status code
-  int status_code;
-
-  // response status code
-  uint64_t content_length;
-
-} upstream_response;
-
-typedef struct {
-  // upstrema type
-  upstream_type type;
-
-  // upstream server like "http://127.0.0.1:8080/"
-  char *server;
+  // 8080
+  int port;
 
   // upstream uri like "/css/base.css"
   char *uri;
 
-  // response data from upstream server
-  upstream_response *res;
+  // connection timeout
+  unsigned int timeout;
 
+  // upstream protocol HTTP/1.1 or HTTP/1.0
+  unsigned int proto_major;
+  unsigned int proto_minor;
+
+  unsigned int keepalive:1;
 } mrb_http2_upstream;
 
 #endif
