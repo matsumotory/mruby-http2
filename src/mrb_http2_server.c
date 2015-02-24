@@ -44,6 +44,7 @@ typedef struct http2_stream_data {
   char *request_args;
   char *request_body;
   char *unparsed_uri;
+  char *percent_encode_uri;
   char method[16];
   char scheme[8];
   int32_t stream_id;
@@ -169,6 +170,7 @@ static http2_stream_data* create_http2_stream_data(mrb_state *mrb,
   stream_data->request_args = NULL;
   stream_data->request_path = NULL;
   stream_data->unparsed_uri = NULL;
+  stream_data->percent_encode_uri = NULL;
   stream_data->method[0] = '\0';
   stream_data->scheme[0] = '\0';
   stream_data->upstream_req = NULL;
@@ -185,6 +187,7 @@ static void delete_http2_stream_data(mrb_state *mrb,
     close(stream_data->fd);
   }
   mrb_free(mrb, stream_data->unparsed_uri);
+  mrb_free(mrb, stream_data->percent_encode_uri);
   if (stream_data->request_args != NULL) {
     mrb_free(mrb, stream_data->request_path);
     mrb_free(mrb, stream_data->request_args);
@@ -975,6 +978,7 @@ static int server_on_header_callback(nghttp2_session *session,
 
     if(namelen == sizeof(PATH) - 1 && memcmp(":p", name, 2) == 0) {
       size_t j;
+      stream_data->percent_encode_uri = mrb_http2_strcopy(mrb, (const char *)value, valuelen);
       stream_data->unparsed_uri = percent_decode(mrb, value, valuelen);
       for(j = 0; j < valuelen && value[j] != '?'; ++j);
       if (j == valuelen) {
@@ -1192,6 +1196,7 @@ static int mrb_http2_process_request(nghttp2_session *session,
   session_data->app_ctx->r->scheme = stream_data->scheme;
   session_data->app_ctx->r->method = stream_data->method;
   session_data->app_ctx->r->unparsed_uri = stream_data->unparsed_uri;
+  session_data->app_ctx->r->percent_encode_uri = stream_data->percent_encode_uri;
   session_data->app_ctx->r->uri = stream_data->request_path;
   session_data->app_ctx->r->request_body = stream_data->request_body;
   session_data->app_ctx->r->args = stream_data->request_args;
@@ -2153,6 +2158,14 @@ static mrb_value mrb_http2_server_unparsed_uri(mrb_state *mrb, mrb_value self)
   return mrb_str_new_cstr(mrb, r->unparsed_uri);
 }
 
+static mrb_value mrb_http2_server_percent_encode_uri(mrb_state *mrb, mrb_value self)
+{
+  mrb_http2_data_t *data = DATA_PTR(self);
+  mrb_http2_request_rec *r = data->r;
+
+  return mrb_str_new_cstr(mrb, r->percent_encode_uri);
+}
+
 static mrb_value mrb_http2_server_args(mrb_state *mrb, mrb_value self)
 {
   mrb_http2_data_t *data = DATA_PTR(self);
@@ -2256,7 +2269,7 @@ static void mrb_http2_upstream_init(mrb_state *mrb, mrb_value self)
       sizeof(mrb_http2_upstream));
   memset(r->upstream, 0, sizeof(mrb_http2_upstream));
 
-  r->upstream->uri = r->uri;
+  r->upstream->uri = r->percent_encode_uri;
   r->upstream->host = NULL;
   r->upstream->port = 80;
   r->upstream->timeout = 600;
@@ -2616,6 +2629,7 @@ void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
   mrb_define_method(mrb, server, "filename=", mrb_http2_server_set_filename, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, server, "uri", mrb_http2_server_uri, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "unparsed_uri", mrb_http2_server_unparsed_uri, MRB_ARGS_NONE());
+  mrb_define_method(mrb, server, "percent_encode_uri", mrb_http2_server_percent_encode_uri, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "args", mrb_http2_server_args, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "method", mrb_http2_server_method, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "scheme", mrb_http2_server_scheme, MRB_ARGS_NONE());

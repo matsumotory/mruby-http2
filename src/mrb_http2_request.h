@@ -97,7 +97,10 @@ typedef struct {
   // request uri
   char *uri;
 
-  // request unparsed uri
+  // request unparsed uri was encoded
+  char *percent_encode_uri;
+
+  // request unparsed uri was decoded
   char *unparsed_uri;
 
   // request args
