@@ -22,6 +22,8 @@ typedef struct {
   // upstream uri like "/css/base.css"
   char *uri;
 
+  unsigned int timeout;
+
 } mrb_http2_upstream;
 
 #endif

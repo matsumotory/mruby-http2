@@ -733,7 +733,7 @@ static int read_upstream_response(http2_session_data *session_data, app_context 
     return -1;
   }
 
-  evhttp_connection_set_timeout(req->evcon, 600);
+  evhttp_connection_set_timeout(req->evcon, r->upstream->timeout);
   event_base_dispatch(session_data->upstream_base);
   if (stream_data->upstream_req == NULL) {
     return -1;
@@ -2257,6 +2257,23 @@ static void mrb_http2_upstream_init(mrb_state *mrb, mrb_value self)
   r->upstream->uri = r->uri;
   r->upstream->host = NULL;
   r->upstream->port = 80;
+  r->upstream->timeout = 600;
+}
+
+static mrb_value mrb_http2_server_set_upstream_timeout(mrb_state *mrb,
+    mrb_value self)
+{
+  mrb_http2_data_t *data = DATA_PTR(self);
+  mrb_http2_request_rec *r = data->r;
+  mrb_int timeout;
+
+  mrb_get_args(mrb, "i", &timeout);
+  if (!r->upstream) {
+    mrb_http2_upstream_init(mrb, self);
+  }
+  r->upstream->timeout = (int)timeout;
+
+  return mrb_fixnum_value(timeout);
 }
 
 static mrb_value mrb_http2_server_upstream_port(mrb_state *mrb, mrb_value self)
@@ -2284,6 +2301,7 @@ static mrb_value mrb_http2_server_set_upstream_port(mrb_state *mrb, mrb_value se
 
   return self;
 }
+
 static mrb_value mrb_http2_server_upstream_host(mrb_state *mrb, mrb_value self)
 {
   mrb_http2_data_t *data = DATA_PTR(self);
@@ -2555,6 +2573,7 @@ void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
   mrb_define_method(mrb, server, "set_logging_cb", mrb_http2_server_set_logging_cb, MRB_ARGS_REQ(1));
 
   // upstream methods
+  mrb_define_method(mrb, server, "upstream_timeout=", mrb_http2_server_set_upstream_timeout, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, server, "upstream_host", mrb_http2_server_upstream_host, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "upstream_host=", mrb_http2_server_set_upstream_host, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, server, "upstream_port", mrb_http2_server_upstream_port, MRB_ARGS_NONE());
