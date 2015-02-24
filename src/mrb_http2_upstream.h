@@ -28,6 +28,8 @@ typedef struct {
   // upstream protocol HTTP/1.1 or HTTP/1.0
   unsigned int proto_major;
   unsigned int proto_minor;
+
+  unsigned int keepalive:1;
 } mrb_http2_upstream;
 
 #endif

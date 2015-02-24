@@ -691,6 +691,9 @@ static int read_upstream_response(http2_session_data *session_data, app_context 
   evhttp_add_header(req->output_headers, "Host", r->upstream->unparsed_host);
   req->major = r->upstream->proto_major;
   req->minor = r->upstream->proto_minor;
+  if (!r->upstream->keepalive && r->upstream->proto_minor == 1) {
+    evhttp_add_header(req->output_headers, "Connection", "close");
+  }
 
   for (i = 0; i < r->reqhdrlen; i++) {
     if (memcmp(":", r->reqhdr[i].name, 1) != 0) {
@@ -2259,6 +2262,7 @@ static void mrb_http2_upstream_init(mrb_state *mrb, mrb_value self)
   r->upstream->timeout = 600;
   r->upstream->proto_major = 1;
   r->upstream->proto_minor = 1;
+  r->upstream->keepalive = 1;
 }
 
 static mrb_value mrb_http2_server_set_upstream_proto_major(mrb_state *mrb,
@@ -2300,6 +2304,22 @@ static mrb_value mrb_http2_server_set_upstream_proto_minor(mrb_state *mrb,
   r->upstream->proto_minor = (int)minor;
 
   return mrb_fixnum_value(r->upstream->proto_minor);
+}
+
+static mrb_value mrb_http2_server_set_upstream_keepalive(mrb_state *mrb,
+    mrb_value self)
+{
+  mrb_http2_data_t *data = DATA_PTR(self);
+  mrb_http2_request_rec *r = data->r;
+  mrb_value keepalive;
+
+  mrb_get_args(mrb, "o", &keepalive);
+  if (!r->upstream) {
+    mrb_http2_upstream_init(mrb, self);
+  }
+  r->upstream->keepalive = mrb_bool(keepalive);
+
+  return keepalive;
 }
 
 static mrb_value mrb_http2_server_set_upstream_timeout(mrb_state *mrb,
@@ -2615,6 +2635,7 @@ void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
   mrb_define_method(mrb, server, "set_logging_cb", mrb_http2_server_set_logging_cb, MRB_ARGS_REQ(1));
 
   // upstream methods
+  mrb_define_method(mrb, server, "upstream_keepalive=", mrb_http2_server_set_upstream_keepalive, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, server, "upstream_proto_major=", mrb_http2_server_set_upstream_proto_major, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, server, "upstream_proto_minor=", mrb_http2_server_set_upstream_proto_minor, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, server, "upstream_timeout=", mrb_http2_server_set_upstream_timeout, MRB_ARGS_REQ(1));
