@@ -605,7 +605,7 @@ void http_request_done(struct evhttp_request *req, void *user_data)
     input_headers = evhttp_request_get_input_headers(req);
   } else {
     c->stream_data->upstream_req = req;
-    event_base_loopexit(c->session_data->upstream_base, 0);
+    event_base_loopexit(c->session_data->upstream_base, NULL);
     return;
   }
 
