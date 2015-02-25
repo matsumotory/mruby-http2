@@ -1324,10 +1324,19 @@ static int mrb_http2_process_request(nghttp2_session *session,
   r->args = stream_data->request_args;
 
   if (config->debug) {
-    fprintf(stderr,
-        "%s %s (%s + %s) is mapped to %s document_root=%s before map_to_strage_cb request_body=(%s)\n",
-        session_data->client_addr, r->unparsed_uri, r->uri, r->args,
-        r->filename, config->document_root, r->request_body);
+    fprinft(stderr, "=== process request information start ===\n");
+    fprintf(stderr, "percent_encode_uri: %s\n", r->percent_encode_uri);
+    fprintf(stderr, "unparsed_uri: %s\n", r->unparsed_uri);
+    fprintf(stderr, "uri: %s\n", r->uri);
+    fprintf(stderr, "request_body: %s\n", r->request_body);
+    fprintf(stderr, "args: %s\n", r->args);
+    fprintf(stderr, "filename: %s\n", r->filename);
+    fprintf(stderr, "hostname: %s\n", r->authority);
+    fprintf(stderr, "scheme: %s\n", r->scheme);
+    fprintf(stderr, "method: %s\n", r->method);
+    fprintf(stderr, "client_addr: %s\n", session_data->client_addr);
+    fprintf(stderr, "document_root: %s\n", config->document_root);
+    fprinft(stderr, "=== process request information end ===\n");
   }
 
   //
