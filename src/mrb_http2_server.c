@@ -2755,6 +2755,8 @@ void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
   mrb_define_method(mrb, server, "method", mrb_http2_server_method, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "scheme", mrb_http2_server_scheme, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "authority", mrb_http2_server_authority, MRB_ARGS_NONE());
+  mrb_define_method(mrb, server, "host", mrb_http2_server_authority, MRB_ARGS_NONE());
+  mrb_define_method(mrb, server, "hostname", mrb_http2_server_authority, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "body", mrb_http2_server_body, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "document_root", mrb_http2_server_document_root, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "client_ip", mrb_http2_server_client_ip, MRB_ARGS_NONE());
