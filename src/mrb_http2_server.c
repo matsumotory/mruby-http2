@@ -1205,7 +1205,9 @@ static int mrb_http2_process_request(nghttp2_session *session,
     return 0;
   }
   if (session_data->app_ctx->server->config->debug) {
-    fprintf(stderr, "%s GET %s\n", session_data->client_addr,
+    fprintf(stderr, "from %s to %s %s %s\n", session_data->client_addr,
+        stream_data->authority,
+        stream_data->method,
         stream_data->request_path);
   }
   TRACER;
