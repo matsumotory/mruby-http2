@@ -683,6 +683,7 @@ static int read_upstream_response(http2_session_data *session_data, app_context 
   char *cookiebuf = NULL;
   size_t cookiebuflen = 0;
   size_t cookiebaselen = 0;
+  char root_path[] = "/";
 
   TRACER;
   if (session_data->upstream_base == NULL) {
@@ -783,6 +784,9 @@ static int read_upstream_response(http2_session_data *session_data, app_context 
     if (app_ctx->server->config->debug) {
       fprintf(stderr, "== DEBUG: send GET method to upstream server\n");
     }
+  }
+  if (r->upstream->uri == NULL) {
+    r->upstream->uri = root_path;
   }
 
   if (evhttp_make_request(session_data->upstream_conn, req, method, r->upstream->uri) == -1) {
@@ -2386,7 +2390,7 @@ static void mrb_http2_upstream_init(mrb_state *mrb, mrb_value self)
       sizeof(mrb_http2_upstream));
   memset(r->upstream, 0, sizeof(mrb_http2_upstream));
 
-  r->upstream->uri = r->percent_encode_uri;
+  r->upstream->uri = NULL;
   r->upstream->host = NULL;
   r->upstream->port = 80;
   r->upstream->timeout = 600;
