@@ -136,6 +136,22 @@ size_t mrb_http2_add_nv(nghttp2_nv *nva, size_t nvlen, nghttp2_nv *nv)
   return nvlen;
 }
 
+int mrb_http2_strrep(char *buf, char *before, char *after)
+{
+    char *ptr;
+    size_t beforelen, afterlen;
+
+    beforelen = strlen(before);
+    afterlen = strlen(after);
+
+    if (beforelen == 0 || (ptr = strstr(buf, before)) == NULL) {
+      return 0;
+    } 
+    memmove(ptr + afterlen, ptr + beforelen, strlen(buf) - (ptr + beforelen - buf) + 1);
+    memcpy(ptr, after, afterlen);
+    return 1;
+}
+
 char *mrb_http2_strcat(mrb_state *mrb, const char *s1, const char *s2)
 {
   size_t len1 = strlen(s1);

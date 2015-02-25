@@ -92,6 +92,7 @@ void mrb_http2_create_nv(mrb_state *mrb, nghttp2_nv *nv, const uint8_t *name,
     size_t namelen, const uint8_t *value, size_t valuelen);
 size_t mrb_http2_add_nv(nghttp2_nv *nva, size_t nvlen, nghttp2_nv *nv);
 
+int mrb_http2_strrep(char *buf, char *before, char *after);
 char *mrb_http2_strcat(mrb_state *mrb, const char *s1, const char *s2);
 char *mrb_http2_strcopy(mrb_state *mrb, const char *s, size_t len);
 char *strcopy(const char *s, size_t len);

@@ -47,6 +47,7 @@ typedef struct http2_stream_data {
   char *percent_encode_uri;
   char method[16];
   char scheme[8];
+  char authority[1024];
   int32_t stream_id;
   int fd;
   int64_t readleft;
@@ -173,6 +174,7 @@ static http2_stream_data* create_http2_stream_data(mrb_state *mrb,
   stream_data->percent_encode_uri = NULL;
   stream_data->method[0] = '\0';
   stream_data->scheme[0] = '\0';
+  stream_data->authority[0] = '\0';
   stream_data->upstream_req = NULL;
 
   add_stream(session_data, stream_data);
@@ -633,6 +635,22 @@ void http_request_done(struct evhttp_request *req, void *user_data)
       // do nothing
     } else if (strlen(header->key) == sizeof("Upgrade") - 1 && memcmp("Upgrade", header->key, sizeof("Upgrade") - 1) == 0) {
       // do nothing
+    } else if (strlen(header->key) == sizeof("Location") - 1 && memcmp("Location", header->key, sizeof("Location") - 1) == 0) {
+      char *buf;
+      // "+ 1" is to http[s]
+      buf = alloca(strlen(header->value) - strlen(r->upstream->unparsed_host) + strlen(r->authority) + 1);
+      memcpy(buf, header->value, strlen(header->value) + 1);
+      mrb_http2_strrep(buf, r->upstream->unparsed_host, r->authority);
+
+      // scheme checke
+      // TODO: http(front) <=> https(back) check
+      if (strlen(r->scheme) == 5 && memcmp(buf, r->scheme, strlen(r->scheme)) != 0) {
+        mrb_http2_strrep(buf, "http", r->scheme);
+      }
+
+      MRB_HTTP2_CREATE_NV_CSCS(mrb, &r->reshdrs[r->reshdrslen], header->key,
+          buf);
+      r->reshdrslen += 1;
     } else {
       MRB_HTTP2_CREATE_NV_CSCS(mrb, &r->reshdrs[r->reshdrslen], header->key,
           header->value);
@@ -971,6 +989,13 @@ static int server_on_header_callback(nghttp2_session *session,
     stream_data->nvlen = mrb_http2_add_nv(stream_data->nva,
         stream_data->nvlen, &nv);
 
+    if(namelen == sizeof(":authority") - 1 && memcmp(":a", name, 2) == 0) {
+        for (i = 0; i < valuelen; i++) {
+          stream_data->authority[i] = value[i];
+        }
+        stream_data->authority[valuelen] = '\0';
+    }
+
     if(namelen == sizeof(":method") - 1 && memcmp(":m", name, 2) == 0) {
         for (i = 0; i < valuelen; i++) {
           stream_data->method[i] = value[i];
@@ -1202,6 +1227,7 @@ static int mrb_http2_process_request(nghttp2_session *session,
       session_data->app_ctx->server->config->document_root,
       stream_data->request_path);
 
+  session_data->app_ctx->r->authority = stream_data->authority;
   session_data->app_ctx->r->scheme = stream_data->scheme;
   session_data->app_ctx->r->method = stream_data->method;
   session_data->app_ctx->r->unparsed_uri = stream_data->unparsed_uri;
@@ -2191,6 +2217,14 @@ static mrb_value mrb_http2_server_method(mrb_state *mrb, mrb_value self)
   return mrb_str_new_cstr(mrb, r->method);
 }
 
+static mrb_value mrb_http2_server_authority(mrb_state *mrb, mrb_value self)
+{
+  mrb_http2_data_t *data = DATA_PTR(self);
+  mrb_http2_request_rec *r = data->r;
+
+  return mrb_str_new_cstr(mrb, r->authority);
+}
+
 static mrb_value mrb_http2_server_scheme(mrb_state *mrb, mrb_value self)
 {
   mrb_http2_data_t *data = DATA_PTR(self);
@@ -2642,6 +2676,7 @@ void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
   mrb_define_method(mrb, server, "args", mrb_http2_server_args, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "method", mrb_http2_server_method, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "scheme", mrb_http2_server_scheme, MRB_ARGS_NONE());
+  mrb_define_method(mrb, server, "authority", mrb_http2_server_authority, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "body", mrb_http2_server_body, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "document_root", mrb_http2_server_document_root, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "client_ip", mrb_http2_server_client_ip, MRB_ARGS_NONE());

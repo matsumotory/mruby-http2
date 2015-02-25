@@ -112,6 +112,9 @@ typedef struct {
   // request scheme
   char *scheme;
 
+  // request authority(hostname and port)
+  char *authority;
+
   // request body
   char *request_body;
 
