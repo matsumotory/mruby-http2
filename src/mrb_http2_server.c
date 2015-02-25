@@ -1353,26 +1353,6 @@ static int mrb_http2_process_request(nghttp2_session *session,
         session_data->app_ctx->r->uri, session_data->app_ctx->r->filename);
   }
 
-  // check proxy config
-  if (session_data->app_ctx->r->upstream && session_data->app_ctx->r->upstream->host) {
-    if (session_data->app_ctx->server->config->debug) {
-      fprintf(stderr, "found upstream: server:%s:%d uri:%s\n",
-          session_data->app_ctx->r->upstream->host,
-          session_data->app_ctx->r->upstream->port,
-          session_data->app_ctx->r->upstream->uri);
-    }
-    // TODO: Set response headers transparently to client.
-    // For now, set 200 code.
-    if (read_upstream_response(session_data, session_data->app_ctx, session, stream_data) != 0) {
-      return  NGHTTP2_ERR_CALLBACK_FAILURE;
-    }
-
-    if (upstream_reply(session_data->app_ctx, session, stream_data) != 0) {
-      return  NGHTTP2_ERR_CALLBACK_FAILURE;
-    }
-    return 0;
-  }
-
   //
   // "set_access_checker" callback ruby block
   //
@@ -1388,6 +1368,24 @@ static int mrb_http2_process_request(nghttp2_session *session,
       && session_data->app_ctx->r->status != HTTP_OK) {
     if(error_reply(session_data->app_ctx, session, stream_data) != 0) {
       return NGHTTP2_ERR_CALLBACK_FAILURE;
+    }
+    return 0;
+  }
+
+  // check proxy config
+  if (session_data->app_ctx->r->upstream && session_data->app_ctx->r->upstream->host) {
+    if (session_data->app_ctx->server->config->debug) {
+      fprintf(stderr, "found upstream: server:%s:%d uri:%s\n",
+          session_data->app_ctx->r->upstream->host,
+          session_data->app_ctx->r->upstream->port,
+          session_data->app_ctx->r->upstream->uri);
+    }
+    if (read_upstream_response(session_data, session_data->app_ctx, session, stream_data) != 0) {
+      return  NGHTTP2_ERR_CALLBACK_FAILURE;
+    }
+
+    if (upstream_reply(session_data->app_ctx, session, stream_data) != 0) {
+      return  NGHTTP2_ERR_CALLBACK_FAILURE;
     }
     return 0;
   }
