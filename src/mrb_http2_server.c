@@ -752,11 +752,20 @@ static int read_upstream_response(http2_session_data *session_data, app_context 
   }
 
   // POST check
-  if (memcmp(r->method, "POST", 4) == 0 && r->request_body != NULL) {
-    evbuffer_add(req->output_buffer, r->request_body, strlen(r->request_body));
+  if (memcmp(r->method, "POST", 4) == 0) {
+    if (r->request_body != NULL) {
+      evbuffer_add(req->output_buffer, r->request_body, strlen(r->request_body));
+    }
     method = EVHTTP_REQ_POST;
+    if (app_ctx->server->config->debug) {
+      fprintf(stderr, "== DEBUG: send POST method to upstream server\n");
+      fprintf(stderr, "== DEBUG: request body=%s\n", r->request_body);
+    }
   } else {
     method = EVHTTP_REQ_GET;
+    if (app_ctx->server->config->debug) {
+      fprintf(stderr, "== DEBUG: send GET method to upstream server\n");
+    }
   }
 
   if (evhttp_make_request(session_data->upstream_conn, req, method, r->upstream->uri) == -1) {
@@ -1386,19 +1395,28 @@ static int server_on_frame_recv_callback(nghttp2_session *session,
   http2_session_data *session_data = (http2_session_data *)user_data;
   http2_stream_data *stream_data;
 
-  if (frame->hd.type != NGHTTP2_HEADERS || frame->headers.cat != NGHTTP2_HCAT_REQUEST) {
-    return 0;
+  TRACER;
+  switch(frame->hd.type) {
+  case NGHTTP2_DATA:
+  case NGHTTP2_HEADERS:
+    /* Check that the client request has finished */
+    if(frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {
+      stream_data = nghttp2_session_get_stream_user_data(session,
+          frame->hd.stream_id);
+      /* For DATA and HEADERS frame, this callback may be called after
+         on_stream_close_callback. Check that stream still alive. */
+      if(!stream_data) {
+        return 0;
+      }
+
+      return mrb_http2_process_request(session, session_data, stream_data);
+    }
+    break;
+  default:
+    break;
   }
 
-  stream_data = nghttp2_session_get_stream_user_data(session,
-      frame->hd.stream_id);
-  /* For DATA and HEADERS frame, this callback may be called after
-     on_stream_close_callback. Check that stream still alive. */
-  if(!stream_data) {
-    return 0;
-  }
-
-  return mrb_http2_process_request(session, session_data, stream_data);
+  return 0;
 }
 
 #define MRB_HTTP2_MAX_POST_DATA_SIZE 1 << 16

@@ -28,6 +28,7 @@ void mrb_http2_request_rec_free(mrb_state *mrb, mrb_http2_request_rec *r)
     r->conn = NULL;
   }
   if (r->reqhdr != NULL) {
+    mrb_http2_free_nva(mrb, r->reqhdr, r->reqhdrlen);
     r->reqhdr = NULL;
   }
 
