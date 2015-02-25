@@ -1324,7 +1324,7 @@ static int mrb_http2_process_request(nghttp2_session *session,
   r->args = stream_data->request_args;
 
   if (config->debug) {
-    fprinft(stderr, "=== process request information start ===\n");
+    fprintf(stderr, "=== process request information start ===\n");
     fprintf(stderr, "percent_encode_uri: %s\n", r->percent_encode_uri);
     fprintf(stderr, "unparsed_uri: %s\n", r->unparsed_uri);
     fprintf(stderr, "uri: %s\n", r->uri);
