@@ -1489,11 +1489,21 @@ static int server_on_data_chunk_recv_callback(nghttp2_session *session,
   http2_stream_data *stream_data = nghttp2_session_get_stream_user_data(session,
       stream_id);
   mrb_state *mrb = session_data->app_ctx->server->mrb;
+  int rv;
 
+  if (session_data->app_ctx->server->config->debug) {
+    fprintf(stderr, "%s: datalen = %ld\n", __func__, len);
+  }
   // TODO: buffering and stored file or memory, currently store len byte
   // when callback only once
   if (stream_data->request_body != NULL) {
     fprintf(stderr, "request_body was already storead, now stored only once");
+    rv = nghttp2_submit_rst_stream(session, NGHTTP2_FLAG_NONE,
+        stream_data->stream_id, NGHTTP2_INTERNAL_ERROR);
+    if(rv != 0) {
+      fprintf(stderr, "Fatal error: %s", nghttp2_strerror(rv));
+      return NGHTTP2_ERR_CALLBACK_FAILURE;
+    }
     return 0;
   }
   if (len > MRB_HTTP2_MAX_POST_DATA_SIZE) {
