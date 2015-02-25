@@ -1336,7 +1336,7 @@ static int mrb_http2_process_request(nghttp2_session *session,
     fprintf(stderr, "method: %s\n", r->method);
     fprintf(stderr, "client_addr: %s\n", session_data->client_addr);
     fprintf(stderr, "document_root: %s\n", config->document_root);
-    fprinft(stderr, "=== process request information end ===\n");
+    fprintf(stderr, "=== process request information end ===\n");
   }
 
   //
