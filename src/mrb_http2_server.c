@@ -676,9 +676,13 @@ static int read_upstream_response(http2_session_data *session_data, app_context 
   struct evhttp_request *req;
   struct mrb_http2_upstream_client *c;
   mrb_http2_request_rec *r = app_ctx->r;
+  mrb_state *mrb = app_ctx->server->mrb;
   size_t len;
   int i;
   int method;
+  char *cookiebuf = NULL;
+  size_t cookiebuflen = 0;
+  size_t cookiebaselen = 0;
 
   TRACER;
   if (session_data->upstream_base == NULL) {
@@ -722,19 +726,33 @@ static int read_upstream_response(http2_session_data *session_data, app_context 
       char keybuf[4096], valbuf[4096];
       size_t len;
 
-      len = r->reqhdr[i].namelen;
-      if (len > 4096)
-        len = 4096;
-      memcpy(keybuf, r->reqhdr[i].name, len);
-      keybuf[len] = '\0';
+      if (memcmp("cookie", r->reqhdr[i].name, 6) == 0) {
+        cookiebaselen = cookiebuflen;
+        cookiebuflen += r->reqhdr[i].valuelen + 2;
+        cookiebuf = mrb_realloc(mrb, cookiebuf, cookiebuflen);      
+        memcpy(cookiebuf + cookiebaselen, r->reqhdr[i].value, r->reqhdr[i].valuelen);
+        memcpy(cookiebuf + cookiebaselen + r->reqhdr[i].valuelen, "; ", 2);
+      } else {
+        len = r->reqhdr[i].namelen;
+        if (len > 4096)
+          len = 4096;
+        memcpy(keybuf, r->reqhdr[i].name, len);
+        keybuf[len] = '\0';
 
-      len = r->reqhdr[i].valuelen;
-      if (len > 4096)
-        len = 4096;
-      memcpy(valbuf, r->reqhdr[i].value, len);
-      valbuf[len] = '\0';
-      evhttp_add_header(req->output_headers, keybuf, valbuf);
+        len = r->reqhdr[i].valuelen;
+        if (len > 4096)
+          len = 4096;
+        memcpy(valbuf, r->reqhdr[i].value, len);
+        valbuf[len] = '\0';
+
+        evhttp_add_header(req->output_headers, keybuf, valbuf);
+      }
     }
+  }
+  if (cookiebuf != NULL) {
+    cookiebuf[cookiebuflen] = '\0';
+    evhttp_add_header(req->output_headers, "Cookie", cookiebuf);
+    mrb_free(mrb, cookiebuf);
   }
 
   if (app_ctx->server->config->debug) {
