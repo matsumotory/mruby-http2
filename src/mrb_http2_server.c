@@ -985,6 +985,61 @@ static int mruby_reply(app_context *app_ctx, nghttp2_session *session,
   return 0;
 }
 
+/* Inspired by h2o header lookup.  https://github.com/h2o/h2o */
+/* Reference as nghttp2 header lookup.  https://github.com/tatsuhiro-t/nghttp2 */
+
+static int memeq(const void *a, const void *b, size_t n) {
+  return memcmp(a, b, n) == 0;
+}
+
+#define streq(A, B, N) ((sizeof((A)) - 1) == (N) && memeq((A), (B), (N)))
+
+typedef enum {
+  NGHTTP2_TOKEN__AUTHORITY,
+  NGHTTP2_TOKEN__METHOD,
+  NGHTTP2_TOKEN__PATH,
+  NGHTTP2_TOKEN__SCHEME,
+  NGHTTP2_TOKEN_HOST,
+} nghttp2_token;
+
+static int lookup_token(const uint8_t *name, size_t namelen) {
+  switch (namelen) {
+  case 5:
+    switch (name[namelen - 1]) {
+    case 'h':
+      if (streq(":pat", name, 4)) {
+        return NGHTTP2_TOKEN__PATH;
+      }
+      break;
+    }
+    break;
+  case 7:
+    switch (name[namelen - 1]) {
+    case 'd':
+      if (streq(":metho", name, 6)) {
+        return NGHTTP2_TOKEN__METHOD;
+      }
+      break;
+    case 'e':
+      if (streq(":schem", name, 6)) {
+        return NGHTTP2_TOKEN__SCHEME;
+      }
+      break;
+    }
+    break;
+  case 10:
+    switch (name[namelen - 1]) {
+    case 'y':
+      if (streq(":authorit", name, 9)) {
+        return NGHTTP2_TOKEN__AUTHORITY;
+      }
+      break;
+    }
+    break;
+  }
+  return -1;
+}
+
 static int server_on_header_callback(nghttp2_session *session,
     const nghttp2_frame *frame, const uint8_t *name, size_t namelen,
     const uint8_t *value, size_t valuelen, uint8_t flags, void *user_data)
@@ -993,7 +1048,7 @@ static int server_on_header_callback(nghttp2_session *session,
   mrb_state *mrb = session_data->app_ctx->server->mrb;
 
   http2_stream_data *stream_data;
-  int i;
+  size_t i, j;
   nghttp2_nv nv;
 
   if (frame->hd.type != NGHTTP2_HEADERS || frame->headers.cat != NGHTTP2_HCAT_REQUEST) {
@@ -1014,32 +1069,29 @@ static int server_on_header_callback(nghttp2_session *session,
     mrb_free(mrb, val);
   }
 
-  if(namelen == sizeof(":authority") - 1 && memcmp(":a", name, 2) == 0) {
+  switch (lookup_token(name, namelen)) {
+  case NGHTTP2_TOKEN__AUTHORITY:
     for (i = 0; i < valuelen; i++) {
       stream_data->authority[i] = value[i];
     }
     stream_data->authority[valuelen] = '\0';
     return 0;
-  }
 
-  if(namelen == sizeof(":method") - 1 && memcmp(":m", name, 2) == 0) {
+  case NGHTTP2_TOKEN__METHOD:
     for (i = 0; i < valuelen; i++) {
       stream_data->method[i] = value[i];
     }
     stream_data->method[valuelen] = '\0';
     return 0;
-  }
 
-  if(namelen == sizeof(":scheme") - 1 && memcmp(":s", name, 2) == 0) {
+  case NGHTTP2_TOKEN__SCHEME:
     for (i = 0; i < valuelen; i++) {
       stream_data->scheme[i] = value[i];
     }
     stream_data->scheme[valuelen] = '\0';
     return 0;
-  }
 
-  if(namelen == sizeof(":path") - 1 && memcmp(":p", name, 2) == 0) {
-    size_t j;
+  case NGHTTP2_TOKEN__PATH:
     stream_data->percent_encode_uri = mrb_http2_strcopy(mrb, (const char *)value, valuelen);
     stream_data->unparsed_uri = percent_decode(mrb, value, valuelen);
     for(j = 0; j < valuelen && value[j] != '?'; ++j);
@@ -1051,6 +1103,9 @@ static int server_on_header_callback(nghttp2_session *session,
       stream_data->request_args = percent_decode(mrb, value + j, valuelen - j);
     }
     return 0;
+
+  default:
+    break;
   }
 
   // create nv and add stream_data->nva except for HTTP/2 specified headers
