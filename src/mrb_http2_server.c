@@ -660,6 +660,7 @@ static int read_upstream_response(http2_session_data *session_data, app_context 
   mrb_http2_request_rec *r = app_ctx->r;
   size_t len;
   int i;
+  int method;
 
   TRACER;
   if (session_data->upstream_base == NULL) {
@@ -732,7 +733,15 @@ static int read_upstream_response(http2_session_data *session_data, app_context 
     fprintf(stderr, "== DBUEG: request header at proxy END\n");
   }
 
-  if (evhttp_make_request(session_data->upstream_conn, req, EVHTTP_REQ_GET, r->upstream->uri) == -1) {
+  // POST check
+  if (memcmp(r->method, "POST", 4) == 0 && r->request_body != NULL) {
+    evbuffer_add(req->output_buffer, r->request_body, strlen(r->request_body));
+    method = EVHTTP_REQ_POST;
+  } else {
+    method = EVHTTP_REQ_GET;
+  }
+
+  if (evhttp_make_request(session_data->upstream_conn, req, method, r->upstream->uri) == -1) {
     evhttp_request_free(req);
     fprintf(stderr, "evhttp_connection_base_new failed");
     return -1;
