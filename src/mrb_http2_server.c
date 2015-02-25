@@ -967,64 +967,71 @@ static int server_on_header_callback(nghttp2_session *session,
   mrb_state *mrb = session_data->app_ctx->server->mrb;
 
   http2_stream_data *stream_data;
-  const char PATH[] = ":path";
   int i;
+  nghttp2_nv nv;
 
-  TRACER;
-  switch(frame->hd.type) {
-    nghttp2_nv nv;
-  case NGHTTP2_HEADERS:
-
-    if(frame->headers.cat != NGHTTP2_HCAT_REQUEST) {
-      break;
-    }
-    stream_data = nghttp2_session_get_stream_user_data(session,
-        frame->hd.stream_id);
-    if(!stream_data) {
-      break;
-    }
-
-    // create nv and add stream_data->nva
-    mrb_http2_create_nv(mrb, &nv, name, namelen, value, valuelen);
-    stream_data->nvlen = mrb_http2_add_nv(stream_data->nva,
-        stream_data->nvlen, &nv);
-
-    if(namelen == sizeof(":authority") - 1 && memcmp(":a", name, 2) == 0) {
-        for (i = 0; i < valuelen; i++) {
-          stream_data->authority[i] = value[i];
-        }
-        stream_data->authority[valuelen] = '\0';
-    }
-
-    if(namelen == sizeof(":method") - 1 && memcmp(":m", name, 2) == 0) {
-        for (i = 0; i < valuelen; i++) {
-          stream_data->method[i] = value[i];
-        }
-        stream_data->method[valuelen] = '\0';
-    }
-
-    if(namelen == sizeof(":scheme") - 1 && memcmp(":s", name, 2) == 0) {
-      for (i = 0; i < valuelen; i++) {
-        stream_data->scheme[i] = value[i];
-      }
-      stream_data->scheme[valuelen] = '\0';
-    }
-
-    if(namelen == sizeof(PATH) - 1 && memcmp(":p", name, 2) == 0) {
-      size_t j;
-      stream_data->percent_encode_uri = mrb_http2_strcopy(mrb, (const char *)value, valuelen);
-      stream_data->unparsed_uri = percent_decode(mrb, value, valuelen);
-      for(j = 0; j < valuelen && value[j] != '?'; ++j);
-      if (j == valuelen) {
-        stream_data->request_args = NULL;
-        stream_data->request_path = stream_data->unparsed_uri;
-      } else {
-        stream_data->request_path = percent_decode(mrb, value, j);
-        stream_data->request_args = percent_decode(mrb, value + j, valuelen - j);
-      }
-    }
-    break;
+  if (frame->hd.type != NGHTTP2_HEADERS || frame->headers.cat != NGHTTP2_HCAT_REQUEST) {
+    return 0;
   }
+
+  stream_data = nghttp2_session_get_stream_user_data(session,
+      frame->hd.stream_id);
+  if(!stream_data) {
+    return 0;
+  }
+
+  if (session_data->app_ctx->server->config->debug) {
+    char *key = mrb_http2_strcopy(mrb, (char *)name, namelen);
+    char *val = mrb_http2_strcopy(mrb, (char *)value, valuelen);
+    fprintf(stderr, "%s: header={name=%s, value=%s}\n", __func__, key, val);
+    mrb_free(mrb, key);
+    mrb_free(mrb, val);
+  }
+
+  // create nv and add stream_data->nva
+  mrb_http2_create_nv(mrb, &nv, name, namelen, value, valuelen);
+  stream_data->nvlen = mrb_http2_add_nv(stream_data->nva,
+      stream_data->nvlen, &nv);
+
+  if(namelen == sizeof(":authority") - 1 && memcmp(":a", name, 2) == 0) {
+    for (i = 0; i < valuelen; i++) {
+      stream_data->authority[i] = value[i];
+    }
+    stream_data->authority[valuelen] = '\0';
+    return 0;
+  }
+
+  if(namelen == sizeof(":method") - 1 && memcmp(":m", name, 2) == 0) {
+    for (i = 0; i < valuelen; i++) {
+      stream_data->method[i] = value[i];
+    }
+    stream_data->method[valuelen] = '\0';
+    return 0;
+  }
+
+  if(namelen == sizeof(":scheme") - 1 && memcmp(":s", name, 2) == 0) {
+    for (i = 0; i < valuelen; i++) {
+      stream_data->scheme[i] = value[i];
+    }
+    stream_data->scheme[valuelen] = '\0';
+    return 0;
+  }
+
+  if(namelen == sizeof(":path") - 1 && memcmp(":p", name, 2) == 0) {
+    size_t j;
+    stream_data->percent_encode_uri = mrb_http2_strcopy(mrb, (const char *)value, valuelen);
+    stream_data->unparsed_uri = percent_decode(mrb, value, valuelen);
+    for(j = 0; j < valuelen && value[j] != '?'; ++j);
+    if (j == valuelen) {
+      stream_data->request_args = NULL;
+      stream_data->request_path = stream_data->unparsed_uri;
+    } else {
+      stream_data->request_path = percent_decode(mrb, value, j);
+      stream_data->request_args = percent_decode(mrb, value + j, valuelen - j);
+    }
+    return 0;
+  }
+ 
   return 0;
 }
 
@@ -1379,28 +1386,19 @@ static int server_on_frame_recv_callback(nghttp2_session *session,
   http2_session_data *session_data = (http2_session_data *)user_data;
   http2_stream_data *stream_data;
 
-  TRACER;
-  switch(frame->hd.type) {
-  case NGHTTP2_DATA:
-  case NGHTTP2_HEADERS:
-    /* Check that the client request has finished */
-    if(frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {
-      stream_data = nghttp2_session_get_stream_user_data(session,
-          frame->hd.stream_id);
-      /* For DATA and HEADERS frame, this callback may be called after
-         on_stream_close_callback. Check that stream still alive. */
-      if(!stream_data) {
-        return 0;
-      }
-
-      return mrb_http2_process_request(session, session_data, stream_data);
-    }
-    break;
-  default:
-    break;
+  if (frame->hd.type != NGHTTP2_HEADERS || frame->headers.cat != NGHTTP2_HCAT_REQUEST) {
+    return 0;
   }
-  TRACER;
-  return 0;
+
+  stream_data = nghttp2_session_get_stream_user_data(session,
+      frame->hd.stream_id);
+  /* For DATA and HEADERS frame, this callback may be called after
+     on_stream_close_callback. Check that stream still alive. */
+  if(!stream_data) {
+    return 0;
+  }
+
+  return mrb_http2_process_request(session, session_data, stream_data);
 }
 
 #define MRB_HTTP2_MAX_POST_DATA_SIZE 1 << 16
