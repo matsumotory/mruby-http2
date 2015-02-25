@@ -721,32 +721,31 @@ static int read_upstream_response(http2_session_data *session_data, app_context 
     evhttp_add_header(req->output_headers, "Connection", "close");
   }
 
+  // r->reqhdr don't include HTTP/2 specified headders
   for (i = 0; i < r->reqhdrlen; i++) {
-    if (memcmp(":", r->reqhdr[i].name, 1) != 0) {
-      char keybuf[4096], valbuf[4096];
-      size_t len;
+    char keybuf[4096], valbuf[4096];
+    size_t len;
 
-      if (memcmp("cookie", r->reqhdr[i].name, 6) == 0) {
-        cookiebaselen = cookiebuflen;
-        cookiebuflen += r->reqhdr[i].valuelen + 2;
-        cookiebuf = mrb_realloc(mrb, cookiebuf, cookiebuflen);      
-        memcpy(cookiebuf + cookiebaselen, r->reqhdr[i].value, r->reqhdr[i].valuelen);
-        memcpy(cookiebuf + cookiebaselen + r->reqhdr[i].valuelen, "; ", 2);
-      } else {
-        len = r->reqhdr[i].namelen;
-        if (len > 4096)
-          len = 4096;
-        memcpy(keybuf, r->reqhdr[i].name, len);
-        keybuf[len] = '\0';
+    if (memcmp("cookie", r->reqhdr[i].name, 6) == 0) {
+      cookiebaselen = cookiebuflen;
+      cookiebuflen += r->reqhdr[i].valuelen + 2;
+      cookiebuf = mrb_realloc(mrb, cookiebuf, cookiebuflen);
+      memcpy(cookiebuf + cookiebaselen, r->reqhdr[i].value, r->reqhdr[i].valuelen);
+      memcpy(cookiebuf + cookiebaselen + r->reqhdr[i].valuelen, "; ", 2);
+    } else {
+      len = r->reqhdr[i].namelen;
+      if (len > 4096)
+        len = 4096;
+      memcpy(keybuf, r->reqhdr[i].name, len);
+      keybuf[len] = '\0';
 
-        len = r->reqhdr[i].valuelen;
-        if (len > 4096)
-          len = 4096;
-        memcpy(valbuf, r->reqhdr[i].value, len);
-        valbuf[len] = '\0';
+      len = r->reqhdr[i].valuelen;
+      if (len > 4096)
+        len = 4096;
+      memcpy(valbuf, r->reqhdr[i].value, len);
+      valbuf[len] = '\0';
 
-        evhttp_add_header(req->output_headers, keybuf, valbuf);
-      }
+      evhttp_add_header(req->output_headers, keybuf, valbuf);
     }
   }
   if (cookiebuf != NULL) {
@@ -1015,11 +1014,6 @@ static int server_on_header_callback(nghttp2_session *session,
     mrb_free(mrb, val);
   }
 
-  // create nv and add stream_data->nva
-  mrb_http2_create_nv(mrb, &nv, name, namelen, value, valuelen);
-  stream_data->nvlen = mrb_http2_add_nv(stream_data->nva,
-      stream_data->nvlen, &nv);
-
   if(namelen == sizeof(":authority") - 1 && memcmp(":a", name, 2) == 0) {
     for (i = 0; i < valuelen; i++) {
       stream_data->authority[i] = value[i];
@@ -1058,7 +1052,12 @@ static int server_on_header_callback(nghttp2_session *session,
     }
     return 0;
   }
- 
+
+  // create nv and add stream_data->nva except for HTTP/2 specified headers
+  mrb_http2_create_nv(mrb, &nv, name, namelen, value, valuelen);
+  stream_data->nvlen = mrb_http2_add_nv(stream_data->nva,
+      stream_data->nvlen, &nv);
+
   return 0;
 }
 
