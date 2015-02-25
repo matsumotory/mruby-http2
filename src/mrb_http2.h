@@ -88,6 +88,7 @@
 uid_t mrb_http2_get_uid(mrb_state *mrb, const char *user);
 void set_http_date_str(time_t *time, char *date);
 int mrb_http2_get_nv_id(nghttp2_nv *nva, size_t nvlen, const char *key);
+void mrb_http2_free_nva(mrb_state *mrb, nghttp2_nv *nva, size_t nvlen);
 void mrb_http2_create_nv(mrb_state *mrb, nghttp2_nv *nv, const uint8_t *name,
     size_t namelen, const uint8_t *value, size_t valuelen);
 size_t mrb_http2_add_nv(nghttp2_nv *nva, size_t nvlen, nghttp2_nv *nv);

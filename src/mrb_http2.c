@@ -112,14 +112,30 @@ int mrb_http2_get_nv_id(nghttp2_nv *nva, size_t nvlen, const char *key)
   return MRB_HTTP2_HEADER_NOT_FOUND;
 }
 
+// free nghttp2_nv
+void mrb_http2_free_nva(mrb_state *mrb, nghttp2_nv *nva, size_t nvlen)
+{
+  int i;
+  for (i = 0; i < nvlen; i++) {
+    mrb_free(mrb, nva[i].name);
+    mrb_free(mrb, nva[i].value);
+    nva[i].namelen = 0;
+    nva[i].valuelen = 0;
+  }
+}
+
 // create nghttp2_nv
 void mrb_http2_create_nv(mrb_state *mrb, nghttp2_nv *nv, const uint8_t *name,
     size_t namelen, const uint8_t *value, size_t valuelen)
 {
-  nv->name = (uint8_t *)name;
+  nv->name = mrb_malloc(mrb, namelen);
+  memcpy(nv->name, name, namelen);
   nv->namelen = namelen;
-  nv->value = (uint8_t *)value;
+
+  nv->value = mrb_malloc(mrb, valuelen);
+  memcpy(nv->value, value, valuelen);
   nv->valuelen = valuelen;
+
   nv->flags = NGHTTP2_NV_FLAG_NONE;
 }
 
@@ -146,7 +162,7 @@ int mrb_http2_strrep(char *buf, char *before, char *after)
 
     if (beforelen == 0 || (ptr = strstr(buf, before)) == NULL) {
       return 0;
-    } 
+    }
     memmove(ptr + afterlen, ptr + beforelen, strlen(buf) - (ptr + beforelen - buf) + 1);
     memcpy(ptr, after, afterlen);
     return 1;
