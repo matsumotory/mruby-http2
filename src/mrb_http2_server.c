@@ -2052,30 +2052,53 @@ static void mrb_http2_worker_run(mrb_state *mrb, mrb_value self,
   TRACER;
 }
 
+static int pid[MRB_HTTP2_WORKER_MAX];
+static int prepared_killed = 0;
+
+static void killall_worker(int flags)
+{
+  int i;
+  prepared_killed = 1;
+  for (i = 0; pid[i] != -1; i++) {
+    kill(pid[i], SIGTERM);
+  }
+}
+
 static mrb_value mrb_http2_server_run(mrb_state *mrb, mrb_value self)
 {
   mrb_http2_data_t *data = DATA_PTR(self);
   app_context app_ctx;
+  struct sigaction act;
+  memset(&act, 0, sizeof(struct sigaction));
 
   if (data->s->config->worker > 0) {
-    int pid[MRB_HTTP2_WORKER_MAX];
     int i, status;
     for (i=0; i< data->s->config->worker && (pid[i] = fork()) > 0; i++);
 
     if (i == data->s->config->worker){
+      pid[i] = -1;
       while(1) {
-        int wpid = wait(&status);
-        fprintf(stderr, "worker(%d) is killed\n", wpid);
-        for (i = 0; i< data->s->config->worker; i++) {
-          if (wpid == pid[i]) {
-            pid[i] = fork();
-            break;
-          }
-        }
-        if (pid[i] == 0) {
-          mrb_http2_worker_run(mrb, self, data->s, data->r, &app_ctx);
+        int wpid;
+        act.sa_handler = killall_worker;
+        sigaction(SIGTERM, &act, NULL);
+        wpid = wait(&status);
+        if (prepared_killed) {
+          return self;
         } else {
-          fprintf(stderr, "worker[%d](%d) restart\n", i, pid[i]);
+          fprintf(stderr, "worker(%d) is killed\n", wpid);
+          for (i = 0; i< data->s->config->worker; i++) {
+            if (wpid == pid[i]) {
+              pid[i] = fork();
+              break;
+            }
+          }
+          if (pid[i] == 0) {
+            act.sa_handler = SIG_DFL;
+            sigaction(SIGTERM, &act, NULL);
+            mrb_http2_worker_run(mrb, self, data->s, data->r, &app_ctx);
+          } else {
+            fprintf(stderr, "worker[%d](%d) restart\n", i, pid[i]);
+          }
         }
       }
     } else if (pid[i] == 0){
