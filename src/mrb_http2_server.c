@@ -2063,9 +2063,21 @@ static mrb_value mrb_http2_server_run(mrb_state *mrb, mrb_value self)
     for (i=0; i< data->s->config->worker && (pid[i] = fork()) > 0; i++);
 
     if (i == data->s->config->worker){
-       for(i = 0; i < data->s->config->worker; i++){
-         wait(&status);
-       }
+      while(1) {
+        int wpid = wait(&status);
+        fprintf(stderr, "worker(%d) is killed\n", wpid);
+        for (i = 0; i< data->s->config->worker; i++) {
+          if (wpid == pid[i]) {
+            pid[i] = fork();
+            break;
+          }
+        }
+        if (pid[i] == 0) {
+          mrb_http2_worker_run(mrb, self, data->s, data->r, &app_ctx);
+        } else {
+          fprintf(stderr, "worker[%d](%d) restart\n", i, pid[i]);
+        }
+      }
     } else if (pid[i] == 0){
       mrb_http2_worker_run(mrb, self, data->s, data->r, &app_ctx);
     }
