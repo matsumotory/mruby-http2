@@ -18,7 +18,9 @@ const char *mrb_http2_1xx_error_table[] = {
 
 const char *mrb_http2_3xx_error_table[] = {
   // 300 -
-  "<html><head><title>300</title></head><body><h1>300 Moved Permanently</h1></body></html>",
+  "<html><head><title>300</title></head><body><h1>300 Multiple Choices</h1></body></html>",
+  "<html><head><title>301</title></head><body><h1>301 Moved Permanently</h1></body></html>",
+  "<html><head><title>302</title></head><body><h1>302 Found</h1></body></html>",
   NULL
 };
 
