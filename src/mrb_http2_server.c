@@ -159,6 +159,8 @@ static http2_stream_data* create_http2_stream_data(mrb_state *mrb,
     http2_session_data *session_data, int32_t stream_id)
 {
   http2_stream_data *stream_data;
+  mrb_http2_server_t *server = session_data->app_ctx->server;
+  mrb_http2_config_t *config = session_data->app_ctx->server->config;
 
   TRACER;
   stream_data = (http2_stream_data *)mrb_malloc(mrb,
@@ -179,7 +181,9 @@ static http2_stream_data* create_http2_stream_data(mrb_state *mrb,
   stream_data->upstream_req = NULL;
 
   add_stream(session_data, stream_data);
-  session_data->app_ctx->server->worker->stream_requests_per_worker++;
+  if (config->server_status) {
+    server->worker->stream_requests_per_worker++;
+  }
   return stream_data;
 }
 
@@ -238,7 +242,9 @@ static void delete_http2_session_data(http2_session_data *session_data)
   if (session_data->upstream_conn != NULL) {
     evhttp_connection_free(session_data->upstream_conn);
   }
-  server->worker->connected_sessions--;
+  if (config->server_status) {
+    server->worker->connected_sessions--;
+  }
   mrb_http2_conn_rec_free(mrb, session_data->conn);
   mrb_free(mrb, session_data->client_addr);
   mrb_free(mrb, session_data);
@@ -1720,8 +1726,10 @@ static http2_session_data* create_http2_session_data(mrb_state *mrb,
   session_data->upstream_base = NULL;
   session_data->upstream_conn = NULL;
 
-  server->worker->session_requests_per_worker++;
-  server->worker->connected_sessions++;
+  if (config->server_status) {
+    server->worker->session_requests_per_worker++;
+    server->worker->connected_sessions++;
+  }
 
   return session_data;
 }
