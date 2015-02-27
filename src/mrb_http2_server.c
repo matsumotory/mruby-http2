@@ -9,6 +9,7 @@
 #include "mrb_http2_data.h"
 #include "mrb_http2_ssl.h"
 #include "mrb_http2_error.c.h"
+#include "mrb_http2_worker.h"
 
 #include <event.h>
 #include <event2/event.h>
@@ -178,6 +179,7 @@ static http2_stream_data* create_http2_stream_data(mrb_state *mrb,
   stream_data->upstream_req = NULL;
 
   add_stream(session_data, stream_data);
+  session_data->app_ctx->server->worker->stream_requests_per_worker++;
   return stream_data;
 }
 
@@ -1661,6 +1663,7 @@ static http2_session_data* create_http2_session_data(mrb_state *mrb,
   SSL *ssl;
   char host[NI_MAXHOST];
   int val = 1;
+  mrb_http2_server_t *server = app_ctx->server;
   mrb_http2_config_t *config = app_ctx->server->config;
 
   TRACER;
@@ -1714,6 +1717,8 @@ static http2_session_data* create_http2_session_data(mrb_state *mrb,
   }
   session_data->upstream_base = NULL;
   session_data->upstream_conn = NULL;
+
+  server->worker->session_requests_per_worker++;
 
   return session_data;
 }
@@ -2035,6 +2040,8 @@ static void mrb_http2_worker_run(mrb_state *mrb, mrb_value self,
         server->config->cert);
   }
 
+  server->worker = mrb_http2_worker_init(mrb);
+
   evbase = event_base_new();
 
   init_app_context(app_ctx, ssl_ctx, evbase);
@@ -2299,7 +2306,6 @@ static mrb_value mrb_http2_server_set_filename(mrb_state *mrb, mrb_value self)
   mrb_http2_request_rec *r = data->r;
   char *filename;
   mrb_int len;
-
   mrb_get_args(mrb, "s", &filename, &len);
   mrb_free(mrb, r->filename);
 
