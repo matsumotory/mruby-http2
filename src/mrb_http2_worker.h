@@ -16,8 +16,11 @@ typedef struct {
   uint64_t stream_requests_per_worker;
   uint64_t session_requests_per_worker;
 
-  // current sessions
+  // the number of current sessions
   uint64_t connected_sessions;
+
+  // the number of current processing stream
+  uint64_t process_stream;
 
 } mrb_http2_worker_t;
 

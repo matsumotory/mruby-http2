@@ -183,12 +183,13 @@ static http2_stream_data* create_http2_stream_data(mrb_state *mrb,
   add_stream(session_data, stream_data);
   if (config->server_status) {
     server->worker->stream_requests_per_worker++;
+    server->worker->process_stream++;
   }
   return stream_data;
 }
 
 static void delete_http2_stream_data(mrb_state *mrb,
-    http2_stream_data *stream_data)
+    http2_session_data *session_data, http2_stream_data *stream_data)
 {
   TRACER;
   if(stream_data->fd != -1) {
@@ -205,6 +206,9 @@ static void delete_http2_stream_data(mrb_state *mrb,
   }
   if (stream_data->upstream_req != NULL) {
     evhttp_request_free(stream_data->upstream_req);
+  }
+  if (session_data->app_ctx->server->config->server_status) {
+    session_data->app_ctx->server->worker->process_stream--;
   }
   mrb_free(mrb, stream_data);
 }
@@ -233,7 +237,7 @@ static void delete_http2_session_data(http2_session_data *session_data)
   bufferevent_free(session_data->bev);
   for(stream_data = session_data->root.next; stream_data;) {
     http2_stream_data *next = stream_data->next;
-    delete_http2_stream_data(mrb, stream_data);
+    delete_http2_stream_data(mrb, session_data, stream_data);
     stream_data = next;
   }
   if (session_data->upstream_base != NULL) {
@@ -1542,7 +1546,7 @@ static int server_on_stream_close_callback(nghttp2_session *session,
     return 0;
   }
   remove_stream(session_data, stream_data);
-  delete_http2_stream_data(mrb, stream_data);
+  delete_http2_stream_data(mrb, session_data, stream_data);
   TRACER;
   return 0;
 }
@@ -2647,6 +2651,14 @@ static mrb_value mrb_http2_server_connected_sessions(mrb_state *mrb, mrb_value s
   return mrb_fixnum_value(worker->connected_sessions);
 }
 
+static mrb_value mrb_http2_server_process_stream(mrb_state *mrb, mrb_value self)
+{
+  mrb_http2_data_t *data = DATA_PTR(self);
+  mrb_http2_worker_t *worker = data->s->worker;
+
+  return mrb_fixnum_value(worker->process_stream);
+}
+
 static mrb_value mrb_http2_server_enable_mruby(mrb_state *mrb, mrb_value self)
 {
   mrb_http2_data_t *data = DATA_PTR(self);
@@ -2882,6 +2894,7 @@ void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
   mrb_define_method(mrb, server, "total_stream_requests", mrb_http2_server_total_stream_requests, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "total_session_requests", mrb_http2_server_total_session_requests, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "connected_sessions", mrb_http2_server_connected_sessions, MRB_ARGS_NONE());
+  mrb_define_method(mrb, server, "process_stream", mrb_http2_server_process_stream, MRB_ARGS_NONE());
 
   // methods for mruby script
   mrb_define_method(mrb, server, "enable_mruby", mrb_http2_server_enable_mruby, MRB_ARGS_NONE());
