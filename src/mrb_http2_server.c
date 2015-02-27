@@ -2103,7 +2103,7 @@ static mrb_value mrb_http2_server_run(mrb_state *mrb, mrb_value self)
             sigaction(SIGTERM, &act, NULL);
             mrb_http2_worker_run(mrb, self, data->s, data->r, &app_ctx);
           } else {
-            if (condig->debug) {
+            if (config->debug) {
               fprintf(stderr, "worker[%d](%d) restart\n", i, pid[i]);
             }
           }
