@@ -9,6 +9,7 @@
 #include "mrb_http2_data.h"
 #include "mrb_http2_ssl.h"
 #include "mrb_http2_error.c.h"
+#include "mrb_http2_worker.h"
 
 #include <event.h>
 #include <event2/event.h>
@@ -158,6 +159,8 @@ static http2_stream_data* create_http2_stream_data(mrb_state *mrb,
     http2_session_data *session_data, int32_t stream_id)
 {
   http2_stream_data *stream_data;
+  mrb_http2_server_t *server = session_data->app_ctx->server;
+  mrb_http2_config_t *config = session_data->app_ctx->server->config;
 
   TRACER;
   stream_data = (http2_stream_data *)mrb_malloc(mrb,
@@ -178,11 +181,15 @@ static http2_stream_data* create_http2_stream_data(mrb_state *mrb,
   stream_data->upstream_req = NULL;
 
   add_stream(session_data, stream_data);
+  if (config->server_status) {
+    server->worker->stream_requests_per_worker++;
+    server->worker->active_stream++;
+  }
   return stream_data;
 }
 
 static void delete_http2_stream_data(mrb_state *mrb,
-    http2_stream_data *stream_data)
+    http2_session_data *session_data, http2_stream_data *stream_data)
 {
   TRACER;
   if(stream_data->fd != -1) {
@@ -200,6 +207,9 @@ static void delete_http2_stream_data(mrb_state *mrb,
   if (stream_data->upstream_req != NULL) {
     evhttp_request_free(stream_data->upstream_req);
   }
+  if (session_data->app_ctx->server->config->server_status) {
+    session_data->app_ctx->server->worker->active_stream--;
+  }
   mrb_free(mrb, stream_data);
 }
 
@@ -208,6 +218,7 @@ static void delete_http2_session_data(http2_session_data *session_data)
   SSL *ssl;
   http2_stream_data *stream_data;
   mrb_state *mrb = session_data->app_ctx->server->mrb;
+  mrb_http2_server_t *server = session_data->app_ctx->server;
   mrb_http2_config_t *config = session_data->app_ctx->server->config;
 
   TRACER;
@@ -226,7 +237,7 @@ static void delete_http2_session_data(http2_session_data *session_data)
   bufferevent_free(session_data->bev);
   for(stream_data = session_data->root.next; stream_data;) {
     http2_stream_data *next = stream_data->next;
-    delete_http2_stream_data(mrb, stream_data);
+    delete_http2_stream_data(mrb, session_data, stream_data);
     stream_data = next;
   }
   if (session_data->upstream_base != NULL) {
@@ -234,6 +245,9 @@ static void delete_http2_session_data(http2_session_data *session_data)
   }
   if (session_data->upstream_conn != NULL) {
     evhttp_connection_free(session_data->upstream_conn);
+  }
+  if (config->server_status) {
+    server->worker->connected_sessions--;
   }
   mrb_http2_conn_rec_free(mrb, session_data->conn);
   mrb_free(mrb, session_data->client_addr);
@@ -1532,7 +1546,7 @@ static int server_on_stream_close_callback(nghttp2_session *session,
     return 0;
   }
   remove_stream(session_data, stream_data);
-  delete_http2_stream_data(mrb, stream_data);
+  delete_http2_stream_data(mrb, session_data, stream_data);
   TRACER;
   return 0;
 }
@@ -1661,6 +1675,7 @@ static http2_session_data* create_http2_session_data(mrb_state *mrb,
   SSL *ssl;
   char host[NI_MAXHOST];
   int val = 1;
+  mrb_http2_server_t *server = app_ctx->server;
   mrb_http2_config_t *config = app_ctx->server->config;
 
   TRACER;
@@ -1714,6 +1729,11 @@ static http2_session_data* create_http2_session_data(mrb_state *mrb,
   }
   session_data->upstream_base = NULL;
   session_data->upstream_conn = NULL;
+
+  if (config->server_status) {
+    server->worker->session_requests_per_worker++;
+    server->worker->connected_sessions++;
+  }
 
   return session_data;
 }
@@ -2035,6 +2055,8 @@ static void mrb_http2_worker_run(mrb_state *mrb, mrb_value self,
         server->config->cert);
   }
 
+  server->worker = mrb_http2_worker_init(mrb);
+
   evbase = event_base_new();
 
   init_app_context(app_ctx, ssl_ctx, evbase);
@@ -2299,7 +2321,6 @@ static mrb_value mrb_http2_server_set_filename(mrb_state *mrb, mrb_value self)
   mrb_http2_request_rec *r = data->r;
   char *filename;
   mrb_int len;
-
   mrb_get_args(mrb, "s", &filename, &len);
   mrb_free(mrb, r->filename);
 
@@ -2606,6 +2627,38 @@ static mrb_value mrb_http2_server_set_upstream_uri(mrb_state *mrb,
   return self;
 }
 
+static mrb_value mrb_http2_server_total_stream_requests(mrb_state *mrb, mrb_value self)
+{
+  mrb_http2_data_t *data = DATA_PTR(self);
+  mrb_http2_worker_t *worker = data->s->worker;
+
+  return mrb_fixnum_value(worker->stream_requests_per_worker);
+}
+
+static mrb_value mrb_http2_server_total_session_requests(mrb_state *mrb, mrb_value self)
+{
+  mrb_http2_data_t *data = DATA_PTR(self);
+  mrb_http2_worker_t *worker = data->s->worker;
+
+  return mrb_fixnum_value(worker->session_requests_per_worker);
+}
+
+static mrb_value mrb_http2_server_connected_sessions(mrb_state *mrb, mrb_value self)
+{
+  mrb_http2_data_t *data = DATA_PTR(self);
+  mrb_http2_worker_t *worker = data->s->worker;
+
+  return mrb_fixnum_value(worker->connected_sessions);
+}
+
+static mrb_value mrb_http2_server_active_stream(mrb_state *mrb, mrb_value self)
+{
+  mrb_http2_data_t *data = DATA_PTR(self);
+  mrb_http2_worker_t *worker = data->s->worker;
+
+  return mrb_fixnum_value(worker->active_stream);
+}
+
 static mrb_value mrb_http2_server_enable_mruby(mrb_state *mrb, mrb_value self)
 {
   mrb_http2_data_t *data = DATA_PTR(self);
@@ -2836,6 +2889,12 @@ void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
   mrb_define_method(mrb, server, "upstream_port=", mrb_http2_server_set_upstream_port, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, server, "upstream_uri", mrb_http2_server_upstream_uri, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "upstream_uri=", mrb_http2_server_set_upstream_uri, MRB_ARGS_REQ(1));
+
+  // worke status method
+  mrb_define_method(mrb, server, "total_stream_requests", mrb_http2_server_total_stream_requests, MRB_ARGS_NONE());
+  mrb_define_method(mrb, server, "total_session_requests", mrb_http2_server_total_session_requests, MRB_ARGS_NONE());
+  mrb_define_method(mrb, server, "connected_sessions", mrb_http2_server_connected_sessions, MRB_ARGS_NONE());
+  mrb_define_method(mrb, server, "active_stream", mrb_http2_server_active_stream, MRB_ARGS_NONE());
 
   // methods for mruby script
   mrb_define_method(mrb, server, "enable_mruby", mrb_http2_server_enable_mruby, MRB_ARGS_NONE());
