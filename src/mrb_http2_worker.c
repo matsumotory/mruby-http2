@@ -8,6 +8,7 @@ mrb_http2_worker_t *mrb_http2_worker_init(mrb_state *mrb)
 
   worker->session_requests_per_worker = 0;
   worker->stream_requests_per_worker = 0;
+  worker->connected_sessions = 0;
 
   return worker;
 }

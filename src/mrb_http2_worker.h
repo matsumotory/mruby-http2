@@ -16,6 +16,9 @@ typedef struct {
   uint64_t stream_requests_per_worker;
   uint64_t session_requests_per_worker;
 
+  // current sessions
+  uint64_t connected_sessions;
+
 } mrb_http2_worker_t;
 
 mrb_http2_worker_t *mrb_http2_worker_init(mrb_state *);

@@ -210,6 +210,7 @@ static void delete_http2_session_data(http2_session_data *session_data)
   SSL *ssl;
   http2_stream_data *stream_data;
   mrb_state *mrb = session_data->app_ctx->server->mrb;
+  mrb_http2_server_t *server = session_data->app_ctx->server;
   mrb_http2_config_t *config = session_data->app_ctx->server->config;
 
   TRACER;
@@ -237,6 +238,7 @@ static void delete_http2_session_data(http2_session_data *session_data)
   if (session_data->upstream_conn != NULL) {
     evhttp_connection_free(session_data->upstream_conn);
   }
+  server->worker->connected_sessions--;
   mrb_http2_conn_rec_free(mrb, session_data->conn);
   mrb_free(mrb, session_data->client_addr);
   mrb_free(mrb, session_data);
@@ -1719,6 +1721,7 @@ static http2_session_data* create_http2_session_data(mrb_state *mrb,
   session_data->upstream_conn = NULL;
 
   server->worker->session_requests_per_worker++;
+  server->worker->connected_sessions++;
 
   return session_data;
 }
@@ -2628,6 +2631,14 @@ static mrb_value mrb_http2_server_total_session_requests(mrb_state *mrb, mrb_val
   return mrb_fixnum_value(worker->session_requests_per_worker);
 }
 
+static mrb_value mrb_http2_server_connected_sessions(mrb_state *mrb, mrb_value self)
+{
+  mrb_http2_data_t *data = DATA_PTR(self);
+  mrb_http2_worker_t *worker = data->s->worker;
+
+  return mrb_fixnum_value(worker->connected_sessions);
+}
+
 static mrb_value mrb_http2_server_enable_mruby(mrb_state *mrb, mrb_value self)
 {
   mrb_http2_data_t *data = DATA_PTR(self);
@@ -2862,6 +2873,7 @@ void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
   // worke status method
   mrb_define_method(mrb, server, "total_stream_requests", mrb_http2_server_total_stream_requests, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "total_session_requests", mrb_http2_server_total_session_requests, MRB_ARGS_NONE());
+  mrb_define_method(mrb, server, "connected_sessions", mrb_http2_server_connected_sessions, MRB_ARGS_NONE());
 
   // methods for mruby script
   mrb_define_method(mrb, server, "enable_mruby", mrb_http2_server_enable_mruby, MRB_ARGS_NONE());
