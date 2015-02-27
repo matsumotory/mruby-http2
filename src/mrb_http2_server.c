@@ -2612,6 +2612,22 @@ static mrb_value mrb_http2_server_set_upstream_uri(mrb_state *mrb,
   return self;
 }
 
+static mrb_value mrb_http2_server_total_stream_requests(mrb_state *mrb, mrb_value self)
+{
+  mrb_http2_data_t *data = DATA_PTR(self);
+  mrb_http2_worker_t *worker = data->s->worker;
+
+  return mrb_fixnum_value(worker->stream_requests_per_worker);
+}
+
+static mrb_value mrb_http2_server_total_session_requests(mrb_state *mrb, mrb_value self)
+{
+  mrb_http2_data_t *data = DATA_PTR(self);
+  mrb_http2_worker_t *worker = data->s->worker;
+
+  return mrb_fixnum_value(worker->session_requests_per_worker);
+}
+
 static mrb_value mrb_http2_server_enable_mruby(mrb_state *mrb, mrb_value self)
 {
   mrb_http2_data_t *data = DATA_PTR(self);
@@ -2842,6 +2858,10 @@ void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
   mrb_define_method(mrb, server, "upstream_port=", mrb_http2_server_set_upstream_port, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, server, "upstream_uri", mrb_http2_server_upstream_uri, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "upstream_uri=", mrb_http2_server_set_upstream_uri, MRB_ARGS_REQ(1));
+
+  // worke status method
+  mrb_define_method(mrb, server, "total_stream_requests", mrb_http2_server_total_stream_requests, MRB_ARGS_NONE());
+  mrb_define_method(mrb, server, "total_session_requests", mrb_http2_server_total_session_requests, MRB_ARGS_NONE());
 
   // methods for mruby script
   mrb_define_method(mrb, server, "enable_mruby", mrb_http2_server_enable_mruby, MRB_ARGS_NONE());
