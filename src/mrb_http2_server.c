@@ -2053,12 +2053,12 @@ static void mrb_http2_worker_run(mrb_state *mrb, mrb_value self,
 }
 
 static int pid[MRB_HTTP2_WORKER_MAX];
-static int prepared_killed = 0;
+static int prepare_kill = 0;
 
 static void killall_worker(int flags)
 {
   int i;
-  prepared_killed = 1;
+  prepare_kill = 1;
   for (i = 0; pid[i] != -1; i++) {
     kill(pid[i], SIGTERM);
   }
@@ -2069,24 +2069,30 @@ static mrb_value mrb_http2_server_run(mrb_state *mrb, mrb_value self)
   mrb_http2_data_t *data = DATA_PTR(self);
   app_context app_ctx;
   struct sigaction act;
+  mrb_http2_config_t *config = data->s->config;
   memset(&act, 0, sizeof(struct sigaction));
 
-  if (data->s->config->worker > 0) {
+  if (config->worker > 0) {
     int i, status;
-    for (i=0; i< data->s->config->worker && (pid[i] = fork()) > 0; i++);
+    for (i=0; i< config->worker && (pid[i] = fork()) > 0; i++);
 
-    if (i == data->s->config->worker){
+    if (i == config->worker){
       pid[i] = -1;
       while(1) {
         int wpid;
         act.sa_handler = killall_worker;
         sigaction(SIGTERM, &act, NULL);
         wpid = wait(&status);
-        if (prepared_killed) {
+        // monitoring workers
+        if (prepare_kill) {
+          // send term signal to master process
+          // preparing killall worker
           return self;
         } else {
-          fprintf(stderr, "worker(%d) is killed\n", wpid);
-          for (i = 0; i< data->s->config->worker; i++) {
+          if (config->debug) {
+            fprintf(stderr, "worker(%d) is down\n", wpid);
+          }
+          for (i = 0; i< config->worker; i++) {
             if (wpid == pid[i]) {
               pid[i] = fork();
               break;
@@ -2097,7 +2103,9 @@ static mrb_value mrb_http2_server_run(mrb_state *mrb, mrb_value self)
             sigaction(SIGTERM, &act, NULL);
             mrb_http2_worker_run(mrb, self, data->s, data->r, &app_ctx);
           } else {
-            fprintf(stderr, "worker[%d](%d) restart\n", i, pid[i]);
+            if (condig->debug) {
+              fprintf(stderr, "worker[%d](%d) restart\n", i, pid[i]);
+            }
           }
         }
       }
