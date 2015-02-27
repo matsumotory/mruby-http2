@@ -20,7 +20,7 @@ typedef struct {
   uint64_t connected_sessions;
 
   // the number of current processing stream
-  uint64_t process_stream;
+  uint64_t active_stream;
 
 } mrb_http2_worker_t;
 

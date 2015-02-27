@@ -183,7 +183,7 @@ static http2_stream_data* create_http2_stream_data(mrb_state *mrb,
   add_stream(session_data, stream_data);
   if (config->server_status) {
     server->worker->stream_requests_per_worker++;
-    server->worker->process_stream++;
+    server->worker->active_stream++;
   }
   return stream_data;
 }
@@ -208,7 +208,7 @@ static void delete_http2_stream_data(mrb_state *mrb,
     evhttp_request_free(stream_data->upstream_req);
   }
   if (session_data->app_ctx->server->config->server_status) {
-    session_data->app_ctx->server->worker->process_stream--;
+    session_data->app_ctx->server->worker->active_stream--;
   }
   mrb_free(mrb, stream_data);
 }
@@ -2651,12 +2651,12 @@ static mrb_value mrb_http2_server_connected_sessions(mrb_state *mrb, mrb_value s
   return mrb_fixnum_value(worker->connected_sessions);
 }
 
-static mrb_value mrb_http2_server_process_stream(mrb_state *mrb, mrb_value self)
+static mrb_value mrb_http2_server_active_stream(mrb_state *mrb, mrb_value self)
 {
   mrb_http2_data_t *data = DATA_PTR(self);
   mrb_http2_worker_t *worker = data->s->worker;
 
-  return mrb_fixnum_value(worker->process_stream);
+  return mrb_fixnum_value(worker->active_stream);
 }
 
 static mrb_value mrb_http2_server_enable_mruby(mrb_state *mrb, mrb_value self)
@@ -2894,7 +2894,7 @@ void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
   mrb_define_method(mrb, server, "total_stream_requests", mrb_http2_server_total_stream_requests, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "total_session_requests", mrb_http2_server_total_session_requests, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "connected_sessions", mrb_http2_server_connected_sessions, MRB_ARGS_NONE());
-  mrb_define_method(mrb, server, "process_stream", mrb_http2_server_process_stream, MRB_ARGS_NONE());
+  mrb_define_method(mrb, server, "active_stream", mrb_http2_server_active_stream, MRB_ARGS_NONE());
 
   // methods for mruby script
   mrb_define_method(mrb, server, "enable_mruby", mrb_http2_server_enable_mruby, MRB_ARGS_NONE());
