@@ -126,11 +126,7 @@ static void mrb_http2_conn_rec_free(mrb_state *mrb,
     mrb_http2_conn_rec *conn)
 {
   TRACER;
-  if (conn == NULL) {
-    return;
-  }
-  mrb_free(mrb, conn->client_ip);
-  mrb_free(mrb, conn);
+  mrb_free_unless_null(mrb, conn);
 }
 
 static void add_stream(http2_session_data *session_data,
@@ -1702,8 +1698,7 @@ static http2_session_data* create_http2_session_data(mrb_state *mrb,
     session_data->client_addr = mrb_http2_strcopy(mrb, host, strlen(host));
   }
   if (session_data->conn) {
-    session_data->conn->client_ip = mrb_http2_strcopy(mrb,
-        session_data->client_addr, strlen(session_data->client_addr));
+    session_data->conn->client_ip = session_data->client_addr;
   }
   session_data->upstream_base = NULL;
   session_data->upstream_conn = NULL;
