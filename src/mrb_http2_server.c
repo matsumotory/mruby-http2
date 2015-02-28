@@ -62,7 +62,7 @@ typedef struct http2_session_data {
   struct bufferevent *bev;
   app_context *app_ctx;
   nghttp2_session *session;
-  char *client_addr;
+  char client_addr[NI_MAXHOST];
   mrb_http2_conn_rec *conn;
   struct event_base *upstream_base;
   struct evhttp_connection *upstream_conn;
@@ -246,7 +246,6 @@ static void delete_http2_session_data(http2_session_data *session_data)
     server->worker->connected_sessions--;
   }
   mrb_http2_conn_rec_free(mrb, session_data->conn);
-  mrb_free(mrb, session_data->client_addr);
   mrb_free(mrb, session_data);
 }
 
@@ -1647,7 +1646,7 @@ static http2_session_data* create_http2_session_data(mrb_state *mrb,
   int rv;
   http2_session_data *session_data;
   SSL *ssl;
-  char host[NI_MAXHOST];
+  //char host[NI_MAXHOST];
   int val = 1;
   mrb_http2_server_t *server = app_ctx->server;
   mrb_http2_config_t *config = app_ctx->server->config;
@@ -1690,12 +1689,9 @@ static http2_session_data* create_http2_session_data(mrb_state *mrb,
 
   bufferevent_enable(session_data->bev, EV_READ | EV_WRITE);
 
-  rv = getnameinfo(addr, addrlen, host, sizeof(host), NULL, 0, NI_NUMERICHOST);
+  rv = getnameinfo(addr, addrlen, session_data->client_addr, sizeof(session_data->client_addr), NULL, 0, NI_NUMERICHOST);
   if(rv != 0) {
-    session_data->client_addr = mrb_http2_strcopy(mrb, "(unknown)",
-        strlen("(unknown)"));
-  } else {
-    session_data->client_addr = mrb_http2_strcopy(mrb, host, strlen(host));
+    memcpy(session_data->client_addr, "(unknown)", sizeof("(unknown)"));
   }
   if (session_data->conn) {
     session_data->conn->client_ip = session_data->client_addr;
