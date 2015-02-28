@@ -85,6 +85,8 @@
       (uint16_t)(RSTRING_LEN(NAME)), (uint8_t*)RSTRING_PTR(VALUE),  \
       (uint16_t)(RSTRING_LEN(VALUE)))
 
+void debug_header(const char *tag, const uint8_t *name, size_t namelen,
+        const uint8_t *value, size_t valuelen);
 uid_t mrb_http2_get_uid(mrb_state *mrb, const char *user);
 void set_http_date_str(time_t *time, char *date);
 int mrb_http2_get_nv_id(nghttp2_nv *nva, size_t nvlen, const char *key);

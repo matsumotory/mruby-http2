@@ -416,14 +416,7 @@ static int send_upstream_response(app_context *app_ctx,
 
   if (app_ctx->server->config->debug) {
     for (i = 0; i < nvlen; i++) {
-      char *name = mrb_http2_strcopy(mrb, (char *)nva[i].name,
-          nva[i].namelen);
-      char *value = mrb_http2_strcopy(mrb, (char *)nva[i].value,
-          nva[i].valuelen);
-      fprintf(stderr, "%s: nva[%d]={name=%s, value=%s}\n", __func__,
-          i, name, value);
-      mrb_free(mrb, name);
-      mrb_free(mrb, value);
+      debug_header(__func__, nva[i].name, nva[i].namelen, nva[i].value, nva[i].valuelen);
     }
   }
 
@@ -487,14 +480,7 @@ static int send_response(app_context *app_ctx, nghttp2_session *session,
 
   if (app_ctx->server->config->debug) {
     for (i = 0; i < nvlen; i++) {
-      char *name = mrb_http2_strcopy(mrb, (char *)nva[i].name,
-          nva[i].namelen);
-      char *value = mrb_http2_strcopy(mrb, (char *)nva[i].value,
-          nva[i].valuelen);
-      fprintf(stderr, "%s: nva[%d]={name=%s, value=%s}\n", __func__,
-          i, name, value);
-      mrb_free(mrb, name);
-      mrb_free(mrb, value);
+      debug_header(__func__, nva[i].name, nva[i].namelen, nva[i].value, nva[i].valuelen);
     }
   }
 
@@ -1080,11 +1066,7 @@ static int server_on_header_callback(nghttp2_session *session,
   }
 
   if (session_data->app_ctx->server->config->debug) {
-    char *key = mrb_http2_strcopy(mrb, (char *)name, namelen);
-    char *val = mrb_http2_strcopy(mrb, (char *)value, valuelen);
-    fprintf(stderr, "%s: header={name=%s, value=%s}\n", __func__, key, val);
-    mrb_free(mrb, key);
-    mrb_free(mrb, val);
+    debug_header(__func__, name, namelen, value, valuelen);
   }
 
   switch (lookup_token(name, namelen)) {
@@ -1292,14 +1274,7 @@ static int mrb_http2_process_request(nghttp2_session *session,
   if (config->debug) {
     int i;
     for (i = 0; i < stream_data->nvlen; i++) {
-      char *name = mrb_http2_strcopy(mrb, (char *)stream_data->nva[i].name,
-          stream_data->nva[i].namelen);
-      char *value = mrb_http2_strcopy(mrb, (char *)stream_data->nva[i].value,
-          stream_data->nva[i].valuelen);
-      fprintf(stderr, "%s: nva[%d]={name=%s, value=%s}\n", __func__, i,
-          name, value);
-      mrb_free(mrb, name);
-      mrb_free(mrb, value);
+      debug_header(__func__, stream_data->nva[i].name, stream_data->nva[i].namelen, stream_data->nva[i].value, stream_data->nva[i].valuelen);
     }
   }
 
