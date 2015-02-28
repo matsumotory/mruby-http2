@@ -85,6 +85,7 @@
       (uint16_t)(RSTRING_LEN(NAME)), (uint8_t*)RSTRING_PTR(VALUE),  \
       (uint16_t)(RSTRING_LEN(VALUE)))
 
+void mrb_free_unless_null(mrb_state *mrb, void *ptr);
 void debug_header(const char *tag, const uint8_t *name, size_t namelen,
         const uint8_t *value, size_t valuelen);
 uid_t mrb_http2_get_uid(mrb_state *mrb, const char *user);

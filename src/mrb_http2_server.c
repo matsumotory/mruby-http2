@@ -196,7 +196,7 @@ static void delete_http2_stream_data(mrb_state *mrb,
     close(stream_data->fd);
   }
   mrb_free(mrb, stream_data->unparsed_uri);
-  mrb_free(mrb, stream_data->percent_encode_uri);
+  mrb_free_unless_null(mrb, stream_data->percent_encode_uri);
   if (stream_data->request_args != NULL) {
     mrb_free(mrb, stream_data->request_path);
     mrb_free(mrb, stream_data->request_args);
@@ -1050,6 +1050,7 @@ static int server_on_header_callback(nghttp2_session *session,
 {
   http2_session_data *session_data = (http2_session_data *)user_data;
   mrb_state *mrb = session_data->app_ctx->server->mrb;
+  mrb_http2_config_t *config = session_data->app_ctx->server->config;
 
   http2_stream_data *stream_data;
   size_t i, j;
@@ -1092,7 +1093,9 @@ static int server_on_header_callback(nghttp2_session *session,
     return 0;
 
   case NGHTTP2_TOKEN__PATH:
-    stream_data->percent_encode_uri = mrb_http2_strcopy(mrb, (const char *)value, valuelen);
+    if (config->upstream) {
+      stream_data->percent_encode_uri = mrb_http2_strcopy(mrb, (const char *)value, valuelen);
+    }
     stream_data->unparsed_uri = percent_decode(mrb, value, valuelen);
     for(j = 0; j < valuelen && value[j] != '?'; ++j);
     if (j == valuelen) {
@@ -1360,7 +1363,7 @@ static int mrb_http2_process_request(nghttp2_session *session,
   }
 
   // check proxy config
-  if (r->upstream && r->upstream->host) {
+  if (config->upstream && r->upstream && r->upstream->host) {
     if (config->debug) {
       fprintf(stderr, "found upstream: server:%s:%d uri:%s\n",
           r->upstream->host, r->upstream->port, r->upstream->uri);

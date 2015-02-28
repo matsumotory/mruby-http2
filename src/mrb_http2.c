@@ -38,6 +38,13 @@ void mrb_http2_client_class_init(mrb_state *mrb, struct RClass *http2);
 void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2);
 void mrb_http2_request_class_init(mrb_state *mrb, struct RClass *http2);
 
+void mrb_free_unless_null(mrb_state *mrb, void *ptr)
+{
+  if (ptr != NULL) {
+    mrb_free(mrb, ptr);
+  }
+}
+
 void debug_header(const char *tag, const uint8_t *name, size_t namelen,
     const uint8_t *value, size_t valuelen)
 {
