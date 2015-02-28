@@ -1067,23 +1067,17 @@ static int server_on_header_callback(nghttp2_session *session,
 
   switch (lookup_token(name, namelen)) {
   case NGHTTP2_TOKEN__AUTHORITY:
-    for (i = 0; i < valuelen; i++) {
-      stream_data->authority[i] = value[i];
-    }
+    memcpy(stream_data->authority, value, valuelen);
     stream_data->authority[valuelen] = '\0';
     return 0;
 
   case NGHTTP2_TOKEN__METHOD:
-    for (i = 0; i < valuelen; i++) {
-      stream_data->method[i] = value[i];
-    }
+    memcpy(stream_data->method, value, valuelen);
     stream_data->method[valuelen] = '\0';
     return 0;
 
   case NGHTTP2_TOKEN__SCHEME:
-    for (i = 0; i < valuelen; i++) {
-      stream_data->scheme[i] = value[i];
-    }
+    memcpy(stream_data->scheme, value, valuelen);
     stream_data->scheme[valuelen] = '\0';
     return 0;
 
