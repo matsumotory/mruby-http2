@@ -44,6 +44,7 @@ typedef struct {
   mrb_http2_config_flag callback;
   mrb_http2_config_flag tcp_nopush;
   mrb_http2_config_flag server_status;
+  mrb_http2_config_flag upstream;
 
   // connection record option
   // default enabled and can use connection methods

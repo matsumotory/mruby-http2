@@ -38,6 +38,25 @@ void mrb_http2_client_class_init(mrb_state *mrb, struct RClass *http2);
 void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2);
 void mrb_http2_request_class_init(mrb_state *mrb, struct RClass *http2);
 
+void mrb_free_unless_null(mrb_state *mrb, void *ptr)
+{
+  if (ptr != NULL) {
+    mrb_free(mrb, ptr);
+  }
+}
+
+void debug_header(const char *tag, const uint8_t *name, size_t namelen,
+    const uint8_t *value, size_t valuelen)
+{
+  char *key = alloca(namelen + 1);
+  char *val = alloca(valuelen + 1);
+  memcpy(key, name, namelen);
+  memcpy(val, value, valuelen);
+  key[namelen] = '\0';
+  val[valuelen] = '\0';
+  fprintf(stderr, "%s: header={name=%s, value=%s}\n", tag, key, val);
+}
+
 uid_t mrb_http2_get_uid(mrb_state *mrb, const char *user)
 {
   struct passwd *pw;

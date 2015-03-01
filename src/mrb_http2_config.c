@@ -187,6 +187,7 @@ static void config_defualt_value(mrb_state *mrb, mrb_http2_config_t *config)
   config->connection_record = MRB_HTTP2_CONFIG_ENABLED;
   config->tcp_nopush = MRB_HTTP2_CONFIG_DISABLED;
   config->server_status = MRB_HTTP2_CONFIG_DISABLED;
+  config->upstream = MRB_HTTP2_CONFIG_DISABLED;
 
   config->server_host = MRB_HTTP2_CONFIG_LIT(mrb, "0.0.0.0");
   config->server_name = MRB_HTTP2_CONFIG_LIT(mrb, MRUBY_HTTP2_SERVER);
@@ -215,6 +216,7 @@ mrb_http2_config_t *mrb_http2_s_config_init(mrb_state *mrb,
   mrb_http2_config_define_flag(mrb, args, &config->connection_record, NULL, "connection_record");
   mrb_http2_config_define_flag(mrb, args, &config->tcp_nopush, NULL, "tcp_nopush");
   mrb_http2_config_define_flag(mrb, args, &config->server_status, NULL, "server_status");
+  mrb_http2_config_define_flag(mrb, args, &config->server_status, NULL, "upstream");
 
   mrb_http2_config_define_cstr(mrb, args, &config->server_host,  NULL, "server_host");
   mrb_http2_config_define_cstr(mrb, args, &config->server_name,  NULL, "server_name");

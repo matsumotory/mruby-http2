@@ -62,7 +62,7 @@ typedef struct http2_session_data {
   struct bufferevent *bev;
   app_context *app_ctx;
   nghttp2_session *session;
-  char *client_addr;
+  char client_addr[NI_MAXHOST];
   mrb_http2_conn_rec *conn;
   struct event_base *upstream_base;
   struct evhttp_connection *upstream_conn;
@@ -126,11 +126,7 @@ static void mrb_http2_conn_rec_free(mrb_state *mrb,
     mrb_http2_conn_rec *conn)
 {
   TRACER;
-  if (conn == NULL) {
-    return;
-  }
-  mrb_free(mrb, conn->client_ip);
-  mrb_free(mrb, conn);
+  mrb_free_unless_null(mrb, conn);
 }
 
 static void add_stream(http2_session_data *session_data,
@@ -196,7 +192,7 @@ static void delete_http2_stream_data(mrb_state *mrb,
     close(stream_data->fd);
   }
   mrb_free(mrb, stream_data->unparsed_uri);
-  mrb_free(mrb, stream_data->percent_encode_uri);
+  mrb_free_unless_null(mrb, stream_data->percent_encode_uri);
   if (stream_data->request_args != NULL) {
     mrb_free(mrb, stream_data->request_path);
     mrb_free(mrb, stream_data->request_args);
@@ -250,7 +246,6 @@ static void delete_http2_session_data(http2_session_data *session_data)
     server->worker->connected_sessions--;
   }
   mrb_http2_conn_rec_free(mrb, session_data->conn);
-  mrb_free(mrb, session_data->client_addr);
   mrb_free(mrb, session_data);
 }
 
@@ -416,14 +411,7 @@ static int send_upstream_response(app_context *app_ctx,
 
   if (app_ctx->server->config->debug) {
     for (i = 0; i < nvlen; i++) {
-      char *name = mrb_http2_strcopy(mrb, (char *)nva[i].name,
-          nva[i].namelen);
-      char *value = mrb_http2_strcopy(mrb, (char *)nva[i].value,
-          nva[i].valuelen);
-      fprintf(stderr, "%s: nva[%d]={name=%s, value=%s}\n", __func__,
-          i, name, value);
-      mrb_free(mrb, name);
-      mrb_free(mrb, value);
+      debug_header(__func__, nva[i].name, nva[i].namelen, nva[i].value, nva[i].valuelen);
     }
   }
 
@@ -438,10 +426,12 @@ static int send_upstream_response(app_context *app_ctx,
   //
   // "set_logging_cb" callback ruby block
   //
-  r->phase = MRB_HTTP2_SERVER_LOGGING;
-  callback_ruby_block(mrb, app_ctx->self, app_ctx->server->config->callback,
-      app_ctx->server->config->cb_list->logging_cb,
-      app_ctx->server->config->cb_list);
+  if (app_ctx->server->config->callback) {
+    r->phase = MRB_HTTP2_SERVER_LOGGING;
+    callback_ruby_block(mrb, app_ctx->self, app_ctx->server->config->callback,
+        app_ctx->server->config->cb_list->logging_cb,
+        app_ctx->server->config->cb_list);
+  }
 
   mrb_http2_request_rec_free(mrb, r);
   TRACER;
@@ -487,14 +477,7 @@ static int send_response(app_context *app_ctx, nghttp2_session *session,
 
   if (app_ctx->server->config->debug) {
     for (i = 0; i < nvlen; i++) {
-      char *name = mrb_http2_strcopy(mrb, (char *)nva[i].name,
-          nva[i].namelen);
-      char *value = mrb_http2_strcopy(mrb, (char *)nva[i].value,
-          nva[i].valuelen);
-      fprintf(stderr, "%s: nva[%d]={name=%s, value=%s}\n", __func__,
-          i, name, value);
-      mrb_free(mrb, name);
-      mrb_free(mrb, value);
+      debug_header(__func__, nva[i].name, nva[i].namelen, nva[i].value, nva[i].valuelen);
     }
   }
 
@@ -509,9 +492,11 @@ static int send_response(app_context *app_ctx, nghttp2_session *session,
   //
   // "set_logging_cb" callback ruby block
   //
-  r->phase = MRB_HTTP2_SERVER_LOGGING;
-  callback_ruby_block(mrb, app_ctx->self, app_ctx->server->config->callback,
-      app_ctx->server->config->cb_list->logging_cb, app_ctx->server->config->cb_list);
+  if (app_ctx->server->config->callback) {
+    r->phase = MRB_HTTP2_SERVER_LOGGING;
+    callback_ruby_block(mrb, app_ctx->self, app_ctx->server->config->callback,
+        app_ctx->server->config->cb_list->logging_cb, app_ctx->server->config->cb_list);
+  }
 
   mrb_http2_request_rec_free(mrb, r);
   TRACER;
@@ -574,9 +559,11 @@ static int error_reply(app_context *app_ctx, nghttp2_session *session,
   //
   // "set_fixups_cb" callback ruby block
   //
-  r->phase = MRB_HTTP2_SERVER_FIXUPS;
-  callback_ruby_block(mrb, app_ctx->self, config->callback,
-      config->cb_list->fixups_cb, config->cb_list);
+  if (config->callback) {
+    r->phase = MRB_HTTP2_SERVER_FIXUPS;
+    callback_ruby_block(mrb, app_ctx->self, config->callback,
+        config->cb_list->fixups_cb, config->cb_list);
+  }
 
   TRACER;
   if(send_response(app_ctx, session, r->reshdrs, r->reshdrslen, stream_data) != 0) {
@@ -598,9 +585,11 @@ static int upstream_reply(app_context *app_ctx, nghttp2_session *session,
   //
   // "set_fixups_cb" callback ruby block
   //
-  r->phase = MRB_HTTP2_SERVER_FIXUPS;
-  callback_ruby_block(mrb, app_ctx->self, config->callback,
-      config->cb_list->fixups_cb, config->cb_list);
+  if (config->callback) {
+    r->phase = MRB_HTTP2_SERVER_FIXUPS;
+    callback_ruby_block(mrb, app_ctx->self, config->callback,
+        config->cb_list->fixups_cb, config->cb_list);
+  }
 
   if(send_upstream_response(app_ctx, session, r->reshdrs, r->reshdrslen, stream_data) != 0) {
     close(stream_data->fd);
@@ -847,9 +836,11 @@ static int content_cb_reply(app_context *app_ctx, nghttp2_session *session,
   //
   // "set_content" callback ruby block
   //
-  r->phase = MRB_HTTP2_SERVER_CONTENT;
-  callback_ruby_block(mrb, app_ctx->self, config->callback,
-      config->cb_list->content_cb, config->cb_list);
+  if (config->callback) {
+    r->phase = MRB_HTTP2_SERVER_CONTENT;
+    callback_ruby_block(mrb, app_ctx->self, config->callback,
+        config->cb_list->content_cb, config->cb_list);
+  }
 
   fixup_status_header(mrb, r);
 
@@ -880,9 +871,11 @@ static int content_cb_reply(app_context *app_ctx, nghttp2_session *session,
   //
   // "set_fixups_cb" callback ruby block
   //
-  r->phase = MRB_HTTP2_SERVER_FIXUPS;
-  callback_ruby_block(mrb, app_ctx->self, config->callback,
-      config->cb_list->fixups_cb, config->cb_list);
+  if (config->callback) {
+    r->phase = MRB_HTTP2_SERVER_FIXUPS;
+    callback_ruby_block(mrb, app_ctx->self, config->callback,
+        config->cb_list->fixups_cb, config->cb_list);
+  }
 
   if(send_response(app_ctx, session, r->reshdrs, r->reshdrslen, stream_data) != 0) {
     close(pipefd[0]);
@@ -991,9 +984,11 @@ static int mruby_reply(app_context *app_ctx, nghttp2_session *session,
   //
   // "set_fixups_cb" callback ruby block
   //
-  r->phase = MRB_HTTP2_SERVER_FIXUPS;
-  callback_ruby_block(mrb, app_ctx->self, config->callback,
-      config->cb_list->fixups_cb, config->cb_list);
+  if (config->callback) {
+    r->phase = MRB_HTTP2_SERVER_FIXUPS;
+    callback_ruby_block(mrb, app_ctx->self, config->callback,
+        config->cb_list->fixups_cb, config->cb_list);
+  }
 
   if(send_response(app_ctx, session, r->reshdrs, r->reshdrslen, stream_data) != 0) {
     close(pipefd[0]);
@@ -1064,9 +1059,9 @@ static int server_on_header_callback(nghttp2_session *session,
 {
   http2_session_data *session_data = (http2_session_data *)user_data;
   mrb_state *mrb = session_data->app_ctx->server->mrb;
+  mrb_http2_config_t *config = session_data->app_ctx->server->config;
 
   http2_stream_data *stream_data;
-  size_t i, j;
   nghttp2_nv nv;
 
   if (frame->hd.type != NGHTTP2_HEADERS || frame->headers.cat != NGHTTP2_HCAT_REQUEST) {
@@ -1080,37 +1075,30 @@ static int server_on_header_callback(nghttp2_session *session,
   }
 
   if (session_data->app_ctx->server->config->debug) {
-    char *key = mrb_http2_strcopy(mrb, (char *)name, namelen);
-    char *val = mrb_http2_strcopy(mrb, (char *)value, valuelen);
-    fprintf(stderr, "%s: header={name=%s, value=%s}\n", __func__, key, val);
-    mrb_free(mrb, key);
-    mrb_free(mrb, val);
+    debug_header(__func__, name, namelen, value, valuelen);
   }
 
   switch (lookup_token(name, namelen)) {
+    size_t j;
   case NGHTTP2_TOKEN__AUTHORITY:
-    for (i = 0; i < valuelen; i++) {
-      stream_data->authority[i] = value[i];
-    }
+    memcpy(stream_data->authority, value, valuelen);
     stream_data->authority[valuelen] = '\0';
     return 0;
 
   case NGHTTP2_TOKEN__METHOD:
-    for (i = 0; i < valuelen; i++) {
-      stream_data->method[i] = value[i];
-    }
+    memcpy(stream_data->method, value, valuelen);
     stream_data->method[valuelen] = '\0';
     return 0;
 
   case NGHTTP2_TOKEN__SCHEME:
-    for (i = 0; i < valuelen; i++) {
-      stream_data->scheme[i] = value[i];
-    }
+    memcpy(stream_data->scheme, value, valuelen);
     stream_data->scheme[valuelen] = '\0';
     return 0;
 
   case NGHTTP2_TOKEN__PATH:
-    stream_data->percent_encode_uri = mrb_http2_strcopy(mrb, (const char *)value, valuelen);
+    if (config->upstream) {
+      stream_data->percent_encode_uri = mrb_http2_strcopy(mrb, (const char *)value, valuelen);
+    }
     stream_data->unparsed_uri = percent_decode(mrb, value, valuelen);
     for(j = 0; j < valuelen && value[j] != '?'; ++j);
     if (j == valuelen) {
@@ -1214,9 +1202,11 @@ static int mrb_http2_send_custom_response(app_context *app_ctx,
   //
   // "set_fixups_cb" callback ruby block
   //
-  r->phase = MRB_HTTP2_SERVER_FIXUPS;
-  callback_ruby_block(mrb, app_ctx->self, config->callback,
-      config->cb_list->fixups_cb, config->cb_list);
+  if (config->callback) {
+    r->phase = MRB_HTTP2_SERVER_FIXUPS;
+    callback_ruby_block(mrb, app_ctx->self, config->callback,
+        config->cb_list->fixups_cb, config->cb_list);
+  }
 
   if(send_response(app_ctx, session, r->reshdrs, r->reshdrslen, stream_data) != 0) {
     close(stream_data->fd);
@@ -1249,9 +1239,11 @@ static int mrb_http2_send_200_response(app_context *app_ctx,
   //
   // "set_fixups_cb" callback ruby block
   //
-  r->phase = MRB_HTTP2_SERVER_FIXUPS;
-  callback_ruby_block(mrb, app_ctx->self, config->callback,
-      config->cb_list->fixups_cb, config->cb_list);
+  if (config->callback) {
+    r->phase = MRB_HTTP2_SERVER_FIXUPS;
+    callback_ruby_block(mrb, app_ctx->self, config->callback,
+        config->cb_list->fixups_cb, config->cb_list);
+  }
 
   if(send_response(app_ctx, session, r->reshdrs, r->reshdrslen, stream_data) != 0) {
     close(stream_data->fd);
@@ -1276,7 +1268,9 @@ static int mrb_http2_process_request(nghttp2_session *session,
 
   // cached time string created strftime()
   // create r->date for error_reply
-  r->phase = MRB_HTTP2_SERVER_READ_REQUEST;
+  if (config->callback) {
+    r->phase = MRB_HTTP2_SERVER_READ_REQUEST;
+  }
   if (now != r->prev_req_time) {
     r->prev_req_time = now;
     set_http_date_str(&now, r->date);
@@ -1292,14 +1286,7 @@ static int mrb_http2_process_request(nghttp2_session *session,
   if (config->debug) {
     int i;
     for (i = 0; i < stream_data->nvlen; i++) {
-      char *name = mrb_http2_strcopy(mrb, (char *)stream_data->nva[i].name,
-          stream_data->nva[i].namelen);
-      char *value = mrb_http2_strcopy(mrb, (char *)stream_data->nva[i].value,
-          stream_data->nva[i].valuelen);
-      fprintf(stderr, "%s: nva[%d]={name=%s, value=%s}\n", __func__, i,
-          name, value);
-      mrb_free(mrb, name);
-      mrb_free(mrb, value);
+      debug_header(__func__, stream_data->nva[i].name, stream_data->nva[i].namelen, stream_data->nva[i].value, stream_data->nva[i].valuelen);
     }
   }
 
@@ -1360,9 +1347,11 @@ static int mrb_http2_process_request(nghttp2_session *session,
   //
   // "set_map_to_storage" callback ruby block
   //
-  r->phase = MRB_HTTP2_SERVER_MAP_TO_STORAGE;
-  callback_ruby_block(mrb, session_data->app_ctx->self, config->callback,
-      config->cb_list->map_to_strage_cb, config->cb_list);
+  if (config->callback) {
+    r->phase = MRB_HTTP2_SERVER_MAP_TO_STORAGE;
+    callback_ruby_block(mrb, session_data->app_ctx->self, config->callback,
+        config->cb_list->map_to_strage_cb, config->cb_list);
+  }
 
   if (config->debug) {
     fprintf(stderr, "%s %s is mapped to %s\n", session_data->client_addr,
@@ -1372,9 +1361,11 @@ static int mrb_http2_process_request(nghttp2_session *session,
   //
   // "set_access_checker" callback ruby block
   //
-  r->phase = MRB_HTTP2_SERVER_ACCESS_CHECKER;
-  callback_ruby_block(mrb, session_data->app_ctx->self, config->callback,
-      config->cb_list->access_checker_cb, config->cb_list);
+  if (config->callback) {
+    r->phase = MRB_HTTP2_SERVER_ACCESS_CHECKER;
+    callback_ruby_block(mrb, session_data->app_ctx->self, config->callback,
+        config->cb_list->access_checker_cb, config->cb_list);
+  }
 
   // check whether set status or not on access_checker callback
   if (r->status && r->status != HTTP_OK) {
@@ -1385,7 +1376,7 @@ static int mrb_http2_process_request(nghttp2_session *session,
   }
 
   // check proxy config
-  if (r->upstream && r->upstream->host) {
+  if (config->upstream && r->upstream && r->upstream->host) {
     if (config->debug) {
       fprintf(stderr, "found upstream: server:%s:%d uri:%s\n",
           r->upstream->host, r->upstream->port, r->upstream->uri);
@@ -1673,7 +1664,7 @@ static http2_session_data* create_http2_session_data(mrb_state *mrb,
   int rv;
   http2_session_data *session_data;
   SSL *ssl;
-  char host[NI_MAXHOST];
+  //char host[NI_MAXHOST];
   int val = 1;
   mrb_http2_server_t *server = app_ctx->server;
   mrb_http2_config_t *config = app_ctx->server->config;
@@ -1716,16 +1707,12 @@ static http2_session_data* create_http2_session_data(mrb_state *mrb,
 
   bufferevent_enable(session_data->bev, EV_READ | EV_WRITE);
 
-  rv = getnameinfo(addr, addrlen, host, sizeof(host), NULL, 0, NI_NUMERICHOST);
+  rv = getnameinfo(addr, addrlen, session_data->client_addr, sizeof(session_data->client_addr), NULL, 0, NI_NUMERICHOST);
   if(rv != 0) {
-    session_data->client_addr = mrb_http2_strcopy(mrb, "(unknown)",
-        strlen("(unknown)"));
-  } else {
-    session_data->client_addr = mrb_http2_strcopy(mrb, host, strlen(host));
+    memcpy(session_data->client_addr, "(unknown)", sizeof("(unknown)"));
   }
   if (session_data->conn) {
-    session_data->conn->client_ip = mrb_http2_strcopy(mrb,
-        session_data->client_addr, strlen(session_data->client_addr));
+    session_data->conn->client_ip = session_data->client_addr;
   }
   session_data->upstream_base = NULL;
   session_data->upstream_conn = NULL;
