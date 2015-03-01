@@ -667,6 +667,7 @@ void http_request_done(struct evhttp_request *req, void *user_data)
   }
 
   c->stream_data->readleft = req->body_size;
+  snprintf(r->content_length, 64, "%ld", req->body_size);
   c->stream_data->upstream_req = req;
   event_base_loopexit(c->session_data->upstream_base, NULL);
 
