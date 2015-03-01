@@ -30,7 +30,7 @@ const char *mrb_http2_4xx_error_table[] = {
   "<html><head><title>401</title></head><body><h1>401 Unauthorized</h1></body></html>",
   "<html><head><title>402</title></head><body><h1>402 Payment Required</h1></body></html>",
   "<html><head><title>403</title></head><body><h1>403 Forbidden</h1></body></html>",
-  "<html><head><title>404</title></head><body><h1>404 Not Found</h1></body></html>",
+  "<html><head><title>404</title></head><body><h1>404 Not Found</h1><p>The requested URL was not found on this server.</p></body></html>",
   NULL
 };
 
