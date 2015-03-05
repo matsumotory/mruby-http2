@@ -17,6 +17,8 @@ struct mrb_http2_conn_t {
   SSL *ssl;
   nghttp2_session *session;
   int want_io;
+  int fd;
+  SSL_CTX *ssl_ctx;
   mrb_state *mrb;
   mrb_value response;
   mrb_value cb_block_hash;
@@ -65,6 +67,7 @@ static void mrb_http2_context_free(mrb_state *mrb, void *p)
 {
   mrb_http2_context_t *ctx = (mrb_http2_context_t *)p;
   mrb_http2_request_free(mrb, ctx->req);
+  mrb_free(mrb, ctx);
   TRACER;
 }
 
@@ -774,6 +777,118 @@ static mrb_value mrb_http2_fetch_uri(mrb_state *mrb,
   return conn.response;
 }
 
+static mrb_value mrb_http2_client_create_session(mrb_state *mrb, mrb_value self)
+{
+  nghttp2_session_callbacks *callbacks;
+  SSL_CTX *ssl_ctx;
+  SSL *ssl;
+  int rv;
+  int fd;
+  mrb_http2_context_t *ctx = DATA_PTR(self);
+
+  fd = mrb_http2_connect_to(mrb, ctx->req->host, ctx->req->port);
+  if(fd == -1) {
+    mrb_raisef(mrb, E_RUNTIME_ERROR,
+        "Could not open file descriptor: host \"%S\", port \"%S\"",
+        mrb_str_new_cstr(mrb, ctx->req->host),
+        mrb_fixnum_value(ctx->req->port));
+  }
+  ssl_ctx = SSL_CTX_new(SSLv23_client_method());
+  if(ssl_ctx == NULL) {
+    mrb_raisef(mrb, E_RUNTIME_ERROR, "SSL_CTX_new: %S",
+        mrb_str_new_cstr(mrb, ERR_error_string(ERR_get_error(), NULL)));
+  }
+  mrb_http2_init_ssl_ctx(mrb, ssl_ctx);
+  ssl = SSL_new(ssl_ctx);
+  if(ssl == NULL) {
+    mrb_raisef(mrb, E_RUNTIME_ERROR, "SSL_new: %S",
+        mrb_str_new_cstr(mrb, ERR_error_string(ERR_get_error(), NULL)));
+  }
+  mrb_http2_ssl_handshake(mrb, ssl, fd);
+
+  SSL_write(ssl, NGHTTP2_CLIENT_CONNECTION_PREFACE,
+      NGHTTP2_CLIENT_CONNECTION_PREFACE_LEN);
+
+  mrb_http2_make_non_block(mrb, fd);
+  mrb_http2_set_tcp_nodelay(mrb, fd);
+
+  ctx->conn->mrb = mrb;
+  ctx->conn->ssl = ssl;
+  ctx->conn->want_io = IO_NONE;
+  ctx->conn->ssl_ctx = ssl_ctx;
+  ctx->conn->fd = fd;
+
+  rv = nghttp2_session_callbacks_new(&callbacks);
+  if(rv != 0) {
+      mrb_raisef(mrb, E_RUNTIME_ERROR, "nghttp2_session_client_new: %S",
+          mrb_fixnum_value(rv));
+  }
+
+  mrb_http2_setup_nghttp2_callbacks(mrb, callbacks);
+  rv = nghttp2_session_client_new(&ctx->conn->session, callbacks, ctx->conn);
+  nghttp2_session_callbacks_del(callbacks);
+  if(rv != 0) {
+    mrb_raisef(mrb, E_RUNTIME_ERROR, "nghttp2_session_client_new: %S",
+        mrb_fixnum_value(rv));
+  }
+  return self;
+}
+
+
+static mrb_value mrb_http2_client_request_stream(mrb_state *mrb, mrb_value self)
+{
+  struct pollfd pollfds[1];
+  nfds_t npollfds = 1;
+  mrb_http2_context_t *ctx = DATA_PTR(self);
+
+  if (ctx->conn->fd == -1) {
+    return mrb_false_value();
+  }
+
+  nghttp2_submit_settings(ctx->conn->session, NGHTTP2_FLAG_NONE, NULL, 0);
+
+  mrb_http2_submit_request(mrb, ctx->conn, ctx->req);
+
+  pollfds[0].fd = ctx->conn->fd;
+  mrb_http2_ctl_poll(mrb, pollfds, ctx->conn);
+
+  while(nghttp2_session_want_read(ctx->conn->session)
+      || nghttp2_session_want_write(ctx->conn->session)) {
+    int nfds = poll(pollfds, npollfds, -1);
+    if(nfds == -1) {
+      mrb_raisef(mrb, E_RUNTIME_ERROR, "poll: %S",
+          mrb_str_new_cstr(mrb, strerror(errno)));
+    }
+    if(pollfds[0].revents & (POLLIN | POLLOUT)) {
+      mrb_http2_exec_io(mrb, ctx->conn);
+    }
+    if((pollfds[0].revents & POLLHUP) || (pollfds[0].revents & POLLERR)) {
+      mrb_raise(mrb, E_RUNTIME_ERROR, "connection error");
+    }
+    mrb_http2_ctl_poll(mrb, pollfds, ctx->conn);
+  }
+
+  return ctx->conn->response;
+}
+
+static mrb_value mrb_http2_client_delete_session(mrb_state *mrb, mrb_value self)
+{
+  mrb_http2_context_t *ctx = DATA_PTR(self);
+
+  nghttp2_session_del(ctx->conn->session);
+  SSL_set_shutdown(ctx->conn->ssl, SSL_RECEIVED_SHUTDOWN);
+  ERR_clear_error();
+  SSL_shutdown(ctx->conn->ssl);
+  SSL_free(ctx->conn->ssl);
+  SSL_CTX_free(ctx->conn->ssl_ctx);
+  shutdown(ctx->conn->fd, SHUT_WR);
+  close(ctx->conn->fd);
+  ctx->conn->fd = -1;
+  mrb_http2_request_free(mrb, ctx->req);
+
+  return mrb_true_value();
+}
+
 static mrb_value mrb_http2_get_uri(mrb_state *mrb, mrb_http2_context_t *ctx)
 {
   nghttp2_session_callbacks *callbacks;
@@ -1035,9 +1150,13 @@ void mrb_http2_client_class_init(mrb_state *mrb, struct RClass *http2)
   client = mrb_define_class_under(mrb, http2, "Client", mrb->object_class);
 
   mrb_define_method(mrb, client, "initialize", mrb_http2_client_init, MRB_ARGS_NONE());
+  mrb_define_method(mrb, client, "create_session", mrb_http2_client_create_session, MRB_ARGS_NONE());
+  mrb_define_method(mrb, client, "request_stream", mrb_http2_client_request_stream, MRB_ARGS_NONE());
+  mrb_define_method(mrb, client, "delete_session", mrb_http2_client_delete_session, MRB_ARGS_NONE());
+  mrb_define_method(mrb, client, "uri=", mrb_http2_client_set_uri, MRB_ARGS_REQ(1));
+
   mrb_define_method(mrb, client, "request", mrb_http2_client_request, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, client, "inst_get", mrb_http2_client_inst_get, MRB_ARGS_NONE());
-  mrb_define_method(mrb, client, "uri=", mrb_http2_client_set_uri, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, client, "send_callback", mrb_http2_set_send_callback, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, client, "recv_callback", mrb_http2_set_recv_callback, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, client, "before_frame_send_callback", mrb_http2_set_before_frame_send_callback, MRB_ARGS_REQ(1));
