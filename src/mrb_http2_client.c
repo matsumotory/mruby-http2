@@ -34,6 +34,7 @@ struct mrb_http2_request_t {
 };
 
 struct mrb_http2_uri_t {
+  const char *unparsed_uri;
   const char *host;
   size_t hostlen;
   uint16_t port;
@@ -63,6 +64,12 @@ static void mrb_http2_request_free(mrb_state *mrb,
   nghttp2_gzip_inflate_del(req->inflater);
 }
 
+static void mrb_http2_uri_free(mrb_state *mrb,
+    struct mrb_http2_uri_t *uri)
+{
+  mrb_free(mrb, uri);
+}
+
 static void mrb_http2_context_free(mrb_state *mrb, void *p)
 {
   mrb_http2_context_t *ctx = (mrb_http2_context_t *)p;
@@ -80,7 +87,10 @@ static int parse_uri(struct mrb_http2_uri_t *res, const char *uri)
 {
   size_t len, i, offset;
   int ipv6addr = 0;
+
   memset(res, 0, sizeof(struct mrb_http2_uri_t));
+
+  res->unparsed_uri = uri;
   len = strlen(uri);
   if(len < 9 || memcmp("https://", uri, 8) != 0) {
     return -1;
@@ -885,6 +895,9 @@ static mrb_value mrb_http2_client_delete_session(mrb_state *mrb, mrb_value self)
   close(ctx->conn->fd);
   ctx->conn->fd = -1;
   mrb_http2_request_free(mrb, ctx->req);
+  mrb_http2_uri_free(mrb, ctx->uri);
+  ctx->req = NULL;
+  ctx->uri = NULL;
 
   return mrb_true_value();
 }
@@ -975,6 +988,9 @@ static mrb_value mrb_http2_get_uri(mrb_state *mrb, mrb_http2_context_t *ctx)
   shutdown(fd, SHUT_WR);
   close(fd);
   mrb_http2_request_free(mrb, ctx->req);
+  mrb_http2_uri_free(mrb, ctx->uri);
+  ctx->req = NULL;
+  ctx->uri = NULL;
 
   return ctx->conn->response;
 }
@@ -1063,6 +1079,16 @@ static mrb_value mrb_http2_set_on_header_callback(mrb_state *mrb,
 {
   return mrb_http2_set_block_callback(mrb, self, "on_header_callback");
 }
+
+static mrb_value mrb_http2_client_get_uri(mrb_state *mrb, mrb_value self)
+{
+  mrb_http2_context_t *ctx = DATA_PTR(self);
+  if (ctx->uri != NULL) {
+    return mrb_str_new_cstr(mrb, ctx->uri->unparsed_uri);
+  }
+  return mrb_nil_value();
+}
+
 static mrb_value mrb_http2_client_set_uri(mrb_state *mrb, mrb_value self)
 {
   mrb_http2_context_t *ctx = DATA_PTR(self);
@@ -1154,6 +1180,7 @@ void mrb_http2_client_class_init(mrb_state *mrb, struct RClass *http2)
   mrb_define_method(mrb, client, "request_stream", mrb_http2_client_request_stream, MRB_ARGS_NONE());
   mrb_define_method(mrb, client, "delete_session", mrb_http2_client_delete_session, MRB_ARGS_NONE());
   mrb_define_method(mrb, client, "uri=", mrb_http2_client_set_uri, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, client, "uri", mrb_http2_client_get_uri, MRB_ARGS_NONE());
 
   mrb_define_method(mrb, client, "request", mrb_http2_client_request, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, client, "inst_get", mrb_http2_client_inst_get, MRB_ARGS_NONE());
