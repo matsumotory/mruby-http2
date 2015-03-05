@@ -2882,6 +2882,7 @@ void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
   mrb_define_method(mrb, server, "total_stream_requests", mrb_http2_server_total_stream_requests, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "total_session_requests", mrb_http2_server_total_session_requests, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "connected_sessions", mrb_http2_server_connected_sessions, MRB_ARGS_NONE());
+  mrb_define_method(mrb, server, "active_session", mrb_http2_server_connected_sessions, MRB_ARGS_NONE());
   mrb_define_method(mrb, server, "active_stream", mrb_http2_server_active_stream, MRB_ARGS_NONE());
 
   // methods for mruby script
