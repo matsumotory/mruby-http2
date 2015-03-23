@@ -1367,7 +1367,7 @@ static int mrb_http2_process_request(nghttp2_session *session,
   if (config->callback) {
     r->phase = MRB_HTTP2_SERVER_MAP_TO_STORAGE;
     callback_ruby_block(mrb, session_data->app_ctx->self, config->callback,
-        config->cb_list->map_to_strage_cb, config->cb_list);
+        config->cb_list->map_to_storage_cb, config->cb_list);
   }
 
   if (config->debug) {
@@ -2164,7 +2164,7 @@ static mrb_value mrb_http2_server_run(mrb_state *mrb, mrb_value self)
   return self;
 }
 
-static mrb_value mrb_http2_server_set_map_to_strage_cb(mrb_state *mrb,
+static mrb_value mrb_http2_server_set_map_to_storage_cb(mrb_state *mrb,
     mrb_value self)
 {
   mrb_http2_data_t *data = DATA_PTR(self);
@@ -2175,7 +2175,7 @@ static mrb_value mrb_http2_server_set_map_to_strage_cb(mrb_state *mrb,
   mrb_get_args(mrb, "&", &b);
   mrb_gc_protect(mrb, b);
   mrb_iv_set(mrb, self, mrb_intern_cstr(mrb, cbid), b);
-  list->map_to_strage_cb = cbid;
+  list->map_to_storage_cb = cbid;
 
   return b;
 }
@@ -2895,7 +2895,7 @@ void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
   mrb_define_method(mrb, server, "content_length", mrb_http2_server_content_length, MRB_ARGS_NONE());
 
   // callbacks
-  mrb_define_method(mrb, server, "set_map_to_strage_cb", mrb_http2_server_set_map_to_strage_cb, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, server, "set_map_to_storage_cb", mrb_http2_server_set_map_to_storage_cb, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, server, "set_access_checker_cb", mrb_http2_server_set_access_checker_cb, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, server, "set_fixups_cb", mrb_http2_server_set_fixups_cb, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, server, "set_content_cb", mrb_http2_server_set_content_cb, MRB_ARGS_REQ(1));
