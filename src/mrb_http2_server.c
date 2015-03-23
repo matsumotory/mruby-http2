@@ -1541,6 +1541,13 @@ static int server_on_data_chunk_recv_callback(nghttp2_session *session,
           MRB_HTTP2_MAX_POST_DATA_SIZE);
       stream_data->request_body->len = MRB_HTTP2_MAX_POST_DATA_SIZE;
       stream_data->request_body->last = 1;
+      rv = nghttp2_submit_rst_stream(session, NGHTTP2_FLAG_NONE,
+          stream_data->stream_id, NGHTTP2_INTERNAL_ERROR);
+      if(rv != 0) {
+        fprintf(stderr, "Fatal error: %s", nghttp2_strerror(rv));
+        return NGHTTP2_ERR_CALLBACK_FAILURE;
+      }
+      return 0;
     }
     stream_data->request_body->data = mrb_realloc(mrb, stream_data->request_body->data, stream_data->request_body->len + 1);
     pos = stream_data->request_body->data;
