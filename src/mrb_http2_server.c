@@ -1339,7 +1339,7 @@ static int mrb_http2_process_request(nghttp2_session *session,
   r->uri = stream_data->request_path;
   r->args = stream_data->request_args;
 
-  if (r->request_body != NULL) {
+  if (stream_data->request_body != NULL) {
     r->request_body = stream_data->request_body->data;
   } else {
     r->request_body = NULL;
