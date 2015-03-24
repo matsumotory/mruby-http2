@@ -37,7 +37,9 @@ void mrb_http2_request_rec_free(mrb_state *mrb, mrb_http2_request_rec *r)
 
   // free response headers
   if (r->reshdrslen > 0) {
-    mrb_http2_free_nva(mrb, r->reshdrs, r->reshdrslen);
+    if (r->response_type != MRB_HTTP2_RESPONSE_STATIC) {
+      mrb_http2_free_nva(mrb, r->reshdrs, r->reshdrslen);
+    }
     r->reshdrslen = 0;
   }
 
