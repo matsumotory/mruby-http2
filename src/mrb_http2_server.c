@@ -579,17 +579,8 @@ static int error_reply(app_context *app_ctx, nghttp2_session *session,
   TRACER;
   if(send_response(app_ctx, session, r->reshdrs, r->reshdrslen, stream_data) != 0) {
     close(pipefd[0]);
-    if (r->reshdrslen >0) {
-      mrb_http2_free_nva(mrb, r->reshdrs, r->reshdrslen);
-      r->reshdrslen = 0;
-    }
     return -1;
   }
-  if (r->reshdrslen >0) {
-    mrb_http2_free_nva(mrb, r->reshdrs, r->reshdrslen);
-    r->reshdrslen = 0;
-  }
-
   TRACER;
   return 0;
 }
@@ -900,15 +891,7 @@ static int content_cb_reply(app_context *app_ctx, nghttp2_session *session,
 
   if(send_response(app_ctx, session, r->reshdrs, r->reshdrslen, stream_data) != 0) {
     close(pipefd[0]);
-    if (r->reshdrslen >0) {
-      mrb_http2_free_nva(mrb, r->reshdrs, r->reshdrslen);
-      r->reshdrslen = 0;
-    }
     return -1;
-  }
-  if (r->reshdrslen >0) {
-    mrb_http2_free_nva(mrb, r->reshdrs, r->reshdrslen);
-    r->reshdrslen = 0;
   }
   TRACER;
   return 0;
@@ -1020,16 +1003,8 @@ static int mruby_reply(app_context *app_ctx, nghttp2_session *session,
   }
 
   if(send_response(app_ctx, session, r->reshdrs, r->reshdrslen, stream_data) != 0) {
-    if(r->reshdrslen > 0) {
-      mrb_http2_free_nva(mrb, r->reshdrs, r->reshdrslen);
-      r->reshdrslen = 0;
-    }
     close(pipefd[0]);
     return -1;
-  }
-  if(r->reshdrslen > 0) {
-    mrb_http2_free_nva(mrb, r->reshdrs, r->reshdrslen);
-    r->reshdrslen = 0;
   }
   TRACER;
   return 0;
@@ -1283,11 +1258,9 @@ static int mrb_http2_send_200_response(app_context *app_ctx,
   }
 
   if(send_response(app_ctx, session, r->reshdrs, r->reshdrslen, stream_data) != 0) {
-    r->reshdrslen = 0;
     close(stream_data->fd);
     return NGHTTP2_ERR_CALLBACK_FAILURE;
   }
-  r->reshdrslen = 0;
   return 0;
 }
 
