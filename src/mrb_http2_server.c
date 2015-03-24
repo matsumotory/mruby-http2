@@ -1462,13 +1462,8 @@ static int mrb_http2_process_request(nghttp2_session *session,
   stream_data->readleft = r->finfo->st_size;
 
   TRACER;
-  if (r->reshdrslen > 0) {
-    return mrb_http2_send_custom_response(session_data->app_ctx, session,
+  return mrb_http2_send_custom_response(session_data->app_ctx, session,
       stream_data);
-  } else {
-    return mrb_http2_send_200_response(session_data->app_ctx, session,
-        stream_data);
-  }
 }
 
 static int server_on_frame_recv_callback(nghttp2_session *session,
