@@ -1230,10 +1230,7 @@ static int mrb_http2_send_custom_response(app_context *app_ctx,
 static int mrb_http2_send_200_response(app_context *app_ctx,
     nghttp2_session *session, http2_stream_data *stream_data) {
 
-  int i;
   mrb_http2_request_rec *r = app_ctx->r;
-  mrb_http2_config_t *config = app_ctx->server->config;
-  mrb_state *mrb = app_ctx->server->mrb;
   nghttp2_nv hdrs[] = {
     MAKE_NV(":status", "200"),
     MAKE_NV_CS("server", app_ctx->server->config->server_name),
@@ -1242,22 +1239,9 @@ static int mrb_http2_send_200_response(app_context *app_ctx,
     MAKE_NV_CS("last-modified", r->last_modified)
   };
 
-  r->reshdrslen = ARRLEN(hdrs);
-  for (i = 0; i < r->reshdrslen; i++) {
-    r->reshdrs[i] = hdrs[i];
-  }
   r->status = 200;
 
-  //
-  // "set_fixups_cb" callback ruby block
-  //
-  if (config->callback) {
-    r->phase = MRB_HTTP2_SERVER_FIXUPS;
-    callback_ruby_block(mrb, app_ctx->self, config->callback,
-        config->cb_list->fixups_cb, config->cb_list);
-  }
-
-  if(send_response(app_ctx, session, r->reshdrs, r->reshdrslen, stream_data) != 0) {
+  if(send_response(app_ctx, session, hdrs, ARRLEN(hdrs), stream_data) != 0) {
     close(stream_data->fd);
     return NGHTTP2_ERR_CALLBACK_FAILURE;
   }
@@ -1338,6 +1322,7 @@ static int mrb_http2_process_request(nghttp2_session *session,
   r->percent_encode_uri = stream_data->percent_encode_uri;
   r->uri = stream_data->request_path;
   r->args = stream_data->request_args;
+  r->response_type = MRB_HTTP2_RESPONSE_TYPE_NONE;
 
   if (stream_data->request_body != NULL) {
     r->request_body = stream_data->request_body->data;
@@ -1462,11 +1447,12 @@ static int mrb_http2_process_request(nghttp2_session *session,
   stream_data->readleft = r->finfo->st_size;
 
   TRACER;
-  if (r->reshdrslen > 0) {
-    return mrb_http2_send_custom_response(session_data->app_ctx, session,
-      stream_data);
-  } else {
+  if (!config->callback && r->reshdrslen == 0) {
+    r->response_type = MRB_HTTP2_RESPONSE_STATIC;
     return mrb_http2_send_200_response(session_data->app_ctx, session,
+        stream_data);
+  } else {
+    return mrb_http2_send_custom_response(session_data->app_ctx, session,
         stream_data);
   }
 }

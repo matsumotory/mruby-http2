@@ -13,6 +13,11 @@
 #include "mrb_http2_upstream.h"
 #include "mruby.h"
 
+typedef enum mrb_http2_response_type {
+  MRB_HTTP2_RESPONSE_STATIC,
+  MRB_HTTP2_RESPONSE_TYPE_NONE
+} mrb_http2_response_type;
+
 typedef enum mrb_http2_server_phase {
   MRB_HTTP2_SERVER_INIT_REQUEST,
   MRB_HTTP2_SERVER_READ_REQUEST,
@@ -169,6 +174,9 @@ typedef struct {
 
   // current request phase
   mrb_http2_server_phase phase;
+
+  // response type
+  mrb_http2_response_type response_type;
 
 } mrb_http2_request_rec;
 

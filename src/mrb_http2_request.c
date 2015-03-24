@@ -27,13 +27,22 @@ void mrb_http2_request_rec_free(mrb_state *mrb, mrb_http2_request_rec *r)
   if (r->conn != NULL) {
     r->conn = NULL;
   }
-  if (r->reqhdr != NULL) {
+
+  // free request headers
+  if (r->reqhdrlen > 0) {
     mrb_http2_free_nva(mrb, r->reqhdr, r->reqhdrlen);
     r->reqhdr = NULL;
+    r->reqhdrlen = 0;
   }
 
-  r->reqhdrlen = 0;
-  r->reshdrslen = 0;
+  // free response headers
+  if (r->reshdrslen > 0) {
+    if (r->response_type != MRB_HTTP2_RESPONSE_STATIC) {
+      mrb_http2_free_nva(mrb, r->reshdrs, r->reshdrslen);
+    }
+    r->reshdrslen = 0;
+  }
+
   r->status = 0;
 }
 
