@@ -923,11 +923,16 @@ static int mruby_reply(app_context *app_ctx, nghttp2_session *session,
     mrb_inner = mrb_open();
   }
 
-
   rfp = fopen(r->filename, "r");
   if (rfp == NULL) {
-    fprintf(stderr, "mruby file opened failed: %s", r->filename);
-    return -1;
+    if (r->mruby) {
+      mrb_close(mrb_inner);
+    }
+    set_status_record(r, HTTP_NOT_FOUND);
+    if(error_reply(app_ctx, session, stream_data) != 0) {
+      return NGHTTP2_ERR_CALLBACK_FAILURE;
+    }
+    return 0;
   }
 
   TRACER;
