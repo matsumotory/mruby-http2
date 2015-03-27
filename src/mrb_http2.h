@@ -68,15 +68,15 @@
     (uint16_t)(sizeof(NAME) - 1), (uint16_t)(strlen(VALUE)),           \
     NGHTTP2_NV_FLAG_NONE}
 
-#define MRB_HTTP2_CREATE_NV_CS(MRB, NV, NAME, VALUE)                         \
+#define MRB_HTTP2_CREATE_NV_LIT_CS(MRB, NV, NAME, VALUE)                     \
   mrb_http2_create_nv(MRB, NV, (uint8_t*)NAME, (uint16_t)(sizeof(NAME) - 1), \
     (uint8_t*)VALUE,  (uint16_t)(strlen(VALUE)))
 
-#define MRB_HTTP2_CREATE_NV_CSCS(MRB, NV, NAME, VALUE)                         \
+#define MRB_HTTP2_CREATE_NV_CS_CS(MRB, NV, NAME, VALUE)                         \
   mrb_http2_create_nv(MRB, NV, (uint8_t*)NAME, (uint16_t)(strlen(NAME)), \
     (uint8_t*)VALUE,  (uint16_t)(strlen(VALUE)))
 
-#define MRB_HTTP2_CREATE_NV_LIT(MRB, NV, NAME, VALUE)                         \
+#define MRB_HTTP2_CREATE_NV_LIT_LIT(MRB, NV, NAME, VALUE)                         \
   mrb_http2_create_nv(MRB, NV, (uint8_t*)NAME, (uint16_t)(sizeof(NAME) - 1), \
     (uint8_t*)VALUE,  (uint16_t)(sizeof(VALUE) - 1))
 

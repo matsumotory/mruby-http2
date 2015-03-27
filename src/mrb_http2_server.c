@@ -534,11 +534,11 @@ static int error_reply(app_context *app_ctx, nghttp2_session *session,
   fixup_status_header(mrb, r);
 
   // create headers for HTTP/2
-  MRB_HTTP2_CREATE_NV_CS(mrb, &r->reshdrs[r->reshdrslen], "date", r->date);
+  MRB_HTTP2_CREATE_NV_LIT_CS(mrb, &r->reshdrs[r->reshdrslen], "date", r->date);
   r->reshdrslen += 1;
-  MRB_HTTP2_CREATE_NV_CS(mrb, &r->reshdrs[r->reshdrslen], "server", config->server_name);
+  MRB_HTTP2_CREATE_NV_LIT_CS(mrb, &r->reshdrs[r->reshdrslen], "server", config->server_name);
   r->reshdrslen += 1;
-  MRB_HTTP2_CREATE_NV_CS(mrb, &r->reshdrs[r->reshdrslen], "content-type", "text/html; charset=utf-8");
+  MRB_HTTP2_CREATE_NV_LIT_CS(mrb, &r->reshdrs[r->reshdrslen], "content-type", "text/html; charset=utf-8");
   r->reshdrslen += 1;
 
   TRACER;
@@ -564,7 +564,7 @@ static int error_reply(app_context *app_ctx, nghttp2_session *session,
 
   // set content-length: max 10^64
   snprintf(r->content_length, 64, "%ld", size);
-  MRB_HTTP2_CREATE_NV_CS(mrb, &r->reshdrs[r->reshdrslen], "content-length", r->content_length);
+  MRB_HTTP2_CREATE_NV_LIT_CS(mrb, &r->reshdrs[r->reshdrslen], "content-length", r->content_length);
   r->reshdrslen += 1;
 
   //
@@ -635,7 +635,7 @@ void http_request_done(struct evhttp_request *req, void *user_data)
   TAILQ_FOREACH(header, input_headers, next)
   {
     if (memcmp("Via", header->key, sizeof("Via") - 1) == 0) {
-      MRB_HTTP2_CREATE_NV_CSCS(mrb, &r->reshdrs[r->reshdrslen], header->key,
+      MRB_HTTP2_CREATE_NV_CS_CS(mrb, &r->reshdrs[r->reshdrslen], header->key,
           c->app_ctx->server->config->server_name);
       r->reshdrslen += 1;
       find_via = 1;
@@ -662,17 +662,17 @@ void http_request_done(struct evhttp_request *req, void *user_data)
         mrb_http2_strrep(buf, "http", r->scheme);
       }
 
-      MRB_HTTP2_CREATE_NV_CSCS(mrb, &r->reshdrs[r->reshdrslen], header->key,
+      MRB_HTTP2_CREATE_NV_CS_CS(mrb, &r->reshdrs[r->reshdrslen], header->key,
           buf);
       r->reshdrslen += 1;
     } else {
-      MRB_HTTP2_CREATE_NV_CSCS(mrb, &r->reshdrs[r->reshdrslen], header->key,
+      MRB_HTTP2_CREATE_NV_CS_CS(mrb, &r->reshdrs[r->reshdrslen], header->key,
           header->value);
       r->reshdrslen += 1;
     }
   }
   if (!find_via) {
-    MRB_HTTP2_CREATE_NV_CS(mrb, &r->reshdrs[r->reshdrslen], "via",
+    MRB_HTTP2_CREATE_NV_LIT_CS(mrb, &r->reshdrs[r->reshdrslen], "via",
         c->app_ctx->server->config->server_name);
     r->reshdrslen += 1;
   }
@@ -857,9 +857,9 @@ static int content_cb_reply(app_context *app_ctx, nghttp2_session *session,
   fixup_status_header(mrb, r);
 
   // create headers for HTTP/2
-  MRB_HTTP2_CREATE_NV_CS(mrb, &r->reshdrs[r->reshdrslen], "server", config->server_name);
+  MRB_HTTP2_CREATE_NV_LIT_CS(mrb, &r->reshdrs[r->reshdrslen], "server", config->server_name);
   r->reshdrslen += 1;
-  MRB_HTTP2_CREATE_NV_CS(mrb, &r->reshdrs[r->reshdrslen], "date", r->date);
+  MRB_HTTP2_CREATE_NV_LIT_CS(mrb, &r->reshdrs[r->reshdrslen], "date", r->date);
   r->reshdrslen += 1;
 
   if (r->status >= 200 && r->status < 300) {
@@ -877,7 +877,7 @@ static int content_cb_reply(app_context *app_ctx, nghttp2_session *session,
 
   // set content-length: max 10^64
   snprintf(r->content_length, 64, "%ld", size);
-  MRB_HTTP2_CREATE_NV_CS(mrb, &r->reshdrs[r->reshdrslen], "content-length", r->content_length);
+  MRB_HTTP2_CREATE_NV_LIT_CS(mrb, &r->reshdrs[r->reshdrslen], "content-length", r->content_length);
   r->reshdrslen += 1;
 
   //
@@ -973,11 +973,11 @@ static int mruby_reply(app_context *app_ctx, nghttp2_session *session,
   fixup_status_header(mrb, r);
 
   // create headers for HTTP/2
-  MRB_HTTP2_CREATE_NV_CS(mrb, &r->reshdrs[r->reshdrslen], "server", config->server_name);
+  MRB_HTTP2_CREATE_NV_LIT_CS(mrb, &r->reshdrs[r->reshdrslen], "server", config->server_name);
   r->reshdrslen += 1;
-  MRB_HTTP2_CREATE_NV_CS(mrb, &r->reshdrs[r->reshdrslen], "date", r->date);
+  MRB_HTTP2_CREATE_NV_LIT_CS(mrb, &r->reshdrs[r->reshdrslen], "date", r->date);
   r->reshdrslen += 1;
-  MRB_HTTP2_CREATE_NV_CS(mrb, &r->reshdrs[r->reshdrslen], "last-modified", r->last_modified);
+  MRB_HTTP2_CREATE_NV_LIT_CS(mrb, &r->reshdrs[r->reshdrslen], "last-modified", r->last_modified);
   r->reshdrslen += 1;
 
   if (r->status >= 200 && r->status < 300) {
@@ -995,7 +995,7 @@ static int mruby_reply(app_context *app_ctx, nghttp2_session *session,
 
   // set content-length: max 10^64
   snprintf(r->content_length, 64, "%ld", size);
-  MRB_HTTP2_CREATE_NV_CS(mrb, &r->reshdrs[r->reshdrslen], "content-length", r->content_length);
+  MRB_HTTP2_CREATE_NV_LIT_CS(mrb, &r->reshdrs[r->reshdrslen], "content-length", r->content_length);
   r->reshdrslen += 1;
 
   //
@@ -1175,7 +1175,7 @@ static void fixup_status_header(mrb_state *mrb, mrb_http2_request_rec *r)
   int i = mrb_http2_get_nv_id(r->reshdrs, r->reshdrslen, ":status");
 
   if (r->reshdrslen == 0) {
-    MRB_HTTP2_CREATE_NV_CS(mrb, &r->reshdrs[r->reshdrslen], ":status", r->status_line);
+    MRB_HTTP2_CREATE_NV_LIT_CS(mrb, &r->reshdrs[r->reshdrslen], ":status", r->status_line);
     r->reshdrslen += 1;
     return;
   }
@@ -1184,7 +1184,7 @@ static void fixup_status_header(mrb_state *mrb, mrb_http2_request_rec *r)
     mrb_http2_create_nv(mrb, &r->reshdrs[r->reshdrslen], r->reshdrs[0].name,
         r->reshdrs[0].namelen, r->reshdrs[0].value, r->reshdrs[0].valuelen);
     r->reshdrslen += 1;
-    MRB_HTTP2_CREATE_NV_CS(mrb, &r->reshdrs[0], ":status", r->status_line);
+    MRB_HTTP2_CREATE_NV_LIT_CS(mrb, &r->reshdrs[0], ":status", r->status_line);
   } else if (i > 0) {
     mrb_http2_create_nv(mrb, &r->reshdrs[r->reshdrslen], r->reshdrs[0].name,
         r->reshdrs[0].namelen, r->reshdrs[0].value, r->reshdrs[0].valuelen);
@@ -1207,13 +1207,13 @@ static int mrb_http2_send_custom_response(app_context *app_ctx,
 
   fixup_status_header(mrb, r);
 
-  MRB_HTTP2_CREATE_NV_CS(mrb, &r->reshdrs[r->reshdrslen], "server", app_ctx->server->config->server_name);
+  MRB_HTTP2_CREATE_NV_LIT_CS(mrb, &r->reshdrs[r->reshdrslen], "server", app_ctx->server->config->server_name);
   r->reshdrslen += 1;
-  MRB_HTTP2_CREATE_NV_CS(mrb, &r->reshdrs[r->reshdrslen], "date", r->date);
+  MRB_HTTP2_CREATE_NV_LIT_CS(mrb, &r->reshdrs[r->reshdrslen], "date", r->date);
   r->reshdrslen += 1;
-  MRB_HTTP2_CREATE_NV_CS(mrb, &r->reshdrs[r->reshdrslen], "content-length", r->content_length);
+  MRB_HTTP2_CREATE_NV_LIT_CS(mrb, &r->reshdrs[r->reshdrslen], "content-length", r->content_length);
   r->reshdrslen += 1;
-  MRB_HTTP2_CREATE_NV_CS(mrb, &r->reshdrs[r->reshdrslen], "last-modified", r->last_modified);
+  MRB_HTTP2_CREATE_NV_LIT_CS(mrb, &r->reshdrs[r->reshdrslen], "last-modified", r->last_modified);
   r->reshdrslen += 1;
 
   //
