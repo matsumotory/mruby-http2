@@ -728,9 +728,6 @@ static mrb_value mrb_http2_fetch_uri(mrb_state *mrb,
   conn.ssl = ssl;
   conn.want_io = IO_NONE;
 
-  SSL_write(ssl, NGHTTP2_CLIENT_CONNECTION_PREFACE,
-      NGHTTP2_CLIENT_CONNECTION_PREFACE_LEN);
-
   mrb_http2_make_non_block(mrb, fd);
   mrb_http2_set_tcp_nodelay(mrb, fd);
   conn.mrb = mrb;
