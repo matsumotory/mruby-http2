@@ -816,9 +816,6 @@ static mrb_value mrb_http2_client_create_session(mrb_state *mrb, mrb_value self)
   }
   mrb_http2_ssl_handshake(mrb, ssl, fd);
 
-  SSL_write(ssl, NGHTTP2_CLIENT_CONNECTION_PREFACE,
-      NGHTTP2_CLIENT_CONNECTION_PREFACE_LEN);
-
   mrb_http2_make_non_block(mrb, fd);
   mrb_http2_set_tcp_nodelay(mrb, fd);
 
@@ -934,9 +931,6 @@ static mrb_value mrb_http2_get_uri(mrb_state *mrb, mrb_http2_context_t *ctx)
 
   ctx->conn->ssl = ssl;
   ctx->conn->want_io = IO_NONE;
-
-  SSL_write(ssl, NGHTTP2_CLIENT_CONNECTION_PREFACE,
-      NGHTTP2_CLIENT_CONNECTION_PREFACE_LEN);
 
   mrb_http2_make_non_block(mrb, fd);
   mrb_http2_set_tcp_nodelay(mrb, fd);
