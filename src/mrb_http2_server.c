@@ -449,19 +449,57 @@ static int send_upstream_response(app_context *app_ctx,
   return 0;
 }
 
+static int server_send_data_callback(nghttp2_session *session,
+    nghttp2_frame *frame, const uint8_t *framehd, size_t length,
+    nghttp2_data_source *source, void *user_data) {
+
+  http2_session_data *session_data = (http2_session_data *)user_data;
+  http2_stream_data *stream_data;
+  uint8_t *buf = alloca(length + 9);
+  uint8_t *p = buf;
+
+  stream_data = nghttp2_session_get_stream_user_data(session, frame->hd.stream_id);
+
+  if (!stream_data) {
+    return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
+  }
+
+  /* We never use padding in this program */
+  assert(frame->data.padlen == 0);
+
+  //if (evbuffer_get_length(bufferevent_get_output(session_data->bev)) < 9 + frame->hd.length) {
+  //  return NGHTTP2_ERR_WOULDBLOCK;
+  //}
+
+  memcpy(p, framehd, 9);
+  p += 9;
+
+  while (length) {
+    ssize_t nread;
+    while ((nread = read(stream_data->fd, p, length)) == -1 && errno == EINTR)
+      ;
+    if (nread == -1) {
+      return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
+    }
+
+    length -= nread;
+    p += nread;
+  }
+
+  bufferevent_write(session_data->bev, buf, 9 + length);
+  TRACER;
+  //nghttp2_session_send(session);
+
+  return 0;
+}
+
 static ssize_t file_read_callback(nghttp2_session *session,
     int32_t stream_id, uint8_t *buf, size_t length, uint32_t *data_flags,
     nghttp2_data_source *source, void *user_data)
 {
-  ssize_t nread;
   http2_stream_data *stream_data = source->ptr;
-
-  while((nread = read(stream_data->fd, buf, length)) == -1 && errno == EINTR);
-  TRACER;
-
-  if(nread == -1) {
-    return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
-  }
+  ssize_t nread = (int64_t)length < stream_data->readleft ? length : stream_data->readleft;
+  *data_flags |= NGHTTP2_DATA_FLAG_NO_COPY;
 
   stream_data->readleft -= nread;
   if(nread == 0 || stream_data->readleft == 0) {
@@ -1579,12 +1617,9 @@ static ssize_t fixed_data_source_length_callback(nghttp2_session *session,
 
 static void mrb_http2_server_session_init(http2_session_data *session_data)
 {
-  nghttp2_option *option;
   nghttp2_session_callbacks *callbacks;
 
   TRACER;
-  nghttp2_option_new(&option);
-  nghttp2_option_set_recv_client_preface(option, 1);
 
   nghttp2_session_callbacks_new(&callbacks);
 
@@ -1601,12 +1636,11 @@ static void mrb_http2_server_session_init(http2_session_data *session_data)
       server_on_begin_headers_callback);
   nghttp2_session_callbacks_set_data_source_read_length_callback(callbacks,
       fixed_data_source_length_callback);
+  nghttp2_session_callbacks_set_send_data_callback(callbacks,
+      server_send_data_callback);
 
-  nghttp2_session_server_new2(&session_data->session, callbacks, session_data,
-      option);
+  nghttp2_session_server_new(&session_data->session, callbacks, session_data);
   nghttp2_session_callbacks_del(callbacks);
-
-  nghttp2_option_del(option);
 }
 
 /* Send HTTP/2.0 client connection header, which includes 24 bytes
