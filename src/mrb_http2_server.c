@@ -2863,18 +2863,18 @@ void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2)
   MRB_SET_INSTANCE_TT(server, MRB_TT_DATA);
 
   hin = mrb_define_class_under(mrb, server, "Headers_in", mrb->object_class);
-  mrb_define_method(mrb, hin, "[]", mrb_http2_get_reqhdrs, ARGS_ANY());
-  mrb_define_method(mrb, hin, "all", mrb_http2_get_reqhdrs_in_hash, ARGS_ANY());
+  mrb_define_method(mrb, hin, "[]", mrb_http2_get_reqhdrs, MRB_ARGS_ANY());
+  mrb_define_method(mrb, hin, "all", mrb_http2_get_reqhdrs_in_hash, MRB_ARGS_ANY());
 
-  mrb_define_method(mrb, server, "headers_in", mrb_http2_headers_in_obj, ARGS_NONE());
-  mrb_define_method(mrb, server, "request_headers", mrb_http2_headers_in_obj, ARGS_NONE());
+  mrb_define_method(mrb, server, "headers_in", mrb_http2_headers_in_obj, MRB_ARGS_NONE());
+  mrb_define_method(mrb, server, "request_headers", mrb_http2_headers_in_obj, MRB_ARGS_NONE());
 
   hout = mrb_define_class_under(mrb, server, "Headers_out", mrb->object_class);
-  mrb_define_method(mrb, hout, "[]=", mrb_http2_set_reshdrs, ARGS_ANY());
-  mrb_define_method(mrb, hout, "[]", mrb_http2_get_reshdrs, ARGS_ANY());
+  mrb_define_method(mrb, hout, "[]=", mrb_http2_set_reshdrs, MRB_ARGS_ANY());
+  mrb_define_method(mrb, hout, "[]", mrb_http2_get_reshdrs, MRB_ARGS_ANY());
 
-  mrb_define_method(mrb, server, "headers_out", mrb_http2_headers_out_obj, ARGS_NONE());
-  mrb_define_method(mrb, server, "response_headers", mrb_http2_headers_out_obj, ARGS_NONE());
+  mrb_define_method(mrb, server, "headers_out", mrb_http2_headers_out_obj, MRB_ARGS_NONE());
+  mrb_define_method(mrb, server, "response_headers", mrb_http2_headers_out_obj, MRB_ARGS_NONE());
 
   mrb_define_method(mrb, server, "initialize", mrb_http2_server_init, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, server, "run", mrb_http2_server_run, MRB_ARGS_NONE());
