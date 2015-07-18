@@ -29,7 +29,7 @@ typedef struct {
   unsigned int proto_major;
   unsigned int proto_minor;
 
-  unsigned int keepalive:1;
+  unsigned int keepalive : 1;
 } mrb_http2_upstream;
 
 #endif

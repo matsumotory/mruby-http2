@@ -48,8 +48,8 @@ void mrb_http2_request_rec_free(mrb_state *mrb, mrb_http2_request_rec *r)
 
 mrb_http2_request_rec *mrb_http2_request_rec_init(mrb_state *mrb)
 {
-  mrb_http2_request_rec *r = (mrb_http2_request_rec *)mrb_malloc(mrb,
-      sizeof(mrb_http2_request_rec));
+  mrb_http2_request_rec *r =
+      (mrb_http2_request_rec *)mrb_malloc(mrb, sizeof(mrb_http2_request_rec));
   memset(r, 0, sizeof(mrb_http2_request_rec));
 
   // NULL check when request_rec freed
@@ -90,10 +90,12 @@ void mrb_http2_request_class_init(mrb_state *mrb, struct RClass *http2)
 
   req = mrb_define_class_under(mrb, http2, "Request", mrb->object_class);
 
-  //mrb_define_method(mrb, req, "initialize", mrb_http2_req_init, MRB_ARGS_REQ(1));
-  mrb_define_method(mrb, req, "filename", mrb_http2_req_filename, MRB_ARGS_NONE());
-  //mrb_define_method(mrb, req, "filename=", mrb_http2_req_get_filename, MRB_ARGS_REQ(1));
+  // mrb_define_method(mrb, req, "initialize", mrb_http2_req_init,
+  // MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, req, "filename", mrb_http2_req_filename,
+                    MRB_ARGS_NONE());
+  // mrb_define_method(mrb, req, "filename=", mrb_http2_req_get_filename,
+  // MRB_ARGS_REQ(1));
 
   DONE;
 }
-
