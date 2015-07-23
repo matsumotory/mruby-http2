@@ -83,6 +83,60 @@ struct mrb_http2_upstream_client {
   struct evhttp_connection *conn;
 };
 
+static int mrb_http2_large_buf_init(mrb_http2_large_buf *b) {
+  TRACER;
+  b->len=0;
+  b->buf = (char*)malloc(sizeof(char)*LARGE_BUF_UNIT_LEN);
+  if(b->buf == NULL) {
+    return -1;
+  }
+  b->alloced_size = LARGE_BUF_UNIT_LEN;
+  return 0;
+}
+static int mrb_http2_large_buf_write(mrb_http2_large_buf *b, char *src, size_t len) {
+  TRACER;
+  // number of bytes available
+  int available_size = b->alloced_size - b->len;
+
+  if(available_size >= len) {
+    TRACER;
+    memcpy(&b->buf[b->len], src, len);
+    b->len += len;
+  } else {
+    TRACER;
+    // when we need more memory
+    int needed_size = len - available_size;
+      int nblocks = (needed_size/LARGE_BUF_UNIT_LEN) + 1;
+      b->buf = (char*)realloc(b->buf,sizeof(char)*(b->alloced_size)+sizeof(char)*(LARGE_BUF_UNIT_LEN*nblocks));
+      if(b->buf == NULL) {
+        TRACER;
+        return -1;
+      }
+      b->alloced_size += LARGE_BUF_UNIT_LEN * nblocks;
+      memcpy(&b->buf[b->len], src, len);
+      b->len += len;
+  }
+  return len;
+}
+
+static void mrb_http2_large_buf_close(mrb_http2_large_buf *b) {
+  TRACER;
+  b->readleft = b->len;
+}
+
+void mrb_http2_large_buf_free(mrb_http2_large_buf *b) {
+  TRACER;
+  if(b->buf != NULL) {
+    TRACER;
+
+    free(b->buf);
+    b->buf = NULL;
+  }
+  b->len = 0;
+  b->alloced_size = 0;
+  b->readleft = 0;
+}
+
 static void mrb_http2_server_free(mrb_state *mrb, void *p)
 {
   mrb_http2_data_t *data = (mrb_http2_data_t *)p;
@@ -454,6 +508,37 @@ static int send_upstream_response(app_context *app_ctx,
   return 0;
 }
 
+static ssize_t file_read_callback_64kb(nghttp2_session *session, int32_t stream_id,
+                                  uint8_t *buf, size_t length,
+                                  uint32_t *data_flags,
+                                  nghttp2_data_source *source, void *user_data)
+{
+  mrb_http2_large_buf *b = source->ptr;
+  int feof = -1;
+
+  TRACER;
+
+  if(length > b->readleft) {
+    TRACER;
+    length = b->readleft;
+    feof = 1;
+  }
+  memcpy(buf, &(b->buf[b->len - b->readleft]), length);
+  b->readleft -= length;
+  if (b->readleft == 0||feof == 1) {
+    TRACER;
+
+    if (b->readleft != 0) {
+      return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
+    }
+    // Set the eof flag to true
+    *data_flags |= NGHTTP2_DATA_FLAG_EOF;
+    mrb_http2_large_buf_free(b);
+  }
+  TRACER;
+  return length;
+}
+
 static ssize_t file_read_callback(nghttp2_session *session, int32_t stream_id,
                                   uint8_t *buf, size_t length,
                                   uint32_t *data_flags,
@@ -479,6 +564,50 @@ static ssize_t file_read_callback(nghttp2_session *session, int32_t stream_id,
   }
   TRACER;
   return nread;
+}
+
+static int send_response_64kb(app_context *app_ctx, nghttp2_session *session,
+                         nghttp2_nv *nva, size_t nvlen,
+                         http2_stream_data *stream_data)
+{
+  int rv;
+  mrb_state *mrb = app_ctx->server->mrb;
+  mrb_http2_request_rec *r = app_ctx->r;
+  int i;
+
+  TRACER;
+  nghttp2_data_provider data_prd;
+  data_prd.source.ptr = r->write_buf_64kb;
+  data_prd.read_callback = file_read_callback_64kb;
+
+  if (app_ctx->server->config->debug) {
+    for (i = 0; i < nvlen; i++) {
+      debug_header(__func__, nva[i].name, nva[i].namelen, nva[i].value,
+                   nva[i].valuelen);
+    }
+  }
+
+  TRACER;
+  rv = nghttp2_submit_response(session, stream_data->stream_id, nva, nvlen,
+                               &data_prd);
+  if (rv != 0) {
+    fprintf(stderr, "Fatal error: %s", nghttp2_strerror(rv));
+    mrb_http2_request_rec_free(mrb, r);
+    return -1;
+  }
+  //
+  // "set_logging_cb" callback ruby block
+  //
+  if (app_ctx->server->config->callback) {
+    r->phase = MRB_HTTP2_SERVER_LOGGING;
+    callback_ruby_block(mrb, app_ctx->self, app_ctx->server->config->callback,
+                        app_ctx->server->config->cb_list->logging_cb,
+                        app_ctx->server->config->cb_list);
+  }
+
+  mrb_http2_request_rec_free(mrb, r);
+  TRACER;
+  return 0;
 }
 
 static int send_response(app_context *app_ctx, nghttp2_session *session,
@@ -880,7 +1009,16 @@ static int content_cb_reply(app_context *app_ctx, nghttp2_session *session,
     }
     return 0;
   }
-
+  r->write_buf_64kb = (mrb_http2_large_buf*)malloc(sizeof(mrb_http2_large_buf));
+  if(r->write_buf_64kb == NULL) {
+    fprintf(stderr, "Fatal error: can't alloc mrb_http2_large_buf.\n");
+    return -1;
+  }
+  rv = mrb_http2_large_buf_init(r->write_buf_64kb);
+  if(rv != 0) {
+    fprintf(stderr, "Fatal error: mrb_http2_large_buf_init is failed.\n");
+    return -1;
+  }
   r->write_fd = pipefd[1];
 
   //
@@ -910,6 +1048,7 @@ static int content_cb_reply(app_context *app_ctx, nghttp2_session *session,
   }
 
   close(pipefd[1]);
+  mrb_http2_large_buf_close(r->write_buf_64kb);
   stream_data->fd = pipefd[0];
   stream_data->readleft = size;
   TRACER;
@@ -929,9 +1068,10 @@ static int content_cb_reply(app_context *app_ctx, nghttp2_session *session,
                         config->cb_list->fixups_cb, config->cb_list);
   }
 
-  if (send_response(app_ctx, session, r->reshdrs, r->reshdrslen, stream_data) !=
+  if (send_response_64kb(app_ctx, session, r->reshdrs, r->reshdrslen, stream_data) !=
       0) {
     close(pipefd[0]);
+    mrb_http2_large_buf_free(r->write_buf_64kb);
     return -1;
   }
   TRACER;
@@ -989,6 +1129,16 @@ static int mruby_reply(app_context *app_ctx, nghttp2_session *session,
     return 0;
   }
 
+  r->write_buf_64kb = (mrb_http2_large_buf*)malloc(sizeof(mrb_http2_large_buf));
+  if(r->write_buf_64kb == NULL) {
+    fprintf(stderr, "Fatal error: can't alloc mrb_http2_large_buf.\n");
+    return -1;
+  }
+  rv = mrb_http2_large_buf_init(r->write_buf_64kb);
+  if(rv != 0) {
+    fprintf(stderr, "Fatal error: mrb_http2_large_buf_init is failed.\n");
+    return -1;
+  }
   r->write_fd = pipefd[1];
   c = mrbc_context_new(mrb_inner);
   mrbc_filename(mrb_inner, c, r->filename);
@@ -1023,7 +1173,6 @@ static int mruby_reply(app_context *app_ctx, nghttp2_session *session,
   MRB_HTTP2_CREATE_NV_LIT_CS(mrb, &r->reshdrs[r->reshdrslen], "last-modified",
                              r->last_modified);
   r->reshdrslen += 1;
-
   if (r->status >= 200 && r->status < 300) {
     size = r->write_size;
   } else {
@@ -1031,8 +1180,9 @@ static int mruby_reply(app_context *app_ctx, nghttp2_session *session,
     size = strlen(msg);
     rv = write(pipefd[1], msg, size);
   }
-
+TRACER;
   close(pipefd[1]);
+  mrb_http2_large_buf_close(r->write_buf_64kb);
   stream_data->fd = pipefd[0];
   stream_data->readleft = size;
   TRACER;
@@ -1052,9 +1202,10 @@ static int mruby_reply(app_context *app_ctx, nghttp2_session *session,
                         config->cb_list->fixups_cb, config->cb_list);
   }
 
-  if (send_response(app_ctx, session, r->reshdrs, r->reshdrslen, stream_data) !=
+  if (send_response_64kb(app_ctx, session, r->reshdrs, r->reshdrslen, stream_data) !=
       0) {
     close(pipefd[0]);
+    mrb_http2_large_buf_free(r->write_buf_64kb);
     return -1;
   }
   TRACER;
@@ -2791,7 +2942,12 @@ static mrb_value mrb_http2_server_rputs(mrb_state *mrb, mrb_value self)
   int rv;
 
   mrb_get_args(mrb, "s", &msg, &len);
-  rv = write(write_fd, msg, len);
+
+  if(r->write_buf_64kb != NULL) {
+    mrb_http2_large_buf_write(r->write_buf_64kb, msg, len);
+  } else {
+    rv = write(write_fd, msg, len);
+  }
   r->write_size += len;
 
   return mrb_fixnum_value(rv);
