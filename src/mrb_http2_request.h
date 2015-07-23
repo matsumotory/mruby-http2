@@ -92,6 +92,22 @@ typedef struct {
 
 } mrb_http2_conn_rec;
 
+#define LARGE_BUF_UNIT_LEN 65535
+typedef struct  {
+  // total number of bytes written
+  size_t len;
+
+  // number of bytes allocated
+  size_t alloced_size;
+
+  // buffer
+  char *buf;
+
+  // number of bytes left
+  size_t readleft;
+
+} mrb_http2_large_buf;
+
 typedef struct {
   // http status code
   unsigned int status;
@@ -178,6 +194,8 @@ typedef struct {
   // response type
   mrb_http2_response_type response_type;
 
+  // write buffer from mruby
+  mrb_http2_large_buf *write_buf_64kb;
 } mrb_http2_request_rec;
 
 mrb_http2_request_rec *mrb_http2_request_rec_init(mrb_state *mrb);
