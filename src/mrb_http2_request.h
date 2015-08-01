@@ -106,6 +106,8 @@ typedef struct  {
   // number of bytes left
   size_t readleft;
 
+  int read_fd;
+
 } mrb_http2_large_buf;
 
 typedef struct {
@@ -195,7 +197,7 @@ typedef struct {
   mrb_http2_response_type response_type;
 
   // write buffer from mruby
-  mrb_http2_large_buf *write_buf_64kb;
+  mrb_http2_large_buf *write_large_buf;
 } mrb_http2_request_rec;
 
 mrb_http2_request_rec *mrb_http2_request_rec_init(mrb_state *mrb);
