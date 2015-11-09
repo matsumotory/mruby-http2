@@ -46,10 +46,10 @@ typedef struct {
   struct mrb_http2_uri_t *uri;
 } mrb_http2_context_t;
 
-// static char CONTENT_LENGTH[] = "content-encoding";
-// static size_t CONTENT_LENGTH_LEN = sizeof(CONTENT_LENGTH) - 1;
+static char CONTENT_ENCODING[] = "content-encoding";
+static size_t CONTENT_ENCODING_LEN = sizeof(CONTENT_ENCODING) - 1;
 static char GZIP[] = "gzip";
-// static size_t GZIP_LEN = sizeof(GZIP) - 1;
+static size_t GZIP_LEN = sizeof(GZIP) - 1;
 
 static void mrb_http2_request_free(mrb_state *mrb, struct mrb_http2_request_t *req)
 {
@@ -159,29 +159,22 @@ static int parse_uri(struct mrb_http2_uri_t *res, const char *uri)
   return 0;
 }
 
-/*
-static void mrb_http2_check_gzip(mrb_state *mrb,
-    struct mrb_http2_request_t *req, nghttp2_nv *nva, size_t nvlen)
+static void mrb_http2_check_gzip_from_res_header(mrb_state *mrb, struct mrb_http2_request_t *req, const uint8_t *name,
+                                                 size_t namelen, const uint8_t *value, size_t valuelen)
 {
-  size_t i;
-  if(req->inflater) {
+  if (req->inflater) {
     return;
   }
-  for(i = 0; i < nvlen; ++i) {
-    if(CONTENT_LENGTH_LEN == nva[i].namelen &&
-       memcmp(CONTENT_LENGTH, nva[i].name, nva[i].namelen) == 0 &&
-       GZIP_LEN == nva[i].valuelen &&
-       memcmp(GZIP, nva[i].value, nva[i].valuelen) == 0) {
-      int rv;
-      rv = nghttp2_gzip_inflate_new(&req->inflater);
-      if(rv != 0) {
-        mrb_raise(mrb, E_RUNTIME_ERROR, "Can't allocate inflate stream.");
-      }
-      break;
+
+  if (CONTENT_ENCODING_LEN == namelen && memcmp(CONTENT_ENCODING, name, namelen) == 0 && GZIP_LEN == valuelen &&
+      memcmp(GZIP, value, valuelen) == 0) {
+    int rv;
+    rv = nghttp2_gzip_inflate_new(&req->inflater);
+    if (rv != 0) {
+      mrb_raise(mrb, E_RUNTIME_ERROR, "Can't allocate inflate stream.");
     }
   }
 }
-*/
 
 static ssize_t send_callback(nghttp2_session *session, const uint8_t *data, size_t length, int flags, void *user_data)
 {
@@ -338,13 +331,17 @@ static int on_header_callback(nghttp2_session *session, const nghttp2_frame *fra
       break;
     }
     TRACER;
-    if (nghttp2_session_get_stream_user_data(session, frame->hd.stream_id)) {
+    struct mrb_http2_request_t *req;
+    if (req = nghttp2_session_get_stream_user_data(session, frame->hd.stream_id)) {
       mrb_value v = mrb_hash_get(mrb, conn->response, mrb_symbol_value(mrb_intern_cstr(conn->mrb, "response_headers")));
       if (mrb_nil_p(v)) {
         response_headers = mrb_hash_new(mrb);
       } else {
         response_headers = v;
       }
+
+      mrb_http2_check_gzip_from_res_header(mrb, req, name, namelen, value, valuelen);
+
       // const nghttp2_nv *nva = frame->headers.nva;
       mrb_hash_set(mrb, response_headers, mrb_str_new(mrb, (char *)name, namelen),
                    mrb_str_new(mrb, (char *)value, valuelen));
