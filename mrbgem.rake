@@ -5,6 +5,10 @@ MRuby::Gem::Specification.new('mruby-http2') do |spec|
   spec.summary = 'HTTP/2 Client and Server Module'
   spec.linker.libraries << ['ssl', 'crypto', 'z', 'event', 'event_openssl', 'curl']
   spec.add_dependency('mruby-simplehttp')
+  if RUBY_PLATFORM =~ /darwin/i
+    spec.cc.flags << "-I/usr/local/include"
+    spec.linker.library_paths << "/usr/local/lib"
+  end
 
   require 'open3'
 
@@ -46,8 +50,6 @@ MRuby::Gem::Specification.new('mruby-http2') do |spec|
       run_command e, 'autoconf'
       if RUBY_PLATFORM =~ /darwin/i
         run_command e, './configure --disable-threads --enable-shared=no'
-        spec.cc.flags << "-I/usr/local/include"
-        spec.linker.library_paths << "/usr/local/lib"
       else
         run_command e, './configure --enable-shared=no CFLAGS="-g -O2 -fPIC"'
       end
