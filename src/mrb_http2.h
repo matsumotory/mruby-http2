@@ -59,51 +59,46 @@
 #endif
 #define OUTPUT_WOULDBLOCK_THRESHOLD (1 << 16)
 #define ARRLEN(x) (sizeof(x) / sizeof(x[0]))
-#define MAKE_NV(NAME, VALUE)                                                   \
-  {                                                                            \
-    (uint8_t *) NAME, (uint8_t *)VALUE, (uint16_t)(sizeof(NAME) - 1),          \
-        (uint16_t)(sizeof(VALUE) - 1), NGHTTP2_NV_FLAG_NONE                    \
+#define MAKE_NV(NAME, VALUE)                                                                                           \
+  {                                                                                                                    \
+    (uint8_t *) NAME, (uint8_t *)VALUE, (uint16_t)(sizeof(NAME) - 1), (uint16_t)(sizeof(VALUE) - 1),                   \
+        NGHTTP2_NV_FLAG_NONE                                                                                           \
   }
-#define MAKE_NV_CS(NAME, VALUE)                                                \
-  {                                                                            \
-    (uint8_t *) NAME, (uint8_t *)VALUE, (uint16_t)(sizeof(NAME) - 1),          \
-        (uint16_t)(strlen(VALUE)), NGHTTP2_NV_FLAG_NONE                        \
+#define MAKE_NV_CS(NAME, VALUE)                                                                                        \
+  {                                                                                                                    \
+    (uint8_t *) NAME, (uint8_t *)VALUE, (uint16_t)(sizeof(NAME) - 1), (uint16_t)(strlen(VALUE)), NGHTTP2_NV_FLAG_NONE  \
   }
 
-#define MRB_HTTP2_CREATE_NV_LIT_CS(MRB, NV, NAME, VALUE)                       \
-  mrb_http2_create_nv(MRB, NV, (uint8_t *)NAME, (uint16_t)(sizeof(NAME) - 1),  \
-                      (uint8_t *)VALUE, (uint16_t)(strlen(VALUE)))
+#define MRB_HTTP2_CREATE_NV_LIT_CS(MRB, NV, NAME, VALUE)                                                               \
+  mrb_http2_create_nv(MRB, NV, (uint8_t *)NAME, (uint16_t)(sizeof(NAME) - 1), (uint8_t *)VALUE,                        \
+                      (uint16_t)(strlen(VALUE)))
 
-#define MRB_HTTP2_CREATE_NV_CS_CS(MRB, NV, NAME, VALUE)                        \
-  mrb_http2_create_nv(MRB, NV, (uint8_t *)NAME, (uint16_t)(strlen(NAME)),      \
-                      (uint8_t *)VALUE, (uint16_t)(strlen(VALUE)))
+#define MRB_HTTP2_CREATE_NV_CS_CS(MRB, NV, NAME, VALUE)                                                                \
+  mrb_http2_create_nv(MRB, NV, (uint8_t *)NAME, (uint16_t)(strlen(NAME)), (uint8_t *)VALUE, (uint16_t)(strlen(VALUE)))
 
-#define MRB_HTTP2_CREATE_NV_LIT_LIT(MRB, NV, NAME, VALUE)                      \
-  mrb_http2_create_nv(MRB, NV, (uint8_t *)NAME, (uint16_t)(sizeof(NAME) - 1),  \
-                      (uint8_t *)VALUE, (uint16_t)(sizeof(VALUE) - 1))
+#define MRB_HTTP2_CREATE_NV_LIT_LIT(MRB, NV, NAME, VALUE)                                                              \
+  mrb_http2_create_nv(MRB, NV, (uint8_t *)NAME, (uint16_t)(sizeof(NAME) - 1), (uint8_t *)VALUE,                        \
+                      (uint16_t)(sizeof(VALUE) - 1))
 
-#define MRB_HTTP2_CREATE_NV_OBJ(MRB, NV, NAME, VALUE)                          \
-  mrb_http2_create_nv(                                                         \
-      MRB, NV, (uint8_t *)RSTRING_PTR(NAME), (uint16_t)(RSTRING_LEN(NAME)),    \
-      (uint8_t *)RSTRING_PTR(VALUE), (uint16_t)(RSTRING_LEN(VALUE)))
+#define MRB_HTTP2_CREATE_NV_OBJ(MRB, NV, NAME, VALUE)                                                                  \
+  mrb_http2_create_nv(MRB, NV, (uint8_t *)RSTRING_PTR(NAME), (uint16_t)(RSTRING_LEN(NAME)),                            \
+                      (uint8_t *)RSTRING_PTR(VALUE), (uint16_t)(RSTRING_LEN(VALUE)))
 
 void mrb_free_unless_null(mrb_state *mrb, void *ptr);
-void debug_header(const char *tag, const uint8_t *name, size_t namelen,
-                  const uint8_t *value, size_t valuelen);
+void debug_header(const char *tag, const uint8_t *name, size_t namelen, const uint8_t *value, size_t valuelen);
 uid_t mrb_http2_get_uid(mrb_state *mrb, const char *user);
 void set_http_date_str(time_t *time, char *date);
 int mrb_http2_get_nv_id(nghttp2_nv *nva, size_t nvlen, const char *key);
 void mrb_http2_free_nva(mrb_state *mrb, nghttp2_nv *nva, size_t nvlen);
-void mrb_http2_create_nv(mrb_state *mrb, nghttp2_nv *nv, const uint8_t *name,
-                         size_t namelen, const uint8_t *value, size_t valuelen);
+void mrb_http2_create_nv(mrb_state *mrb, nghttp2_nv *nv, const uint8_t *name, size_t namelen, const uint8_t *value,
+                         size_t valuelen);
 size_t mrb_http2_add_nv(nghttp2_nv *nva, size_t nvlen, nghttp2_nv *nv);
 
 int mrb_http2_strrep(char *buf, char *before, char *after);
 char *mrb_http2_strcat(mrb_state *mrb, const char *s1, const char *s2);
 char *mrb_http2_strcopy(mrb_state *mrb, const char *s, size_t len);
 char *strcopy(const char *s, size_t len);
-mrb_value mrb_http2_class_obj(mrb_state *mrb, mrb_value self, char *obj_id,
-                              char *class_name);
+mrb_value mrb_http2_class_obj(mrb_state *mrb, mrb_value self, char *obj_id, char *class_name);
 void mrb_mruby_http2_gem_init(mrb_state *mrb);
 
 #endif

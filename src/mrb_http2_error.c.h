@@ -52,17 +52,13 @@ const char *mrb_http2_5xx_error_table[] = {
     NULL};
 
 const int mrb_http2_1xx_error_table_len =
-    (sizeof(mrb_http2_1xx_error_table) / sizeof(mrb_http2_1xx_error_table[0])) -
-    1;
+    (sizeof(mrb_http2_1xx_error_table) / sizeof(mrb_http2_1xx_error_table[0])) - 1;
 const int mrb_http2_3xx_error_table_len =
-    (sizeof(mrb_http2_3xx_error_table) / sizeof(mrb_http2_3xx_error_table[0])) -
-    1;
+    (sizeof(mrb_http2_3xx_error_table) / sizeof(mrb_http2_3xx_error_table[0])) - 1;
 const int mrb_http2_4xx_error_table_len =
-    (sizeof(mrb_http2_4xx_error_table) / sizeof(mrb_http2_4xx_error_table[0])) -
-    1;
+    (sizeof(mrb_http2_4xx_error_table) / sizeof(mrb_http2_4xx_error_table[0])) - 1;
 const int mrb_http2_5xx_error_table_len =
-    (sizeof(mrb_http2_5xx_error_table) / sizeof(mrb_http2_5xx_error_table[0])) -
-    1;
+    (sizeof(mrb_http2_5xx_error_table) / sizeof(mrb_http2_5xx_error_table[0])) - 1;
 
 const char *mrb_http2_error_message(int status)
 {

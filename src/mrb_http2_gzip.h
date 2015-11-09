@@ -83,8 +83,7 @@ void nghttp2_gzip_inflate_del(nghttp2_gzip *inflater);
  *         ....
  *     }
  */
-int nghttp2_gzip_inflate(nghttp2_gzip *inflater, uint8_t *out,
-                         size_t *outlen_ptr, const uint8_t *in,
+int nghttp2_gzip_inflate(nghttp2_gzip *inflater, uint8_t *out, size_t *outlen_ptr, const uint8_t *in,
                          size_t *inlen_ptr);
 
 /**

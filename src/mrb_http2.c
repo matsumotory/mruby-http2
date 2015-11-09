@@ -28,11 +28,9 @@
 #include "mrb_http2.h"
 #include <pwd.h>
 
-static const char *MONTH[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                              "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+static const char *MONTH[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
 
-static const char *DAY_OF_WEEK[] = {"Sun", "Mon", "Tue", "Wed",
-                                    "Thu", "Fri", "Sat"};
+static const char *DAY_OF_WEEK[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
 
 void mrb_http2_client_class_init(mrb_state *mrb, struct RClass *http2);
 void mrb_http2_server_class_init(mrb_state *mrb, struct RClass *http2);
@@ -45,8 +43,7 @@ void mrb_free_unless_null(mrb_state *mrb, void *ptr)
   }
 }
 
-void debug_header(const char *tag, const uint8_t *name, size_t namelen,
-                  const uint8_t *value, size_t valuelen)
+void debug_header(const char *tag, const uint8_t *name, size_t namelen, const uint8_t *value, size_t valuelen)
 {
   char *key = alloca(namelen + 1);
   char *val = alloca(valuelen + 1);
@@ -125,8 +122,7 @@ int mrb_http2_get_nv_id(nghttp2_nv *nva, size_t nvlen, const char *key)
   size_t len = strlen(key);
 
   for (i = 0; i < nvlen; i++) {
-    if (nva[i].namelen == len &&
-        memcmp(key, nva[i].name, nva[i].namelen) == 0) {
+    if (nva[i].namelen == len && memcmp(key, nva[i].name, nva[i].namelen) == 0) {
       return i;
     }
   }
@@ -146,8 +142,8 @@ void mrb_http2_free_nva(mrb_state *mrb, nghttp2_nv *nva, size_t nvlen)
 }
 
 // create nghttp2_nv
-void mrb_http2_create_nv(mrb_state *mrb, nghttp2_nv *nv, const uint8_t *name,
-                         size_t namelen, const uint8_t *value, size_t valuelen)
+void mrb_http2_create_nv(mrb_state *mrb, nghttp2_nv *nv, const uint8_t *name, size_t namelen, const uint8_t *value,
+                         size_t valuelen)
 {
   nv->name = mrb_malloc(mrb, namelen);
   memcpy(nv->name, name, namelen);
@@ -185,8 +181,7 @@ int mrb_http2_strrep(char *buf, char *before, char *after)
   if (beforelen == 0 || (ptr = strstr(buf, before)) == NULL) {
     return 0;
   }
-  memmove(ptr + afterlen, ptr + beforelen,
-          strlen(buf) - (ptr + beforelen - buf) + 1);
+  memmove(ptr + afterlen, ptr + beforelen, strlen(buf) - (ptr + beforelen - buf) + 1);
   memcpy(ptr, after, afterlen);
   return 1;
 }
@@ -222,8 +217,7 @@ char *strcopy(const char *s, size_t len)
   return dst;
 }
 
-mrb_value mrb_http2_class_obj(mrb_state *mrb, mrb_value self, char *obj_id,
-                              char *class_name)
+mrb_value mrb_http2_class_obj(mrb_state *mrb, mrb_value self, char *obj_id, char *class_name)
 {
   mrb_value obj;
   struct RClass *target, *http2;
@@ -231,8 +225,7 @@ mrb_value mrb_http2_class_obj(mrb_state *mrb, mrb_value self, char *obj_id,
   obj = mrb_iv_get(mrb, self, mrb_intern_cstr(mrb, obj_id));
   if (mrb_nil_p(obj)) {
     http2 = mrb_module_get(mrb, "HTTP2");
-    target = (struct RClass *)mrb_class_ptr(mrb_const_get(
-        mrb, mrb_obj_value(http2), mrb_intern_cstr(mrb, class_name)));
+    target = (struct RClass *)mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(http2), mrb_intern_cstr(mrb, class_name)));
     obj = mrb_obj_new(mrb, target, 0, NULL);
     mrb_iv_set(mrb, self, mrb_intern_cstr(mrb, obj_id), obj);
   }
