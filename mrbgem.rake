@@ -12,7 +12,7 @@ MRuby::Gem::Specification.new('mruby-http2') do |spec|
   nghttp2_lib = "#{build_dir}/nghttp2/lib/.libs"
   libnghttp2a = "#{nghttp2_lib}/libnghttp2.a"
   if ENV['NGHTTP2_CURRENT'] != "true"
-    nghttp2_ver = "3973d9ce12a1d9a5c48cbf4b84c462d690adfe2c"
+    nghttp2_ver = "9b18e47671eb8a71aa655e9f5842947252c73194"
   end
 
   def run_command env, command
@@ -46,6 +46,8 @@ MRuby::Gem::Specification.new('mruby-http2') do |spec|
       run_command e, 'autoconf'
       if RUBY_PLATFORM =~ /darwin/i
         run_command e, './configure --disable-threads --enable-shared=no'
+        spec.cc.flags << "-I/usr/local/include"
+        spec.linker.library_paths << "/usr/local/lib"
       else
         run_command e, './configure --enable-shared=no CFLAGS="-g -O2 -fPIC"'
       end
