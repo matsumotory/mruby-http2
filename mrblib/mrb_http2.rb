@@ -20,5 +20,10 @@ module HTTP2
     def body; @response[:body]; end
     def body_length; @response[:body_length]; end
     def stream_id; @response[:stream_id]; end
+    def method; @response[:response_headers][":method"]; end
+    def path; @response[:response_headers][":path"]; end
+    def scheme; @response[:response_headers][":scheme"]; end
+    def authority; @response[:response_headers][":authority"]; end
+    def accept; @response[:response_headers]["accept"]; end
   end
 end
