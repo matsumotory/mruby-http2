@@ -30,8 +30,12 @@
 #include <sys/resource.h>
 #include <sys/queue.h>
 #include <unistd.h>
+#include <stdbool.h>
 
-const char *npn_proto = "\x02h2\x05h2-16\x05h2-14";
+typedef struct st_mrb_http2_iovec_t {
+  char *base;
+  size_t len;
+} mrb_http2_iovec_t;
 
 typedef struct {
   SSL_CTX *ssl_ctx;
@@ -98,6 +102,25 @@ static void mrb_http2_server_free(mrb_state *mrb, void *p)
 static const struct mrb_data_type mrb_http2_server_type = {
     "mrb_http2_server_t", mrb_http2_server_free,
 };
+
+#define MRB_HTTP2_H2_PROTO "h2"
+#define MRB_HTTP2_H2_16_PROTO "h2-16"
+#define MRB_HTTP2_H2_14_PROTO "h2-14"
+
+#define MRB_HTTP2_LIT(s) (s), sizeof(s) - 1
+#define MRB_HTTP2_ALPN_PROTOCOLS                                                                                       \
+  {                                                                                                                    \
+    MRB_HTTP2_LIT(MRB_HTTP2_H2_PROTO)                                                                                  \
+  }                                                                                                                    \
+  , {MRB_HTTP2_LIT(MRB_HTTP2_H2_16_PROTO)},                                                                            \
+  {                                                                                                                    \
+    MRB_HTTP2_LIT(MRB_HTTP2_H2_14_PROTO)                                                                               \
+  }
+
+#define MRB_HTTP2_NPN_PROTOCOLS "\x02" MRB_HTTP2_H2_PROTO "\x05" MRB_HTTP2_H2_16_PROTO "\x05" MRB_HTTP2_H2_14_PROTO;
+
+const char *npn_proto = MRB_HTTP2_NPN_PROTOCOLS;
+const mrb_http2_iovec_t alpn_proto[] = {MRB_HTTP2_ALPN_PROTOCOLS, {}};
 
 //
 //
@@ -1625,6 +1648,38 @@ static void tune_packet_buffer(struct bufferevent *bev, mrb_http2_config_t *conf
   // evbuffer_expand(session_data->bev->input, 4096);
 }
 
+static bool check_selected_proto(const unsigned char *proto, unsigned int len)
+{
+  if (sizeof(MRB_HTTP2_H2_PROTO) == len && memcmp(MRB_HTTP2_H2_PROTO, proto, len) == 0)
+    return true;
+  if (sizeof(MRB_HTTP2_H2_16_PROTO) == len && memcmp(MRB_HTTP2_H2_16_PROTO, proto, len) == 0)
+    return true;
+  if (sizeof(MRB_HTTP2_H2_14_PROTO) == len && memcmp(MRB_HTTP2_H2_14_PROTO, proto, len) == 0)
+    return true;
+
+  return false;
+}
+
+static bool check_http2_npn_or_alpn(SSL *ssl)
+{
+  const unsigned char *next_proto = NULL;
+  unsigned int next_proto_len = 0;
+
+  SSL_get0_next_proto_negotiated(ssl, &next_proto, &next_proto_len);
+
+  if (next_proto == NULL)
+    SSL_get0_alpn_selected(ssl, &next_proto, &next_proto_len);
+
+  if (next_proto == NULL || !check_selected_proto(next_proto, next_proto_len))
+    return true;
+
+  /* one more check */
+  if (!check_http2_npn_or_alpn(ssl))
+    return false;
+
+  return true;
+}
+
 static http2_session_data *create_http2_session_data(mrb_state *mrb, app_context *app_ctx, int fd,
                                                      struct sockaddr *addr, int addrlen)
 {
@@ -1665,6 +1720,10 @@ static http2_session_data *create_http2_session_data(mrb_state *mrb, app_context
 
   if (ssl) {
     TRACER;
+
+    if (!check_http2_npn_or_alpn(ssl))
+      return NULL;
+
     session_data->bev =
         bufferevent_openssl_filter_new(app_ctx->evbase, session_data->bev, ssl, BUFFEREVENT_SSL_ACCEPTING,
                                        BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS);
@@ -1827,6 +1886,33 @@ static int npn_advertise_cb(SSL *s, const unsigned char **data, unsigned int *le
   return SSL_TLSEXT_ERR_OK;
 }
 
+/* ref: h2o/lib/common/socket.c */
+static int alpn_select_cb(SSL *ssl, const unsigned char **out, unsigned char *outlen, const unsigned char *_in,
+                          unsigned int inlen, void *_protos)
+{
+  const mrb_http2_iovec_t *protos = _protos;
+  size_t i;
+
+  for (i = 0; protos[i].len != 0; ++i) {
+    const unsigned char *in = _in, *in_end = in + inlen;
+    while (in != in_end) {
+      size_t cand_len = *in++;
+      if (in_end - in < cand_len) {
+        return SSL_TLSEXT_ERR_NOACK;
+      }
+      if (cand_len == protos[i].len && memcmp(in, protos[i].base, cand_len) == 0) {
+        *out = (const unsigned char *)protos[i].base;
+        *outlen = (unsigned char)protos[i].len;
+
+        return SSL_TLSEXT_ERR_OK;
+      }
+      in += cand_len;
+    }
+  }
+
+  return SSL_TLSEXT_ERR_NOACK;
+}
+
 static SSL_CTX *mrb_http2_create_ssl_ctx(mrb_state *mrb, mrb_http2_config_t *config, const char *key_file,
                                          const char *cert_file)
 {
@@ -1880,6 +1966,7 @@ static SSL_CTX *mrb_http2_create_ssl_ctx(mrb_state *mrb, mrb_http2_config_t *con
     mrb_raisef(mrb, E_RUNTIME_ERROR, "Could not read certificate file %S", mrb_str_new_cstr(mrb, cert_file));
   }
   SSL_CTX_set_next_protos_advertised_cb(ssl_ctx, npn_advertise_cb, (void *)npn_proto);
+  SSL_CTX_set_alpn_select_cb(ssl_ctx, alpn_select_cb, (void *)alpn_proto);
   TRACER;
   return ssl_ctx;
 }
