@@ -31,7 +31,7 @@
 #include <sys/queue.h>
 #include <unistd.h>
 
-const char *npn_proto = "\x05h2";
+const char *npn_proto = "\x02h2\x05h2-16\x05h2-14";
 
 typedef struct {
   SSL_CTX *ssl_ctx;
