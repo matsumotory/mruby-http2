@@ -31,6 +31,8 @@
 #include <sys/queue.h>
 #include <unistd.h>
 
+const char *npn_proto = "\x05h2";
+
 typedef struct {
   SSL_CTX *ssl_ctx;
   struct event_base *evbase;
@@ -1817,8 +1819,6 @@ static void set_dhparams(mrb_state *mrb, mrb_http2_config_t *config, SSL_CTX *ss
   SSL_CTX_set_tmp_dh(ssl_ctx, dh);
   DH_free(dh);
 }
-
-const char *npn_proto = "\x05h2-16\x05h2-14";
 
 static int npn_advertise_cb(SSL *s, const unsigned char **data, unsigned int *len, void *proto)
 {
