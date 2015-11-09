@@ -159,16 +159,18 @@ static int parse_uri(struct mrb_http2_uri_t *res, const char *uri)
   return 0;
 }
 
-static void mrb_http2_check_gzip_from_res_header(mrb_state *mrb, struct mrb_http2_request_t *req, const uint8_t *name, size_t namelen, const uint8_t *value, size_t valuelen)
+static void mrb_http2_check_gzip_from_res_header(mrb_state *mrb, struct mrb_http2_request_t *req, const uint8_t *name,
+                                                 size_t namelen, const uint8_t *value, size_t valuelen)
 {
-  if(req->inflater) {
+  if (req->inflater) {
     return;
   }
 
-  if(CONTENT_ENCODING_LEN == namelen && memcmp(CONTENT_ENCODING, name, namelen) == 0 && GZIP_LEN == valuelen && memcmp(GZIP, value, valuelen) == 0) {
+  if (CONTENT_ENCODING_LEN == namelen && memcmp(CONTENT_ENCODING, name, namelen) == 0 && GZIP_LEN == valuelen &&
+      memcmp(GZIP, value, valuelen) == 0) {
     int rv;
     rv = nghttp2_gzip_inflate_new(&req->inflater);
-    if(rv != 0) {
+    if (rv != 0) {
       mrb_raise(mrb, E_RUNTIME_ERROR, "Can't allocate inflate stream.");
     }
   }
