@@ -63,6 +63,7 @@ mrb_http2_request_rec *mrb_http2_request_rec_init(mrb_state *mrb)
   r->mruby = 0;
   r->shared_mruby = 0;
   r->write_fd = -1;
+  r->write_size = 0;
   r->status = 0;
   r->phase = MRB_HTTP2_SERVER_INIT_REQUEST;
 
