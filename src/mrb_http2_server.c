@@ -104,9 +104,9 @@ static const struct mrb_data_type mrb_http2_server_type = {
 };
 
 #if OPENSSL_VERSION_NUMBER >= 0x10002000L
-  #define MRB_HTTP2_USE_ALPN 1
+#define MRB_HTTP2_USE_ALPN 1
 #else
-  #define MRB_HTTP2_USE_ALPN 0
+#define MRB_HTTP2_USE_ALPN 0
 #endif
 
 #define MRB_HTTP2_H2_PROTO "h2"
@@ -114,20 +114,21 @@ static const struct mrb_data_type mrb_http2_server_type = {
 #define MRB_HTTP2_H2_14_PROTO "h2-14"
 
 #define MRB_HTTP2_LIT(s) (s), sizeof(s) - 1
+#define MRB_HTTP2_LIT_TO_CSTR(s) (char *)(s), sizeof(s) - 1
 #define MRB_HTTP2_ALPN_PROTOCOLS                                                                                       \
   {                                                                                                                    \
-    MRB_HTTP2_LIT(MRB_HTTP2_H2_PROTO)                                                                                  \
+    MRB_HTTP2_LIT_TO_CSTR(MRB_HTTP2_H2_PROTO)                                                                          \
   }                                                                                                                    \
-  , {MRB_HTTP2_LIT(MRB_HTTP2_H2_16_PROTO)},                                                                            \
+  , {MRB_HTTP2_LIT_TO_CSTR(MRB_HTTP2_H2_16_PROTO)},                                                                    \
   {                                                                                                                    \
-    MRB_HTTP2_LIT(MRB_HTTP2_H2_14_PROTO)                                                                               \
+    MRB_HTTP2_LIT_TO_CSTR(MRB_HTTP2_H2_14_PROTO)                                                                       \
   }
 
 #define MRB_HTTP2_NPN_PROTOCOLS "\x02" MRB_HTTP2_H2_PROTO "\x05" MRB_HTTP2_H2_16_PROTO "\x05" MRB_HTTP2_H2_14_PROTO;
 
-const char *npn_proto = MRB_HTTP2_NPN_PROTOCOLS;
+static const char *npn_proto = MRB_HTTP2_NPN_PROTOCOLS;
 #if MRB_HTTP2_USE_ALPN
-const mrb_http2_iovec_t alpn_proto[] = {MRB_HTTP2_ALPN_PROTOCOLS, {}};
+static const mrb_http2_iovec_t alpn_proto[] = {MRB_HTTP2_ALPN_PROTOCOLS, {}};
 #endif
 
 //
@@ -580,7 +581,7 @@ static int error_reply(app_context *app_ctx, nghttp2_session *session, http2_str
   stream_data->readleft = size;
 
   // set content-length: max 10^64
-  snprintf(r->content_length, 64, "%ld", size);
+  snprintf(r->content_length, 64, "%ld", (long)size);
   MRB_HTTP2_CREATE_NV_LIT_CS(mrb, &r->reshdrs[r->reshdrslen], "content-length", r->content_length);
   r->reshdrslen += 1;
 
@@ -678,7 +679,7 @@ void http_request_done(struct evhttp_request *req, void *user_data)
       // scheme checke
       // TODO: http(front) <=> https(back) check
       if (strlen(r->scheme) == 5 && memcmp(buf, r->scheme, strlen(r->scheme)) != 0) {
-        mrb_http2_strrep(buf, "http", r->scheme);
+        mrb_http2_strrep(buf, (char *)"http", r->scheme);
       }
 
       MRB_HTTP2_CREATE_NV_CS_CS(mrb, &r->reshdrs[r->reshdrslen], header->key, buf);
@@ -889,7 +890,7 @@ static int content_cb_reply(app_context *app_ctx, nghttp2_session *session, http
   TRACER;
 
   // set content-length: max 10^64
-  snprintf(r->content_length, 64, "%ld", size);
+  snprintf(r->content_length, 64, "%ld", (long)size);
   MRB_HTTP2_CREATE_NV_LIT_CS(mrb, &r->reshdrs[r->reshdrslen], "content-length", r->content_length);
   r->reshdrslen += 1;
 
@@ -1004,7 +1005,7 @@ static int mruby_reply(app_context *app_ctx, nghttp2_session *session, http2_str
   TRACER;
 
   // set content-length: max 10^64
-  snprintf(r->content_length, 64, "%ld", size);
+  snprintf(r->content_length, 64, "%ld", (long)size);
   MRB_HTTP2_CREATE_NV_LIT_CS(mrb, &r->reshdrs[r->reshdrslen], "content-length", r->content_length);
   r->reshdrslen += 1;
 
@@ -1447,7 +1448,7 @@ static int mrb_http2_process_request(nghttp2_session *session, http2_session_dat
   }
 
   // set content-length: max 10^64
-  snprintf(r->content_length, 64, "%ld", r->finfo->st_size);
+  snprintf(r->content_length, 64, "%ld", (long)r->finfo->st_size);
   stream_data->readleft = r->finfo->st_size;
 
   TRACER;
@@ -1521,7 +1522,7 @@ static int server_on_data_chunk_recv_callback(nghttp2_session *session, uint8_t 
     if (stream_data->request_body->len >= MRB_HTTP2_MAX_POST_DATA_SIZE) {
       fprintf(stderr, "post data length(%ld) exceed "
                       "MRB_HTTP2_MAX_POST_DATA_SIZE(%d)\n",
-              stream_data->request_body->len, MRB_HTTP2_MAX_POST_DATA_SIZE);
+              (long)stream_data->request_body->len, MRB_HTTP2_MAX_POST_DATA_SIZE);
       stream_data->request_body->len = MRB_HTTP2_MAX_POST_DATA_SIZE;
       stream_data->request_body->last = 1;
       rv = nghttp2_submit_rst_stream(session, NGHTTP2_FLAG_NONE, stream_data->stream_id, NGHTTP2_INTERNAL_ERROR);
@@ -1656,6 +1657,7 @@ static void tune_packet_buffer(struct bufferevent *bev, mrb_http2_config_t *conf
   // evbuffer_expand(session_data->bev->input, 4096);
 }
 
+#if MRB_HTTP2_USE_ALPN
 static bool check_selected_proto(const unsigned char *proto, unsigned int len)
 {
   if (sizeof(MRB_HTTP2_H2_PROTO) == len && memcmp(MRB_HTTP2_H2_PROTO, proto, len) == 0)
@@ -1667,6 +1669,7 @@ static bool check_selected_proto(const unsigned char *proto, unsigned int len)
 
   return false;
 }
+#endif
 
 #if MRB_HTTP2_USE_ALPN
 static bool check_http2_npn_or_alpn(SSL *ssl)
@@ -2726,7 +2729,6 @@ static mrb_value mrb_http2_server_echo(mrb_state *mrb, mrb_value self)
   mrb_http2_data_t *data = DATA_PTR(self);
   mrb_http2_request_rec *r = data->r;
   int write_fd = r->write_fd;
-  mrb_value msg;
   char *str;
   mrb_int len;
   int rv;
@@ -2756,7 +2758,7 @@ static mrb_value mrb_http2_server_set_status(mrb_state *mrb, mrb_value self)
   return mrb_fixnum_value(status);
 }
 
-static mrb_value mrb_http2_get_class_obj(mrb_state *mrb, mrb_value self, char *obj_id, char *class_name)
+static mrb_value mrb_http2_get_class_obj(mrb_state *mrb, mrb_value self, const char *obj_id, const char *class_name)
 {
   mrb_value obj;
   struct RClass *obj_class, *http2_class;
@@ -2827,10 +2829,6 @@ static mrb_value mrb_http2_get_reshdrs(mrb_state *mrb, mrb_value self)
   mrb_http2_request_rec *r = data->r;
   int i;
   char *key;
-
-  if (!data->r->reshdrs) {
-    return mrb_nil_value();
-  }
 
   mrb_get_args(mrb, "z", &key);
 

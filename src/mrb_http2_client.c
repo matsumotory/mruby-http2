@@ -326,13 +326,14 @@ static int on_header_callback(nghttp2_session *session, const nghttp2_frame *fra
   mrb_state *mrb = conn->mrb;
 
   switch (frame->hd.type) {
+    struct mrb_http2_request_t *req;
   case NGHTTP2_HEADERS:
     if (frame->headers.cat != NGHTTP2_HCAT_RESPONSE && frame->headers.cat != NGHTTP2_HCAT_PUSH_RESPONSE) {
       break;
     }
     TRACER;
-    struct mrb_http2_request_t *req;
-    if (req = nghttp2_session_get_stream_user_data(session, frame->hd.stream_id)) {
+    req = nghttp2_session_get_stream_user_data(session, frame->hd.stream_id);
+    if (req) {
       mrb_value v = mrb_hash_get(mrb, conn->response, mrb_symbol_value(mrb_intern_cstr(conn->mrb, "response_headers")));
       if (mrb_nil_p(v)) {
         response_headers = mrb_hash_new(mrb);
@@ -912,7 +913,7 @@ static mrb_value mrb_http2_client_request(mrb_state *mrb, mrb_value self)
   return self;
 }
 
-static mrb_value mrb_http2_set_block_callback(mrb_state *mrb, mrb_value self, char *cb_type)
+static mrb_value mrb_http2_set_block_callback(mrb_state *mrb, mrb_value self, const char *cb_type)
 {
   mrb_http2_context_t *ctx = DATA_PTR(self);
   mrb_value cb_block;
