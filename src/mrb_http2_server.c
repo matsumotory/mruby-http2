@@ -581,7 +581,7 @@ static int error_reply(app_context *app_ctx, nghttp2_session *session, http2_str
   stream_data->readleft = size;
 
   // set content-length: max 10^64
-  snprintf(r->content_length, 64, "%lld", size);
+  snprintf(r->content_length, 64, "%ld", (long)size);
   MRB_HTTP2_CREATE_NV_LIT_CS(mrb, &r->reshdrs[r->reshdrslen], "content-length", r->content_length);
   r->reshdrslen += 1;
 
@@ -890,7 +890,7 @@ static int content_cb_reply(app_context *app_ctx, nghttp2_session *session, http
   TRACER;
 
   // set content-length: max 10^64
-  snprintf(r->content_length, 64, "%lld", size);
+  snprintf(r->content_length, 64, "%ld", (long)size);
   MRB_HTTP2_CREATE_NV_LIT_CS(mrb, &r->reshdrs[r->reshdrslen], "content-length", r->content_length);
   r->reshdrslen += 1;
 
@@ -1005,7 +1005,7 @@ static int mruby_reply(app_context *app_ctx, nghttp2_session *session, http2_str
   TRACER;
 
   // set content-length: max 10^64
-  snprintf(r->content_length, 64, "%lld", size);
+  snprintf(r->content_length, 64, "%ld", (long)size);
   MRB_HTTP2_CREATE_NV_LIT_CS(mrb, &r->reshdrs[r->reshdrslen], "content-length", r->content_length);
   r->reshdrslen += 1;
 
@@ -1448,7 +1448,7 @@ static int mrb_http2_process_request(nghttp2_session *session, http2_session_dat
   }
 
   // set content-length: max 10^64
-  snprintf(r->content_length, 64, "%lld", r->finfo->st_size);
+  snprintf(r->content_length, 64, "%ld", (long)r->finfo->st_size);
   stream_data->readleft = r->finfo->st_size;
 
   TRACER;
@@ -1520,9 +1520,9 @@ static int server_on_data_chunk_recv_callback(nghttp2_session *session, uint8_t 
     char *pos;
     stream_data->request_body->len += len;
     if (stream_data->request_body->len >= MRB_HTTP2_MAX_POST_DATA_SIZE) {
-      fprintf(stderr, "post data length(%lld) exceed "
+      fprintf(stderr, "post data length(%ld) exceed "
                       "MRB_HTTP2_MAX_POST_DATA_SIZE(%d)\n",
-              stream_data->request_body->len, MRB_HTTP2_MAX_POST_DATA_SIZE);
+              (long)stream_data->request_body->len, MRB_HTTP2_MAX_POST_DATA_SIZE);
       stream_data->request_body->len = MRB_HTTP2_MAX_POST_DATA_SIZE;
       stream_data->request_body->last = 1;
       rv = nghttp2_submit_rst_stream(session, NGHTTP2_FLAG_NONE, stream_data->stream_id, NGHTTP2_INTERNAL_ERROR);
@@ -1657,6 +1657,7 @@ static void tune_packet_buffer(struct bufferevent *bev, mrb_http2_config_t *conf
   // evbuffer_expand(session_data->bev->input, 4096);
 }
 
+#if MRB_HTTP2_USE_ALPN
 static bool check_selected_proto(const unsigned char *proto, unsigned int len)
 {
   if (sizeof(MRB_HTTP2_H2_PROTO) == len && memcmp(MRB_HTTP2_H2_PROTO, proto, len) == 0)
@@ -1668,6 +1669,7 @@ static bool check_selected_proto(const unsigned char *proto, unsigned int len)
 
   return false;
 }
+#endif
 
 #if MRB_HTTP2_USE_ALPN
 static bool check_http2_npn_or_alpn(SSL *ssl)
