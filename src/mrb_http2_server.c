@@ -103,6 +103,12 @@ static const struct mrb_data_type mrb_http2_server_type = {
     "mrb_http2_server_t", mrb_http2_server_free,
 };
 
+#if OPENSSL_VERSION_NUMBER >= 0x10002000L
+  #define MRB_HTTP2_USE_ALPN 1
+#else
+  #define MRB_HTTP2_USE_ALPN 0
+#endif
+
 #define MRB_HTTP2_H2_PROTO "h2"
 #define MRB_HTTP2_H2_16_PROTO "h2-16"
 #define MRB_HTTP2_H2_14_PROTO "h2-14"
@@ -120,7 +126,9 @@ static const struct mrb_data_type mrb_http2_server_type = {
 #define MRB_HTTP2_NPN_PROTOCOLS "\x02" MRB_HTTP2_H2_PROTO "\x05" MRB_HTTP2_H2_16_PROTO "\x05" MRB_HTTP2_H2_14_PROTO;
 
 const char *npn_proto = MRB_HTTP2_NPN_PROTOCOLS;
+#if MRB_HTTP2_USE_ALPN
 const mrb_http2_iovec_t alpn_proto[] = {MRB_HTTP2_ALPN_PROTOCOLS, {}};
+#endif
 
 //
 //
@@ -1660,6 +1668,7 @@ static bool check_selected_proto(const unsigned char *proto, unsigned int len)
   return false;
 }
 
+#if MRB_HTTP2_USE_ALPN
 static bool check_http2_npn_or_alpn(SSL *ssl)
 {
   const unsigned char *next_proto = NULL;
@@ -1679,6 +1688,7 @@ static bool check_http2_npn_or_alpn(SSL *ssl)
 
   return true;
 }
+#endif
 
 static http2_session_data *create_http2_session_data(mrb_state *mrb, app_context *app_ctx, int fd,
                                                      struct sockaddr *addr, int addrlen)
@@ -1721,8 +1731,10 @@ static http2_session_data *create_http2_session_data(mrb_state *mrb, app_context
   if (ssl) {
     TRACER;
 
+#if MRB_HTTP2_USE_ALPN
     if (!check_http2_npn_or_alpn(ssl))
       return NULL;
+#endif
 
     session_data->bev =
         bufferevent_openssl_filter_new(app_ctx->evbase, session_data->bev, ssl, BUFFEREVENT_SSL_ACCEPTING,
@@ -1887,6 +1899,7 @@ static int npn_advertise_cb(SSL *s, const unsigned char **data, unsigned int *le
 }
 
 /* ref: h2o/lib/common/socket.c */
+#if MRB_HTTP2_USE_ALPN
 static int alpn_select_cb(SSL *ssl, const unsigned char **out, unsigned char *outlen, const unsigned char *_in,
                           unsigned int inlen, void *_protos)
 {
@@ -1912,6 +1925,7 @@ static int alpn_select_cb(SSL *ssl, const unsigned char **out, unsigned char *ou
 
   return SSL_TLSEXT_ERR_NOACK;
 }
+#endif
 
 static SSL_CTX *mrb_http2_create_ssl_ctx(mrb_state *mrb, mrb_http2_config_t *config, const char *key_file,
                                          const char *cert_file)
@@ -1966,7 +1980,9 @@ static SSL_CTX *mrb_http2_create_ssl_ctx(mrb_state *mrb, mrb_http2_config_t *con
     mrb_raisef(mrb, E_RUNTIME_ERROR, "Could not read certificate file %S", mrb_str_new_cstr(mrb, cert_file));
   }
   SSL_CTX_set_next_protos_advertised_cb(ssl_ctx, npn_advertise_cb, (void *)npn_proto);
+#if MRB_HTTP2_USE_ALPN
   SSL_CTX_set_alpn_select_cb(ssl_ctx, alpn_select_cb, (void *)alpn_proto);
+#endif
   TRACER;
   return ssl_ctx;
 }
