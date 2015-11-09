@@ -2721,6 +2721,8 @@ static mrb_value mrb_http2_server_rputs(mrb_state *mrb, mrb_value self)
 
 static mrb_value mrb_http2_server_echo(mrb_state *mrb, mrb_value self)
 {
+  const char sep[] = "\n";
+  size_t sep_len = strlen(sep);
   mrb_http2_data_t *data = DATA_PTR(self);
   mrb_http2_request_rec *r = data->r;
   int write_fd = r->write_fd;
@@ -2729,13 +2731,12 @@ static mrb_value mrb_http2_server_echo(mrb_state *mrb, mrb_value self)
   mrb_int len;
   int rv;
 
-  mrb_get_args(mrb, "o", &msg);
-
-  str = RSTRING_PTR(mrb_str_plus(mrb, msg, mrb_str_new_lit(mrb, "\n")));
-  len = RSTRING_LEN(msg) + sizeof("\n") - 1;
+  mrb_get_args(mrb, "s", &str, &len);
 
   rv = write(write_fd, str, len);
   r->write_size += len;
+  rv += write(write_fd, sep, sep_len);
+  r->write_size += sep_len;
 
   return mrb_fixnum_value(rv);
 }
