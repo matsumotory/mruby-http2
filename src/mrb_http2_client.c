@@ -713,6 +713,10 @@ static mrb_value mrb_http2_client_create_session(mrb_state *mrb, mrb_value self)
   int fd;
   mrb_http2_context_t *ctx = DATA_PTR(self);
 
+  if (ctx->req == NULL) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "Could not find request object");
+  }
+
   fd = mrb_http2_connect_to(mrb, ctx->req->host, ctx->req->port);
   if (fd == -1) {
     mrb_raisef(mrb, E_RUNTIME_ERROR, "Could not open file descriptor: host \"%S\", port \"%S\"",
@@ -1016,6 +1020,7 @@ static mrb_value mrb_http2_client_init(mrb_state *mrb, mrb_value self)
   ctx->conn->mrb = mrb;
   ctx->conn->response = mrb_hash_new(mrb);
   ctx->conn->cb_block_hash = mrb_http2_cb_block_hash_init(mrb);
+  ctx->req = NULL;
   DATA_PTR(self) = ctx;
 
   memset(&act, 0, sizeof(struct sigaction));
