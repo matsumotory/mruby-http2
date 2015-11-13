@@ -142,10 +142,12 @@ static void fixup_status_header(mrb_state *mrb, mrb_http2_request_rec *r);
 static void callback_ruby_block(mrb_state *mrb, mrb_value self, unsigned int flag, const char *cbid,
                                 mruby_cb_list *list)
 {
+  mrb_int ai = mrb_gc_arena_save(mrb);
   mrb_value b;
   mrb_sym s;
 
   if (!flag || !cbid) {
+    mrb_gc_arena_restore(mrb, ai);
     return;
   }
 
@@ -161,6 +163,7 @@ static void callback_ruby_block(mrb_state *mrb, mrb_value self, unsigned int fla
       list->content_cb = NULL;
     }
   }
+  mrb_gc_arena_restore(mrb, ai);
 }
 
 static void mrb_http2_conn_rec_free(mrb_state *mrb, mrb_http2_conn_rec *conn)
