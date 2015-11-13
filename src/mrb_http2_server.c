@@ -568,6 +568,7 @@ static int error_reply(app_context *app_ctx, nghttp2_session *session, http2_str
   if (rv != 0) {
     mrb_warn(app_ctx->server->mrb, "Could not pipefd");
     rv = nghttp2_submit_rst_stream(session, NGHTTP2_FLAG_NONE, stream_data->stream_id, NGHTTP2_INTERNAL_ERROR);
+    mrb_http2_request_rec_free(mrb, r);
     if (rv != 0) {
       fprintf(stderr, "Fatal error: %s", nghttp2_strerror(rv));
       return -1;
@@ -854,6 +855,7 @@ static int content_cb_reply(app_context *app_ctx, nghttp2_session *session, http
   rv = pipe(pipefd);
   if (rv != 0) {
     rv = nghttp2_submit_rst_stream(session, NGHTTP2_FLAG_NONE, stream_data->stream_id, NGHTTP2_INTERNAL_ERROR);
+    mrb_http2_request_rec_free(mrb, r);
     if (rv != 0) {
       fprintf(stderr, "Fatal error: %s", nghttp2_strerror(rv));
       return -1;
@@ -954,6 +956,7 @@ static int mruby_reply(app_context *app_ctx, nghttp2_session *session, http2_str
   rv = pipe(pipefd);
   if (rv != 0) {
     rv = nghttp2_submit_rst_stream(session, NGHTTP2_FLAG_NONE, stream_data->stream_id, NGHTTP2_INTERNAL_ERROR);
+    mrb_http2_request_rec_free(mrb, r);
     if (rv != 0) {
       fprintf(stderr, "Fatal error: %s", nghttp2_strerror(rv));
       return -1;
