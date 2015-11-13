@@ -525,39 +525,41 @@ static int send_upstream_response(app_context *app_ctx, nghttp2_session *session
 }
 
 static ssize_t large_buf_read_callback(nghttp2_session *session, int32_t stream_id,
-                                   uint8_t *buf, size_t length,
-                                   uint32_t *data_flags,
-                                   nghttp2_data_source *source, void *user_data)
+                                  uint8_t *buf, size_t length,
+                                  uint32_t *data_flags,
+                                  nghttp2_data_source *source, void *user_data)
 {
-   mrb_http2_large_buf *b = source->ptr;
-   int feof = -1;
+  mrb_http2_large_buf *b = source->ptr;
+  int feof = -1;
 
-   TRACER;
+  TRACER;
 
-   if(length > b->readleft) {
-     TRACER;
-     length = b->readleft;
-     feof = 1;
-   }
-   memcpy(buf, &(b->buf[b->len - b->readleft]), length);
-   b->readleft -= length;
-   if (b->readleft == 0||feof == 1) {
-     TRACER;
+  if(length > b->readleft) {
+    TRACER;
+    length = b->readleft;
+    feof = 1;
+  }
+  memcpy(buf, &(b->buf[b->len - b->readleft]), length);
+  b->readleft -= length;
+  if (b->readleft == 0||feof == 1) {
+    TRACER;
 
-     if (b->readleft != 0) {
-       return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
-     }
-     // Set the eof flag to true
-     *data_flags |= NGHTTP2_DATA_FLAG_EOF;
-     mrb_http2_large_buf_free(b);
-     free(b);
-   }
-   TRACER;
-   return length;
+    if (b->readleft != 0) {
+      return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
+    }
+    // Set the eof flag to true
+    *data_flags |= NGHTTP2_DATA_FLAG_EOF;
+    mrb_http2_large_buf_free(b);
+    free(b);
+  }
+  TRACER;
+  return length;
 }
 
-static ssize_t file_read_callback(nghttp2_session *session, int32_t stream_id, uint8_t *buf, size_t length,
-                                  uint32_t *data_flags, nghttp2_data_source *source, void *user_data)
+static ssize_t file_read_callback(nghttp2_session *session, int32_t stream_id,
+                                  uint8_t *buf, size_t length,
+                                  uint32_t *data_flags,
+                                  nghttp2_data_source *source, void *user_data)
 {
   ssize_t nread;
   http2_stream_data *stream_data = source->ptr;
@@ -582,50 +584,51 @@ static ssize_t file_read_callback(nghttp2_session *session, int32_t stream_id, u
 }
 
 static int send_response_large_buf(app_context *app_ctx, nghttp2_session *session,
-                          nghttp2_nv *nva, size_t nvlen,
-                          http2_stream_data *stream_data)
+                         nghttp2_nv *nva, size_t nvlen,
+                         http2_stream_data *stream_data)
 {
-   int rv;
-   mrb_state *mrb = app_ctx->server->mrb;
-   mrb_http2_request_rec *r = app_ctx->r;
-   int i;
+  int rv;
+  mrb_state *mrb = app_ctx->server->mrb;
+  mrb_http2_request_rec *r = app_ctx->r;
+  int i;
 
-   TRACER;
-   nghttp2_data_provider data_prd;
-   data_prd.source.ptr = r->write_large_buf;
-   data_prd.read_callback = large_buf_read_callback;
+  TRACER;
+  nghttp2_data_provider data_prd;
+  data_prd.source.ptr = r->write_large_buf;
+  data_prd.read_callback = large_buf_read_callback;
 
-   if (app_ctx->server->config->debug) {
-     for (i = 0; i < nvlen; i++) {
-       debug_header(__func__, nva[i].name, nva[i].namelen, nva[i].value,
-                    nva[i].valuelen);
-     }
-   }
+  if (app_ctx->server->config->debug) {
+    for (i = 0; i < nvlen; i++) {
+      debug_header(__func__, nva[i].name, nva[i].namelen, nva[i].value,
+                   nva[i].valuelen);
+    }
+  }
 
-   TRACER;
-   rv = nghttp2_submit_response(session, stream_data->stream_id, nva, nvlen,
-                                &data_prd);
-   if (rv != 0) {
-     fprintf(stderr, "Fatal error: %s", nghttp2_strerror(rv));
-     mrb_http2_request_rec_free(mrb, r);
-     return -1;
-   }
-   //
-   // "set_logging_cb" callback ruby block
-   //
-   if (app_ctx->server->config->callback) {
-     r->phase = MRB_HTTP2_SERVER_LOGGING;
-     callback_ruby_block(mrb, app_ctx->self, app_ctx->server->config->callback,
-                         app_ctx->server->config->cb_list->logging_cb,
-                         app_ctx->server->config->cb_list);
-   }
+  TRACER;
+  rv = nghttp2_submit_response(session, stream_data->stream_id, nva, nvlen,
+                               &data_prd);
+  if (rv != 0) {
+    fprintf(stderr, "Fatal error: %s", nghttp2_strerror(rv));
+    mrb_http2_request_rec_free(mrb, r);
+    return -1;
+  }
+  //
+  // "set_logging_cb" callback ruby block
+  //
+  if (app_ctx->server->config->callback) {
+    r->phase = MRB_HTTP2_SERVER_LOGGING;
+    callback_ruby_block(mrb, app_ctx->self, app_ctx->server->config->callback,
+                        app_ctx->server->config->cb_list->logging_cb,
+                        app_ctx->server->config->cb_list);
+  }
 
-   mrb_http2_request_rec_free(mrb, r);
-   TRACER;
-   return 0;
+  mrb_http2_request_rec_free(mrb, r);
+  TRACER;
+  return 0;
 }
 
-static int send_response(app_context *app_ctx, nghttp2_session *session, nghttp2_nv *nva, size_t nvlen,
+static int send_response(app_context *app_ctx, nghttp2_session *session,
+                         nghttp2_nv *nva, size_t nvlen,
                          http2_stream_data *stream_data)
 {
   int rv;
@@ -1037,33 +1040,27 @@ static int content_cb_reply(app_context *app_ctx, nghttp2_session *session, http
   //
   if (config->callback) {
     r->phase = MRB_HTTP2_SERVER_FIXUPS;
-    callback_ruby_block(mrb, app_ctx->self, config->callback, config->cb_list->fixups_cb, config->cb_list);
+    callback_ruby_block(mrb, app_ctx->self, config->callback,
+                        config->cb_list->fixups_cb, config->cb_list);
   }
-
-     if(r->write_large_buf->len == 0) {
-       TRACER;
-       free(r->write_large_buf);
-       r->write_large_buf = NULL;
-       if (send_response(app_ctx, session, r->reshdrs, r->reshdrslen, stream_data) !=
-           0) {
-         close(pipefd[0]);
-         return -1;
-       }
-     } else {
-       TRACER;
-       if (send_response_large_buf(app_ctx, session, r->reshdrs, r->reshdrslen, stream_data) !=
-          0) {
-         close(pipefd[0]);
-         mrb_http2_large_buf_free(r->write_large_buf);
-         free(r->write_large_buf);
-         return -1;
-       }
-     }
-  // if (send_response(app_ctx, session, r->reshdrs, r->reshdrslen, stream_data) != 0) {
-  //   close(pipefd[0]);
-  //   return -1;
-  // }
-
+  if(r->write_large_buf->len == 0) {
+    TRACER;
+    free(r->write_large_buf);
+    r->write_large_buf = NULL;
+    if (send_response(app_ctx, session, r->reshdrs, r->reshdrslen, stream_data) !=
+        0) {
+      close(pipefd[0]);
+      return -1;
+    }
+  } else {
+    TRACER;
+    if (send_response_large_buf(app_ctx, session, r->reshdrs, r->reshdrslen, stream_data) !=
+      0) {
+      close(pipefd[0]);
+      mrb_http2_large_buf_free(r->write_large_buf);
+      return -1;
+    }
+  }
   TRACER;
   return 0;
 }
@@ -1182,9 +1179,22 @@ TRACER;
     callback_ruby_block(mrb, app_ctx->self, config->callback, config->cb_list->fixups_cb, config->cb_list);
   }
 
-  if (send_response(app_ctx, session, r->reshdrs, r->reshdrslen, stream_data) != 0) {
-    close(pipefd[0]);
-    return -1;
+  if(r->write_large_buf->len == 0) {
+    TRACER;
+    free(r->write_large_buf);
+    r->write_large_buf = NULL;
+    if (send_response(app_ctx, session, r->reshdrs, r->reshdrslen, stream_data) !=
+        0) {
+      close(pipefd[0]);
+      return -1;
+    }
+  } else {
+    if (send_response_large_buf(app_ctx, session, r->reshdrs, r->reshdrslen, stream_data) !=
+      0) {
+      close(pipefd[0]);
+      mrb_http2_large_buf_free(r->write_large_buf);
+      return -1;
+    }
   }
   TRACER;
   return 0;
