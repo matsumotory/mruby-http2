@@ -6,7 +6,7 @@
 #include "mrb_http2.h"
 #include "mrb_http2_config.h"
 
-#define MRB_HTTP2_CONFIG_LIT(mrb, lit) mrb_str_to_cstr(mrb, mrb_str_new_lit(mrb, lit))
+#define MRB_HTTP2_CONFIG_LIT(lit) lit
 #define MRB_HTTP2_CONFIG_ENABLED 1
 #define MRB_HTTP2_CONFIG_DISABLED 0
 
@@ -182,9 +182,9 @@ static void config_defualt_value(mrb_state *mrb, mrb_http2_config_t *config)
   config->server_status = MRB_HTTP2_CONFIG_DISABLED;
   config->upstream = MRB_HTTP2_CONFIG_DISABLED;
 
-  config->server_host = MRB_HTTP2_CONFIG_LIT(mrb, "0.0.0.0");
-  config->server_name = MRB_HTTP2_CONFIG_LIT(mrb, MRUBY_HTTP2_SERVER);
-  config->document_root = MRB_HTTP2_CONFIG_LIT(mrb, "./");
+  config->server_host = MRB_HTTP2_CONFIG_LIT("0.0.0.0");
+  config->server_name = MRB_HTTP2_CONFIG_LIT(MRUBY_HTTP2_SERVER);
+  config->document_root = MRB_HTTP2_CONFIG_LIT("./");
   config->run_user = NULL;
   config->dh_params_file = NULL;
 
