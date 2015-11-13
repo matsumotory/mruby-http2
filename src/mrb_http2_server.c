@@ -1058,6 +1058,7 @@ static int content_cb_reply(app_context *app_ctx, nghttp2_session *session, http
       0) {
       close(pipefd[0]);
       mrb_http2_large_buf_free(r->write_large_buf);
+      free(r->write_large_buf);
       return -1;
     }
   }
@@ -1193,6 +1194,7 @@ TRACER;
       0) {
       close(pipefd[0]);
       mrb_http2_large_buf_free(r->write_large_buf);
+      free(r->write_large_buf);
       return -1;
     }
   }
