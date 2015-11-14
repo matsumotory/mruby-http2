@@ -122,9 +122,12 @@ static int mrb_http2_large_buf_write(mrb_http2_large_buf *b, char *src, size_t l
   return len;
 }
 
-static void mrb_http2_large_buf_close(mrb_http2_large_buf *b) {
+static void mrb_http2_large_buf_close(mrb_http2_large_buf *b, int fd) {
+  ssize_t nread;
+
   TRACER;
   b->readleft = b->len;
+  nread = read(fd, b->buf, 65535);
 }
 
 void mrb_http2_large_buf_free(mrb_http2_large_buf *b) {
@@ -549,8 +552,11 @@ static ssize_t large_buf_read_callback(nghttp2_session *session, int32_t stream_
     }
     // Set the eof flag to true
     *data_flags |= NGHTTP2_DATA_FLAG_EOF;
-    mrb_http2_large_buf_free(b);
+    if(b->buf != NULL) {
+      mrb_http2_large_buf_free(b);
+    }
     free(b);
+    b = NULL;
   }
   TRACER;
   return length;
@@ -992,14 +998,8 @@ static int content_cb_reply(app_context *app_ctx, nghttp2_session *session, http
     }
     return 0;
   }
-  r->write_large_buf = (mrb_http2_large_buf*)malloc(sizeof(mrb_http2_large_buf));
-  if(r->write_large_buf == NULL) {
-    fprintf(stderr, "Fatal error: can't alloc mrb_http2_large_buf.\n");
-    return -1;
-  }
-  mrb_http2_large_buf_init(r->write_large_buf);
+  r->write_large_buf = NULL;
   r->write_fd = pipefd[1];
-  r->write_large_buf->read_fd = pipefd[0];
   //
   // "set_content" callback ruby block
   //
@@ -1025,7 +1025,9 @@ static int content_cb_reply(app_context *app_ctx, nghttp2_session *session, http
   }
 
   close(pipefd[1]);
-  mrb_http2_large_buf_close(r->write_large_buf);
+  if(r->write_large_buf != NULL) {
+    mrb_http2_large_buf_close(r->write_large_buf,pipefd[0]);
+  }
   stream_data->fd = pipefd[0];
   stream_data->readleft = size;
   TRACER;
@@ -1043,10 +1045,8 @@ static int content_cb_reply(app_context *app_ctx, nghttp2_session *session, http
     callback_ruby_block(mrb, app_ctx->self, config->callback,
                         config->cb_list->fixups_cb, config->cb_list);
   }
-  if(r->write_large_buf->len == 0) {
+  if(r->write_large_buf == NULL) {
     TRACER;
-    free(r->write_large_buf);
-    r->write_large_buf = NULL;
     if (send_response(app_ctx, session, r->reshdrs, r->reshdrslen, stream_data) !=
         0) {
       close(pipefd[0]);
@@ -1059,6 +1059,7 @@ static int content_cb_reply(app_context *app_ctx, nghttp2_session *session, http
       close(pipefd[0]);
       mrb_http2_large_buf_free(r->write_large_buf);
       free(r->write_large_buf);
+      r->write_large_buf = NULL;
       return -1;
     }
   }
@@ -1115,12 +1116,7 @@ static int mruby_reply(app_context *app_ctx, nghttp2_session *session, http2_str
     return 0;
   }
 
-  r->write_large_buf = (mrb_http2_large_buf*)malloc(sizeof(mrb_http2_large_buf));
-  if(r->write_large_buf == NULL) {
-    fprintf(stderr, "Fatal error: can't alloc mrb_http2_large_buf.\n");
-    return -1;
-  }
-  mrb_http2_large_buf_init(r->write_large_buf);
+  r->write_large_buf = NULL;
   r->write_fd = pipefd[1];
   c = mrbc_context_new(mrb_inner);
   mrbc_filename(mrb_inner, c, r->filename);
@@ -1162,7 +1158,9 @@ static int mruby_reply(app_context *app_ctx, nghttp2_session *session, http2_str
   }
 TRACER;
   close(pipefd[1]);
-  mrb_http2_large_buf_close(r->write_large_buf);
+  if(r->write_large_buf != NULL) {
+    mrb_http2_large_buf_close(r->write_large_buf, pipefd[0]);
+  }
   stream_data->fd = pipefd[0];
   stream_data->readleft = size;
   TRACER;
@@ -1180,10 +1178,8 @@ TRACER;
     callback_ruby_block(mrb, app_ctx->self, config->callback, config->cb_list->fixups_cb, config->cb_list);
   }
 
-  if(r->write_large_buf->len == 0) {
+  if(r->write_large_buf == NULL) {
     TRACER;
-    free(r->write_large_buf);
-    r->write_large_buf = NULL;
     if (send_response(app_ctx, session, r->reshdrs, r->reshdrslen, stream_data) !=
         0) {
       close(pipefd[0]);
@@ -1195,6 +1191,7 @@ TRACER;
       close(pipefd[0]);
       mrb_http2_large_buf_free(r->write_large_buf);
       free(r->write_large_buf);
+      r->write_large_buf = NULL;
       return -1;
     }
   }
@@ -2901,21 +2898,23 @@ static mrb_value mrb_http2_server_rputs(mrb_state *mrb, mrb_value self)
     rv = write(write_fd, msg, len);
   } else {
     TRACER;
-    if(r->write_large_buf != NULL) {
-      if(r->write_large_buf->len == 0) {
-        TRACER;
-        b = r->write_large_buf;
-        b->buf = (char*)malloc(sizeof(char)*(LARGE_BUF_UNIT_LEN));
-        if(b->buf == NULL) {
-	  return mrb_fixnum_value(-1);
-        }
-        b->alloced_size = LARGE_BUF_UNIT_LEN;
 
-        nread = read(r->write_large_buf->read_fd, r->write_large_buf->buf, r->write_size);
-        r->write_large_buf->len = nread;
+    if(r->write_large_buf == NULL) {
+      r->write_large_buf = (mrb_http2_large_buf*)malloc(sizeof(mrb_http2_large_buf));
+      if(r->write_large_buf == NULL) {
+        fprintf(stderr, "Fatal error: can't alloc mrb_http2_large_buf.\n");
+        return mrb_fixnum_value(-1);
       }
-      rv = mrb_http2_large_buf_write(r->write_large_buf, msg, len);
+      mrb_http2_large_buf_init(r->write_large_buf);
+      b = r->write_large_buf;
+      b->buf = (char*)malloc(sizeof(char)*(LARGE_BUF_UNIT_LEN));
+      if(b->buf == NULL) {
+        return mrb_fixnum_value(-1);
+      }
+      b->alloced_size = LARGE_BUF_UNIT_LEN;
+      r->write_large_buf->len = r->write_size;
     }
+    rv = mrb_http2_large_buf_write(r->write_large_buf, msg, len);
   }
   r->write_size += len;
 
