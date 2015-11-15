@@ -2882,6 +2882,7 @@ static mrb_value mrb_http2_server_rputs(mrb_state *mrb, mrb_value self)
   char *msg;
   mrb_int len;
   int rv;
+  mrb_http2_large_buf *b;
 
   mrb_get_args(mrb, "s", &msg, &len);
 
@@ -2898,7 +2899,7 @@ static mrb_value mrb_http2_server_rputs(mrb_state *mrb, mrb_value self)
         return mrb_fixnum_value(-1);
       }
       mrb_http2_large_buf_init(r->write_large_buf);
-      mrb_http2_large_buf *b = r->write_large_buf;
+      b = r->write_large_buf;
       b->buf = (char*)malloc(sizeof(char)*(LARGE_BUF_UNIT_LEN));
       if(b->buf == NULL) {
         return mrb_fixnum_value(-1);
