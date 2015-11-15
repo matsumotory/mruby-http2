@@ -998,6 +998,7 @@ static int content_cb_reply(app_context *app_ctx, nghttp2_session *session, http
   }
   r->write_large_buf = NULL;
   r->write_fd = pipefd[1];
+
   //
   // "set_content" callback ruby block
   //
@@ -1040,20 +1041,17 @@ static int content_cb_reply(app_context *app_ctx, nghttp2_session *session, http
   //
   if (config->callback) {
     r->phase = MRB_HTTP2_SERVER_FIXUPS;
-    callback_ruby_block(mrb, app_ctx->self, config->callback,
-                        config->cb_list->fixups_cb, config->cb_list);
+    callback_ruby_block(mrb, app_ctx->self, config->callback, config->cb_list->fixups_cb, config->cb_list);
   }
   if(r->write_large_buf == NULL) {
     TRACER;
-    if (send_response(app_ctx, session, r->reshdrs, r->reshdrslen, stream_data) !=
-        0) {
+    if (send_response(app_ctx, session, r->reshdrs, r->reshdrslen, stream_data) != 0) {
       close(pipefd[0]);
       return -1;
     }
   } else {
     TRACER;
-    if (send_response_large_buf(app_ctx, session, r->reshdrs, r->reshdrslen, stream_data) !=
-      0) {
+    if (send_response_large_buf(app_ctx, session, r->reshdrs, r->reshdrslen, stream_data) != 0) {
       close(pipefd[0]);
       mrb_http2_large_buf_free(r->write_large_buf);
       free(r->write_large_buf);
@@ -1178,14 +1176,12 @@ TRACER;
 
   if(r->write_large_buf == NULL) {
     TRACER;
-    if (send_response(app_ctx, session, r->reshdrs, r->reshdrslen, stream_data) !=
-        0) {
+    if (send_response(app_ctx, session, r->reshdrs, r->reshdrslen, stream_data) != 0) {
       close(pipefd[0]);
       return -1;
     }
   } else {
-    if (send_response_large_buf(app_ctx, session, r->reshdrs, r->reshdrslen, stream_data) !=
-      0) {
+    if (send_response_large_buf(app_ctx, session, r->reshdrs, r->reshdrslen, stream_data) != 0) {
       close(pipefd[0]);
       mrb_http2_large_buf_free(r->write_large_buf);
       free(r->write_large_buf);
