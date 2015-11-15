@@ -123,11 +123,9 @@ static int mrb_http2_large_buf_write(mrb_http2_large_buf *b, char *src, size_t l
 }
 
 static void mrb_http2_large_buf_close(mrb_http2_large_buf *b, int fd) {
-  ssize_t nread;
-
   TRACER;
   b->readleft = b->len;
-  nread = read(fd, b->buf, 65535);
+  read(fd, b->buf, 65535);
 }
 
 void mrb_http2_large_buf_free(mrb_http2_large_buf *b) {
@@ -2888,7 +2886,7 @@ static mrb_value mrb_http2_server_rputs(mrb_state *mrb, mrb_value self)
   char *msg;
   mrb_int len;
   int rv;
-  
+
   mrb_get_args(mrb, "s", &msg, &len);
 
   if(r->write_size + len <= LARGE_BUF_UNIT_LEN) {
