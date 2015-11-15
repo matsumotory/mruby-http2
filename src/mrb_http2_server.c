@@ -2888,7 +2888,6 @@ static mrb_value mrb_http2_server_rputs(mrb_state *mrb, mrb_value self)
   char *msg;
   mrb_int len;
   int rv;
-  ssize_t nread;
   mrb_http2_large_buf *b;
 
   mrb_get_args(mrb, "s", &msg, &len);
