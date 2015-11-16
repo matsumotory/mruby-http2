@@ -93,7 +93,7 @@ typedef struct {
 } mrb_http2_conn_rec;
 
 #define LARGE_BUF_UNIT_LEN 65535
-typedef struct  {
+typedef struct {
   // total number of bytes written
   size_t len;
 
