@@ -66,7 +66,7 @@ mrb_http2_request_rec *mrb_http2_request_rec_init(mrb_state *mrb)
   r->write_size = 0;
   r->status = 0;
   r->phase = MRB_HTTP2_SERVER_INIT_REQUEST;
-
+  r->write_large_buf = NULL;
   return r;
 }
 
