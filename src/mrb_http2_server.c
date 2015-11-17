@@ -2877,7 +2877,6 @@ static mrb_value mrb_http2_server_rputs(mrb_state *mrb, mrb_value self)
   char *msg;
   mrb_int len;
   int rv;
-  mrb_http2_large_buf *b;
 
   mrb_get_args(mrb, "s", &msg, &len);
 
@@ -2888,6 +2887,8 @@ static mrb_value mrb_http2_server_rputs(mrb_state *mrb, mrb_value self)
     TRACER;
 
     if (r->write_large_buf == NULL) {
+      mrb_http2_large_buf *b;
+
       r->write_large_buf = (mrb_http2_large_buf *)malloc(sizeof(mrb_http2_large_buf));
       if (r->write_large_buf == NULL) {
         fprintf(stderr, "Fatal error: can't alloc mrb_http2_large_buf.\n");
