@@ -1189,7 +1189,7 @@ static int mruby_reply(app_context *app_ctx, nghttp2_session *session, http2_str
 }
 
 /* Inspired by h2o header lookup.  https://github.com/h2o/h2o */
-/* Reference as nghttp2 header lookup.  https://github.com/tatsuhiro-t/nghttp2
+/* Reference as nghttp2 header lookup.  https://github.com/nghttp2/nghttp2
  */
 
 static int memeq(const void *a, const void *b, size_t n)

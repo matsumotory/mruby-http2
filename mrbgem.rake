@@ -33,7 +33,7 @@ MRuby::Gem::Specification.new('mruby-http2') do |spec|
   if ! File.exists? nghttp2_dir
     Dir.chdir(build_dir) do
     e = {}
-      run_command e, 'git clone https://github.com/tatsuhiro-t/nghttp2.git'
+      run_command e, 'git clone https://github.com/nghttp2/nghttp2.git'
     end
   end
 
@@ -49,9 +49,9 @@ MRuby::Gem::Specification.new('mruby-http2') do |spec|
       run_command e, 'automake'
       run_command e, 'autoconf'
       if RUBY_PLATFORM =~ /darwin/i
-        run_command e, './configure --disable-threads --enable-shared=no'
+        run_command e, './configure --enable-app --disable-threads --enable-shared=no'
       else
-        run_command e, './configure --enable-shared=no CFLAGS="-g -O2 -fPIC"'
+        run_command e, './configure --enable-app --enable-shared=no CFLAGS="-g -O2 -fPIC"'
       end
       run_command e, 'make'
     end
