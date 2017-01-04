@@ -1,22 +1,22 @@
 # HTTP2 Module for mruby 
 
-[![Build Status](https://travis-ci.org/matsumoto-r/mruby-http2.svg?branch=master)](https://travis-ci.org/matsumoto-r/mruby-http2)
+[![Build Status](https://travis-ci.org/matsumotory/mruby-http2.svg?branch=master)](https://travis-ci.org/matsumotory/mruby-http2)
 [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/trusterd/mruby-http2?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 HTTP2 module for mruby using [nghttp2](https://github.com/tatsuhiro-t/nghttp2). You can access Web site using HTTP/2 protocol from mruby applications or devices with mruby, and run HTTP/2 Web server easily.
 
-- [HTTP/2 Web Server by mruby-http2](https://github.com/matsumoto-r/mruby-http2/blob/master/README.md#http2server)
-- [HTTP/2 Client by mruby-http2](https://github.com/matsumoto-r/mruby-http2/blob/master/README.md#http2client)
+- [HTTP/2 Web Server by mruby-http2](https://github.com/matsumotory/mruby-http2/blob/master/README.md#http2server)
+- [HTTP/2 Client by mruby-http2](https://github.com/matsumotory/mruby-http2/blob/master/README.md#http2client)
 
 #### [HTTP/2](http://http2.github.io/) 
 
 HTTP/2 is a replacement for how HTTP is expressed "on the wire". It is not a ground-up rewrite of the protocol; HTTP methods, status codes and semantics will be the same, and it should be possible to use the same APIs as HTTP/1.x (possibly with some small additions) to represent the protocol.
 
-## [Trusterd HTTP/2 Web Server](https://github.com/matsumoto-r/trusterd)
-[Trusterd](https://github.com/matsumoto-r/trusterd) is a HTTP/2 Web Server implementation using mruby-http2.
+## [Trusterd HTTP/2 Web Server](https://github.com/matsumotory/trusterd)
+[Trusterd](https://github.com/matsumotory/trusterd) is a HTTP/2 Web Server implementation using mruby-http2.
 
 ## Benchmark
-Please see [link](https://gist.github.com/matsumoto-r/9702123).
+Please see [link](https://gist.github.com/matsumotory/9702123).
 
 ## Install by mrbgems
 #### Download mruby
@@ -29,7 +29,7 @@ MRuby::Build.new do |conf|
 
   # ... (snip) ...
 
-  conf.gem :github => 'matsumoto-r/mruby-http2'
+  conf.gem :github => 'matsumotory/mruby-http2'
 end
 ```
 

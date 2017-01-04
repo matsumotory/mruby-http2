@@ -6,7 +6,7 @@ MRuby::Build.new do |conf|
   conf.gem :github => "iij/mruby-io"
   conf.gem :github => "iij/mruby-socket"
   conf.gem :github => "iij/mruby-pack"
-  conf.gem :github => "matsumoto-r/mruby-simplehttp"
+  conf.gem :github => "matsumotory/mruby-simplehttp"
   conf.gem '../mruby-http2'
 end
 
