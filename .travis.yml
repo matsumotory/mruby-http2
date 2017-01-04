@@ -6,7 +6,7 @@ before_install:
   - sudo add-apt-repository --yes ppa:ubuntu-toolchain-r/test
   - sudo apt-get -qq update
 install:
-  - sudo apt-get -qq install rake bison git gperf g++-4.9 libstdc++-4.9-dev libev-dev libevent-dev libjansson-dev libjemalloc-dev libxml2-dev libssl-dev zlib1g-dev make binutils autoconf automake autotools-dev libtool pkg-config libcunit1-dev libc-ares-dev cython python3-dev python-setuptools
+  - sudo apt-get -qq install rake bison git gperf g++-4.9 libstdc++-4.9-dev libev-dev libevent-dev libjansson-dev libjemalloc-dev libxml2-dev libssl-dev zlib1g-dev make binutils autoconf automake autotools-dev libtool pkg-config libcunit1-dev libc-ares-dev
   - if [ "$CXX" = "g++" ]; then export CXX="g++-4.9" CC="gcc-4.9"; fi
   - $CXX -v
 env:
