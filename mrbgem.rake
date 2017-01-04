@@ -33,7 +33,7 @@ MRuby::Gem::Specification.new('mruby-http2') do |spec|
   if ! File.exists? nghttp2_dir
     Dir.chdir(build_dir) do
     e = {}
-      run_command e, 'git clone https://github.com/tatsuhiro-t/nghttp2.git'
+      run_command e, 'git clone https://github.com/nghttp2/nghttp2.git'
     end
   end
 
