@@ -916,6 +916,7 @@ static int read_upstream_response(http2_session_data *session_data, app_context 
     }
   }
   if (cookiebuf != NULL) {
+    cookiebuf = mrb_realloc(mrb, cookiebuf, cookiebuflen + 1);
     cookiebuf[cookiebuflen] = '\0';
     evhttp_add_header(req->output_headers, "Cookie", cookiebuf);
     mrb_free(mrb, cookiebuf);
