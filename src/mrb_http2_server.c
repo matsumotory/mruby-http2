@@ -901,14 +901,14 @@ static int read_upstream_response(http2_session_data *session_data, app_context 
       memcpy(cookiebuf + cookiebaselen + r->reqhdr[i].valuelen, "; ", 2);
     } else {
       len = r->reqhdr[i].namelen;
-      if (len > 4096)
-        len = 4096;
+      if (len > 4095)
+        len = 4095;
       memcpy(keybuf, r->reqhdr[i].name, len);
       keybuf[len] = '\0';
 
       len = r->reqhdr[i].valuelen;
-      if (len > 4096)
-        len = 4096;
+      if (len > 4095)
+        len = 4095;
       memcpy(valbuf, r->reqhdr[i].value, len);
       valbuf[len] = '\0';
 
