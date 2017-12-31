@@ -902,6 +902,7 @@ static int read_upstream_response(http2_session_data *session_data, app_context 
       memcpy(cookiebuf + cookiebaselen + r->reqhdr[i].valuelen, "; ", 2);
     } else {
       len = r->reqhdr[i].namelen;
+      // for null termination
       if (len > MRB_HTTP2_MAX_REQ_HEADER_SIZE - 1)
         len = MRB_HTTP2_MAX_REQ_HEADER_SIZE - 1;
       memcpy(keybuf, r->reqhdr[i].name, len);
