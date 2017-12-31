@@ -32,6 +32,9 @@
 #include <unistd.h>
 #include <stdbool.h>
 
+#define MRB_HTTP2_TLS_RECORD_SIZE 4096
+#define MRB_HTTP2_MAX_REQ_HEADER_SIZE 4096
+
 typedef struct st_mrb_http2_iovec_t {
   char *base;
   size_t len;
@@ -393,8 +396,6 @@ static int session_recv(http2_session_data *session_data)
   TRACER;
   return 0;
 }
-
-#define MRB_HTTP2_TLS_RECORD_SIZE 4096
 
 static ssize_t server_send_callback(nghttp2_session *session, const uint8_t *data, size_t length, int flags,
                                     void *user_data)
@@ -890,7 +891,7 @@ static int read_upstream_response(http2_session_data *session_data, app_context 
 
   // r->reqhdr don't include HTTP/2 specified headders
   for (i = 0; i < r->reqhdrlen; i++) {
-    char keybuf[4096], valbuf[4096];
+    char keybuf[MRB_HTTP2_MAX_REQ_HEADER_SIZE], valbuf[MRB_HTTP2_MAX_REQ_HEADER_SIZE];
     size_t len;
 
     if (memcmp("cookie", r->reqhdr[i].name, 6) == 0) {
@@ -901,14 +902,14 @@ static int read_upstream_response(http2_session_data *session_data, app_context 
       memcpy(cookiebuf + cookiebaselen + r->reqhdr[i].valuelen, "; ", 2);
     } else {
       len = r->reqhdr[i].namelen;
-      if (len > 4095)
-        len = 4095;
+      if (len > MRB_HTTP2_MAX_REQ_HEADER_SIZE - 1)
+        len = MRB_HTTP2_MAX_REQ_HEADER_SIZE - 1;
       memcpy(keybuf, r->reqhdr[i].name, len);
       keybuf[len] = '\0';
 
       len = r->reqhdr[i].valuelen;
-      if (len > 4095)
-        len = 4095;
+      if (len > MRB_HTTP2_MAX_REQ_HEADER_SIZE - 1)
+        len = MRB_HTTP2_MAX_REQ_HEADER_SIZE - 1;
       memcpy(valbuf, r->reqhdr[i].value, len);
       valbuf[len] = '\0';
 
