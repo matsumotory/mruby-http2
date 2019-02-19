@@ -18,6 +18,17 @@ HTTP/2 is a replacement for how HTTP is expressed "on the wire". It is not a gro
 ## Benchmark
 Please see [link](https://gist.github.com/matsumotory/9702123).
 
+## Development Environment
+
+Requrie: vagrant
+
+```
+vagrant up
+vagrant ssh
+cd mruby-http2
+rake test
+```
+
 ## Install by mrbgems
 #### Download mruby
 ```
