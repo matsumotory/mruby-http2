@@ -50,6 +50,9 @@ MRuby::Gem::Specification.new('mruby-http2') do |spec|
       run_command e, 'autoconf'
       if RUBY_PLATFORM =~ /darwin/i
         run_command e, './configure --enable-lib-only --disable-threads --enable-shared=no'
+      elsif ENV['NGHTTP2_CURRENT']
+        # for travis CI
+        run_command e, './configure --enable-app --enable-shared=no CFLAGS="-g -O2 -fPIC"'
       else
         run_command e, './configure --enable-lib-only --enable-shared=no CFLAGS="-g -O2 -fPIC"'
       end
