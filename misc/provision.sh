@@ -11,3 +11,4 @@ sudo apt-get -y remove nano
 sudo update-alternatives --install /usr/bin/clang-format clang-format /usr/bin/clang-format-6.0 1000
 
 git clone https://github.com/matsumotory/mruby-http2
+cd mruby-http2/ && rake test
